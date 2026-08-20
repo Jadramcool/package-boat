@@ -28,3 +28,5 @@ pnpm run build
 - PR 描述应包含问题、实现、测试结果及兼容性影响。
 - 不要把真实配对码、用户目录、IP、日志或私有文件放入 issue、截图和测试夹具。
 - 贡献代码即表示你同意按仓库的 MIT License 发布该贡献。
+
+发布版本时还应更新根目录 `CHANGELOG.md`，并确保 Cargo workspace、Tauri 配置和桌面 UI 的版本号一致。

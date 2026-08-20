@@ -21,6 +21,7 @@ tempfile = { workspace = true }
 if-addrs = { workspace = true }
 httpdate = { workspace = true }
 mime_guess = { workspace = true }
+fs2 = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tokio-util = { workspace = true }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "lane-desktop",
-  "version": "0.2.0",
+  "productName": "LANE",
+  "version": "0.3.0",
   "identifier": "com.lane.fileshare",
   "build": {
     "beforeDevCommand": "pnpm dev",

@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/lane-core", "crates/lane-cli", "crates/lane-desktop"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
@@ -22,6 +22,7 @@ tempfile = "3"
 if-addrs = "0.13"
 httpdate = "1"
 mime_guess = "2"
+fs2 = "0.4.3"
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["catch-panic", "fs"] }
 tokio-util = { version = "0.7", features = ["rt"] }

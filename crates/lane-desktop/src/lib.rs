@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 use tracing::{info, warn};
 
-const VERSION: &str = "0.2.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// 桌面端共享状态。
 struct Desktop {

@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: crates/lane-desktop/ui/pnpm-lock.yaml
+      - name: Install desktop dependencies
+        run: pnpm --dir crates/lane-desktop/ui install --frozen-lockfile
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart("v")
+          $metadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+          $cargoVersions = @(
+            $metadata.packages |
+              Where-Object { $metadata.workspace_members -contains $_.id } |
+              Select-Object -ExpandProperty version -Unique
+          )
+          $tauriVersion = (Get-Content "crates/lane-desktop/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          $uiVersion = (Get-Content "crates/lane-desktop/ui/package.json" -Raw | ConvertFrom-Json).version
+          $versions = @(@($cargoVersions) + $tauriVersion + $uiVersion | Sort-Object -Unique)
+          if ($versions.Count -ne 1 -or $versions[0] -ne $tagVersion) {
+            throw "Tag $tagVersion does not match project versions: $($versions -join ', ')"
+          }
+      - name: Build CLI
+        run: cargo build -p lane-cli --release
+      - name: Clean previous bundles
+        shell: pwsh
+        run: Remove-Item "target/release/bundle" -Recurse -Force -ErrorAction SilentlyContinue
+      - name: Build Windows installer
+        working-directory: crates/lane-desktop
+        run: '& .\ui\node_modules\.bin\tauri.cmd build'
+      - name: Package artifacts and checksums
+        shell: pwsh
+        run: |
+          $bundleDir = Join-Path $PWD "target/release/bundle"
+          $cliArchive = Join-Path $bundleDir "laneshare-windows-x86_64.zip"
+          Compress-Archive -LiteralPath "target/release/laneshare.exe" -DestinationPath $cliArchive
+
+          $assets = @(
+            Get-ChildItem "target/release/bundle/nsis/*.exe" -File
+            Get-Item $cliArchive
+          )
+          if ($assets.Count -lt 2) {
+            throw "Expected an NSIS installer and CLI archive"
+          }
+
+          $checksumPath = Join-Path $bundleDir "SHA256SUMS.txt"
+          $checksums = $assets | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          [System.IO.File]::WriteAllLines($checksumPath, $checksums)
+
+          $releaseAssets = @($assets.FullName) + $checksumPath
+          gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes $releaseAssets
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -5,12 +5,126 @@ use rand::RngCore;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter as AsyncBufWriter};
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
 
 /// 大文件传输使用较大的用户态缓冲，减少异步运行时与系统调用开销。
 pub const TRANSFER_BUFFER_SIZE: usize = 256 * 1024;
+
+/// 启动时回收超过此时长的残留上传/压缩临时文件。
+pub const STALE_TRANSFER_FILE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 临时文件清理结果。失败项会被保留，避免因清理问题阻止服务启动。
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CleanupReport {
+    pub removed: usize,
+    pub failed: usize,
+}
+
+impl CleanupReport {
+    fn merge(&mut self, other: CleanupReport) {
+        self.removed += other.removed;
+        self.failed += other.failed;
+    }
+}
+
+/// 清理接收目录中的残留上传文件，以及系统临时目录中的残留文件夹 ZIP。
+/// 仅删除严格匹配 LANE 命名规则且超过 24 小时的普通文件。
+pub fn cleanup_stale_transfer_files(storage_dir: &Path) -> CleanupReport {
+    let mut report = cleanup_stale_in_directory(storage_dir, STALE_TRANSFER_FILE_AGE);
+    let system_temp = std::env::temp_dir();
+    if system_temp != storage_dir {
+        report.merge(cleanup_stale_in_directory(
+            &system_temp,
+            STALE_TRANSFER_FILE_AGE,
+        ));
+    }
+    report
+}
+
+/// 检查接收目录所在文件系统能否容纳预期请求体。
+/// multipart 请求体略大于实际文件，因此该检查会保守预留协议开销。
+pub fn has_upload_capacity(storage_dir: &Path, expected_bytes: u64) -> std::io::Result<bool> {
+    fs2::available_space(storage_dir).map(|available| available >= expected_bytes)
+}
+
+fn cleanup_stale_in_directory(directory: &Path, stale_after: Duration) -> CleanupReport {
+    let mut report = CleanupReport::default();
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(_) => {
+            report.failed += 1;
+            return report;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                report.failed += 1;
+                continue;
+            }
+        };
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !is_lane_transfer_temp_name(name) {
+            continue;
+        }
+        let metadata = match std::fs::symlink_metadata(entry.path()) {
+            Ok(metadata) if metadata.file_type().is_file() => metadata,
+            Ok(_) => continue,
+            Err(_) => {
+                report.failed += 1;
+                continue;
+            }
+        };
+        let stale = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age >= stale_after);
+        if !stale {
+            continue;
+        }
+        match std::fs::remove_file(entry.path()) {
+            Ok(()) => report.removed += 1,
+            Err(_) => report.failed += 1,
+        }
+    }
+    report
+}
+
+fn is_lane_transfer_temp_name(name: &str) -> bool {
+    if let Some(body) = name
+        .strip_prefix(".laneshare-zip-")
+        .and_then(|value| value.strip_suffix(".zip"))
+    {
+        return valid_pid_and_suffix(body, false);
+    }
+    if let Some(body) = name
+        .strip_prefix(".laneshare-")
+        .and_then(|value| value.strip_suffix(".part"))
+    {
+        return valid_pid_and_suffix(body, true);
+    }
+    false
+}
+
+fn valid_pid_and_suffix(body: &str, fixed_suffix: bool) -> bool {
+    let Some((pid, suffix)) = body.split_once('-') else {
+        return false;
+    };
+    !pid.is_empty()
+        && pid.bytes().all(|byte| byte.is_ascii_digit())
+        && !suffix.is_empty()
+        && (!fixed_suffix || suffix.len() == 16)
+        && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
 
 /// 单文件超过大小上限的错误。
 #[derive(Debug, Clone, Copy)]
@@ -216,10 +330,7 @@ pub async fn save_upload(
         let destination = unique_destination(storage_dir, &name);
         if let Err(err) = tokio::fs::rename(&temp_path, &destination).await {
             let _ = tokio::fs::remove_file(&temp_path).await;
-            return Err(SaveUploadError::Io(format!(
-                "保存文件到 {:?}: {err}",
-                destination
-            )));
+            return Err(map_storage_io(&format!("保存文件到 {destination:?}"), err));
         }
         destination
     };
@@ -241,25 +352,34 @@ async fn write_temp(
 ) -> Result<u64, SaveUploadError> {
     let temporary = tokio::fs::File::create(path)
         .await
-        .map_err(|err| SaveUploadError::Io(format!("创建临时文件: {err}")))?;
+        .map_err(|err| map_storage_io("创建临时文件", err))?;
     let mut temporary = AsyncBufWriter::with_capacity(TRANSFER_BUFFER_SIZE, temporary);
     let mut limited = reader.take(max_upload_bytes.saturating_add(1).max(0) as u64);
     let written = tokio::io::copy(&mut limited, &mut temporary)
         .await
-        .map_err(|err| SaveUploadError::Io(format!("写入上传文件: {err}")))?;
+        .map_err(|err| map_storage_io("写入上传文件", err))?;
     if written > max_upload_bytes as u64 {
         return Err(SaveUploadError::TooLarge);
     }
     temporary
         .flush()
         .await
-        .map_err(|err| SaveUploadError::Io(format!("刷新上传文件: {err}")))?;
+        .map_err(|err| map_storage_io("刷新上传文件", err))?;
     temporary
         .get_ref()
         .sync_all()
         .await
-        .map_err(|err| SaveUploadError::Io(format!("同步文件: {err}")))?;
+        .map_err(|err| map_storage_io("同步文件", err))?;
     Ok(written)
+}
+
+fn map_storage_io(context: &str, err: std::io::Error) -> SaveUploadError {
+    // Unix/macOS ENOSPC=28；Windows ERROR_HANDLE_DISK_FULL=39、ERROR_DISK_FULL=112。
+    if matches!(err.raw_os_error(), Some(28 | 39 | 112)) {
+        SaveUploadError::InsufficientStorage
+    } else {
+        SaveUploadError::Io(format!("{context}: {err}"))
+    }
 }
 
 fn random_hex(length: usize) -> String {
@@ -326,6 +446,7 @@ fn write_dir_to_zip(
 pub enum SaveUploadError {
     InvalidName,
     TooLarge,
+    InsufficientStorage,
     Io(String),
     Catalog(String),
 }
@@ -341,6 +462,7 @@ impl std::fmt::Display for SaveUploadError {
         match self {
             SaveUploadError::InvalidName => write!(f, "文件名无效"),
             SaveUploadError::TooLarge => write!(f, "文件超过大小限制"),
+            SaveUploadError::InsufficientStorage => write!(f, "接收目录可用空间不足"),
             SaveUploadError::Io(message) => write!(f, "{message}"),
             SaveUploadError::Catalog(message) => write!(f, "{message}"),
         }
@@ -422,5 +544,61 @@ mod tests {
             dir.join("hello (2).txt")
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn transfer_temp_names_are_matched_strictly() {
+        assert!(is_lane_transfer_temp_name(
+            ".laneshare-1234-0123456789abcdef.part"
+        ));
+        assert!(is_lane_transfer_temp_name(
+            ".laneshare-zip-1234-18d7a0ff.zip"
+        ));
+        assert!(!is_lane_transfer_temp_name(".laneshare-not-a-temp.part"));
+        assert!(!is_lane_transfer_temp_name(
+            ".laneshare-1234-0123456789abcdef.txt"
+        ));
+        assert!(!is_lane_transfer_temp_name("notes.zip"));
+    }
+
+    #[test]
+    fn stale_transfer_cleanup_preserves_unrelated_files() {
+        let dir = std::env::temp_dir().join(format!("lane-cleanup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let upload = dir.join(".laneshare-1234-0123456789abcdef.part");
+        let archive = dir.join(".laneshare-zip-1234-18d7a0ff.zip");
+        let unrelated = dir.join(".laneshare-user-notes.part");
+        std::fs::write(&upload, b"partial").unwrap();
+        std::fs::write(&archive, b"zip").unwrap();
+        std::fs::write(&unrelated, b"keep").unwrap();
+
+        let report = cleanup_stale_in_directory(&dir, Duration::ZERO);
+        assert_eq!(
+            report,
+            CleanupReport {
+                removed: 2,
+                failed: 0
+            }
+        );
+        assert!(!upload.exists());
+        assert!(!archive.exists());
+        assert!(unrelated.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn upload_capacity_accepts_empty_request() {
+        assert!(has_upload_capacity(&std::env::temp_dir(), 0).unwrap());
+    }
+
+    #[test]
+    fn disk_full_errors_have_a_distinct_category() {
+        for code in [28, 39, 112] {
+            let error = map_storage_io("write", std::io::Error::from_raw_os_error(code));
+            assert!(matches!(error, SaveUploadError::InsufficientStorage));
+        }
+        let error = map_storage_io("write", std::io::Error::other("x"));
+        assert!(matches!(error, SaveUploadError::Io(_)));
     }
 }

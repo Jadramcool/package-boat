@@ -66,6 +66,14 @@ impl Server {
             .map_err(|err| format!("解析保存目录: {err}"))?;
         std::fs::create_dir_all(&storage_dir).map_err(|err| format!("创建保存目录: {err}"))?;
 
+        let cleanup = crate::files::cleanup_stale_transfer_files(&storage_dir);
+        if cleanup.removed > 0 {
+            info!(removed = cleanup.removed, "已清理残留传输临时文件");
+        }
+        if cleanup.failed > 0 {
+            warn!(failed = cleanup.failed, "部分残留传输临时文件清理失败");
+        }
+
         let catalog = match config.catalog {
             Some(catalog) => catalog,
             None => Arc::new(
@@ -333,6 +341,15 @@ async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> R
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);
+    if total > 0 {
+        match crate::files::has_upload_capacity(&server.storage_dir, total) {
+            Ok(false) => {
+                return json_error(StatusCode::INSUFFICIENT_STORAGE, "接收目录可用空间不足")
+            }
+            Ok(true) => {}
+            Err(err) => warn!("查询接收目录可用空间失败，继续尝试上传: {err}"),
+        }
+    }
     server.progress.begin(total);
 
     // 包装 body 为计数流（统计已读取字节），直接喂给 multer 解析
@@ -377,6 +394,10 @@ async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> R
             Err(SaveUploadError::TooLarge) => {
                 server.progress.finish();
                 return json_error(StatusCode::PAYLOAD_TOO_LARGE, "文件超过大小限制");
+            }
+            Err(SaveUploadError::InsufficientStorage) => {
+                server.progress.finish();
+                return json_error(StatusCode::INSUFFICIENT_STORAGE, "接收目录可用空间不足");
             }
             Err(SaveUploadError::InvalidName) => {
                 server.progress.finish();
