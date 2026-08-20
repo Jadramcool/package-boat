@@ -1,0 +1,29 @@
+{
+  "name": "lane-desktop-ui",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "typecheck": "vue-tsc -b --pretty"
+  },
+  "dependencies": {
+    "@lucide/vue": "1.28.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-clipboard-manager": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "qrcode.vue": "3.10.0",
+    "vue": "3.5.40"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "26.1.2",
+    "@vitejs/plugin-vue": "6.0.8",
+    "typescript": "5.9.3",
+    "vite": "8.2.0",
+    "vue-tsc": "3.3.9"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "lane-desktop",
+  "version": "0.2.0",
+  "identifier": "com.lane.fileshare",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "./ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "LANE · 局域网投递站",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 400,
+        "minHeight": 560,
+        "resizable": true,
+        "center": true,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Utility",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["SimpChinese", "English"]
+      }
+    }
+  }
+}

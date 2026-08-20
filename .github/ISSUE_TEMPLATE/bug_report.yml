@@ -1,0 +1,40 @@
+name: Bug report
+description: 报告可复现的问题
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先移除日志、截图中的配对码、Cookie、私有路径和文件内容。
+  - type: input
+    id: version
+    attributes:
+      label: LANE 版本
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 操作系统与运行方式
+      placeholder: Windows 11 / desktop 或 CLI
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true

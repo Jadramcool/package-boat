@@ -1,0 +1,25 @@
+# Rust
+/target
+
+# Node / 前端
+node_modules/
+crates/lane-desktop/ui/dist/
+crates/lane-desktop/gen/
+crates/lane-desktop/dist/
+crates/lane-desktop/ui/qa-out.txt
+
+# Tauri
+crates/lane-desktop/target/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+
+# 本地代理/质量检查产物
+.codegraph/
+.omo/
+.zcode/
+.screenshot-qa.png

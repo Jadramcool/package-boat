@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "LANE 桌面端默认权限",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-progress-bar",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-is-always-on-top",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "dialog:default",
+    "opener:default",
+    "clipboard-manager:allow-write-text"
+  ]
+}

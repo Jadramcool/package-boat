@@ -1,0 +1,85 @@
+:root {
+  --paper: #f1eee4;
+  --paper-deep: #e8e4d8;
+  --surface: #f9f7f0;
+  --ink: #20261d;
+  --muted: #6f7469;
+  --line: #d9d5c9;
+  --line-strong: #aaa99e;
+  --acid: #d9ff52;
+  --signal: #f05a32;
+  --signal-soft: #ffe0d4;
+  --font-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --font-label: "Bahnschrift SemiCondensed", "Noto Sans SC", sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  background: var(--paper);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 74% 7%, rgb(217 255 82 / 13%), transparent 25rem),
+    var(--paper);
+}
+
+button,
+input { font: inherit; }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--signal) 70%, transparent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--acid);
+  color: var(--ink);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  clip-path: inset(50%) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* 自定义滚动条（WebView2 / Chromium） */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: var(--line-strong);
+  border: 1px solid rgb(255 255 255 / 35%);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-thumb:active { background: var(--ink); }
+::-webkit-scrollbar-corner { background: transparent; }
+
