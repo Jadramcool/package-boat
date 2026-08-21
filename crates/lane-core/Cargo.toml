@@ -34,5 +34,9 @@ rust-embed = "8"
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
-reqwest = { version = "0.12", features = ["json", "cookies", "multipart"] }
+reqwest = { version = "0.12", features = ["json", "cookies", "multipart", "stream"] }
 flate2 = "1"
+
+[[bench]]
+name = "transfer"
+harness = false

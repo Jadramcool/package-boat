@@ -67,12 +67,15 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
+# 快速端到端传输基准
+cargo bench -p lane-core --bench transfer -- --profile smoke
+
 cd crates/lane-desktop/ui
 pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)，计划中的能力见 [ROADMAP.md](ROADMAP.md)。
+架构说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，基准方法见 [docs/BENCHMARKS.md](docs/BENCHMARKS.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)，计划中的能力见 [ROADMAP.md](ROADMAP.md)。
 
 ## 发布
 

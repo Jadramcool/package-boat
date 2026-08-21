@@ -1,0 +1,45 @@
+name: Transfer benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Benchmark workload
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - standard
+          - stress
+  schedule:
+    - cron: "0 18 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: transfer-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    env:
+      BENCH_PROFILE: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'standard' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - name: Run transfer benchmark
+        run: cargo bench -p lane-core --bench transfer -- --profile "$BENCH_PROFILE" --output-dir target/benchmarks
+      - name: Add report to job summary
+        run: cat target/benchmarks/transfer-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload machine-readable reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: transfer-benchmark-${{ env.BENCH_PROFILE }}
+          path: target/benchmarks/transfer-report.*
+          if-no-files-found: error
+          retention-days: 30
