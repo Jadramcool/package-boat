@@ -10,7 +10,7 @@ LANE 的传输基准是一个独立的端到端程序：它启动真实 Axum 服
 | `weak_network_upload` | 客户端按目标带宽、初始延迟和确定性抖动发送请求体 |
 | `concurrent_uploads` | 多个独立 multipart 请求并发上传的聚合吞吐 |
 | `parallel_range_download` | 把大文件切成多个并行 Range，校验响应长度和内容 |
-| `interrupted_upload_retry` | 请求体传输约三分之一后断开，确认 `.part` 被清理并成功重试 |
+| `resumable_upload_recovery` | 上传部分块后重新查询会话，确认恢复阶段只发送缺失块并正确提交 |
 
 弱网模型发生在客户端请求体生产端，不需要管理员权限或系统级流量整形。它能稳定重现低带宽、首包延迟和不均匀分块，但不模拟真实网络中的重传、乱序或操作系统 TCP 队列拥塞。
 
@@ -68,7 +68,7 @@ cargo bench -p lane-core --bench transfer -- --profile standard
 ## 结果解读
 
 - 吞吐按有效文件字节计算，不包含 multipart 边界和 HTTP 头。
-- 上传结果包含文件写入、刷新、`fsync`、原子重命名和 catalog 更新耗时。
+- 上传结果包含文件写入、刷新、`fsync`、原子重命名和 catalog 更新耗时。断点恢复场景的吞吐只按恢复阶段实际补传的字节计算。
 - Range 下载在 loopback 上运行，主要衡量服务端读取、HTTP 编码和客户端消费能力，并不等同于真实 Wi-Fi 速度。
 - GitHub 托管 Runner 的硬件会变化。判断回归时应比较同一操作系统、相同 profile 的多次结果，而不是设置单次绝对阈值。
 - `stress` 会产生 GiB 级临时数据，运行前应确认磁盘空间。

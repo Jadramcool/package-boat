@@ -6,14 +6,15 @@ use crate::auth::{AuthManager, SESSION_COOKIE_NAME};
 use crate::catalog::{Catalog, Item, SourceType};
 use crate::files::{save_upload, SaveUploadError};
 use crate::hub::Hub;
+use crate::uploads::{UploadError, UploadManager, MAX_CHUNK_SIZE};
 use axum::body::Body;
 use axum::extract::connect_info::ConnectInfo;
-use axum::extract::{DefaultBodyLimit, Path, Request, State};
+use axum::extract::{DefaultBodyLimit, Json, Path, Request, State};
 use axum::http::header::{self, HeaderValue};
 use axum::http::{Method, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{Response, Sse};
-use axum::routing::{delete, get};
+use axum::routing::{delete, get, put};
 use axum::Router;
 use chrono::{DateTime, Utc};
 use futures_util::stream::Stream;
@@ -51,6 +52,8 @@ pub struct Server {
     file_mu: Arc<tokio::sync::Mutex<()>>,
     /// 传输进度（上传/下载）跟踪。
     progress: Arc<crate::progress::ProgressTracker>,
+    /// 分块上传会话及临时文件状态。
+    uploads: Arc<UploadManager>,
 }
 
 impl Server {
@@ -84,16 +87,22 @@ impl Server {
             .import_received_directory(&storage_dir)
             .map_err(|err| format!("导入接收目录: {err}"))?;
 
+        let max_upload_bytes = config.max_upload_bytes;
+        let uploads = Arc::new(UploadManager::new(
+            storage_dir.clone(),
+            max_upload_bytes as u64,
+        ));
         Ok(Server {
             device_name,
             storage_dir,
-            max_upload_bytes: config.max_upload_bytes,
+            max_upload_bytes,
             version: config.version,
             catalog,
             auth: Arc::new(AuthManager::new()),
             hub: Arc::new(Hub::new()),
             file_mu: Arc::new(tokio::sync::Mutex::new(())),
             progress: config.progress.unwrap_or_default(),
+            uploads,
         })
     }
 
@@ -126,6 +135,19 @@ impl Server {
             .route("/api/files", get(handle_file_list).post(handle_upload))
             .route("/api/files/{id}/download", get(handle_download))
             .route("/api/files/{id}", delete(handle_delete))
+            .route(
+                "/api/uploads",
+                axum::routing::post(handle_create_chunk_upload),
+            )
+            .route(
+                "/api/uploads/{id}",
+                get(handle_chunk_upload_status).delete(handle_cancel_chunk_upload),
+            )
+            .route("/api/uploads/{id}/chunks/{index}", put(handle_upload_chunk))
+            .route(
+                "/api/uploads/{id}/complete",
+                axum::routing::post(handle_complete_chunk_upload),
+            )
             .route("/api/events", get(handle_events))
             .route_layer(DefaultBodyLimit::max(upload_body_limit))
             .layer(middleware::from_fn_with_state(server.clone(), require_auth));
@@ -165,6 +187,15 @@ struct InfoPayload<'a> {
 #[derive(Serialize)]
 struct SessionPayload {
     authenticated: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateUploadPayload {
+    file_name: String,
+    file_size: u64,
+    #[serde(default)]
+    chunk_size: Option<u64>,
 }
 
 /// 浏览器端文件记录（不含 local_path）。
@@ -313,6 +344,126 @@ async fn handle_file_list(State(server): State<Arc<Server>>) -> Response {
     let mut records: Vec<FileRecord> = items.iter().map(record_from_item).collect();
     records.sort_by_key(|record| std::cmp::Reverse(record.modified));
     json_response(StatusCode::OK, serde_json::json!({ "files": records }))
+}
+
+async fn handle_create_chunk_upload(
+    State(server): State<Arc<Server>>,
+    Json(payload): Json<CreateUploadPayload>,
+) -> Response {
+    match server
+        .uploads
+        .create(&payload.file_name, payload.file_size, payload.chunk_size)
+        .await
+    {
+        Ok(status) => {
+            server.progress.begin(status.file_size);
+            json_response(StatusCode::CREATED, status)
+        }
+        Err(error) => upload_error_response(error),
+    }
+}
+
+async fn handle_chunk_upload_status(
+    State(server): State<Arc<Server>>,
+    Path(id): Path<String>,
+) -> Response {
+    match server.uploads.status(&id).await {
+        Ok(status) => json_response(StatusCode::OK, status),
+        Err(error) => upload_error_response(error),
+    }
+}
+
+async fn handle_upload_chunk(
+    State(server): State<Arc<Server>>,
+    Path((id, index)): Path<(String, u32)>,
+    request: Request,
+) -> Response {
+    let checksum = match request
+        .headers()
+        .get("x-chunk-sha256")
+        .and_then(|value| value.to_str().ok())
+    {
+        Some(checksum) => checksum.to_string(),
+        None => return json_error(StatusCode::BAD_REQUEST, "缺少 X-Chunk-SHA256 请求头"),
+    };
+    let bytes = match axum::body::to_bytes(request.into_body(), MAX_CHUNK_SIZE as usize).await {
+        Ok(bytes) => bytes,
+        Err(_) => return json_error(StatusCode::PAYLOAD_TOO_LARGE, "分块超过大小限制"),
+    };
+    match server
+        .uploads
+        .write_chunk(&id, index, &checksum, &bytes)
+        .await
+    {
+        Ok(result) => {
+            if result.newly_received {
+                server.progress.add(bytes.len() as u64);
+            }
+            json_response(StatusCode::OK, result.status)
+        }
+        Err(error) => upload_error_response(error),
+    }
+}
+
+async fn handle_complete_chunk_upload(
+    State(server): State<Arc<Server>>,
+    Path(id): Path<String>,
+) -> Response {
+    match server
+        .uploads
+        .complete(&id, &server.catalog, &server.file_mu)
+        .await
+    {
+        Ok(item) => {
+            server.progress.finish();
+            server
+                .hub
+                .publish(r#"{"type":"files_changed"}"#.to_string());
+            json_response(
+                StatusCode::CREATED,
+                serde_json::json!({ "files": [record_from_item(&item)] }),
+            )
+        }
+        Err(error) => upload_error_response(error),
+    }
+}
+
+async fn handle_cancel_chunk_upload(
+    State(server): State<Arc<Server>>,
+    Path(id): Path<String>,
+) -> Response {
+    match server.uploads.cancel(&id).await {
+        Ok(()) => {
+            server.progress.finish();
+            no_content()
+        }
+        Err(error) => upload_error_response(error),
+    }
+}
+
+fn upload_error_response(error: UploadError) -> Response {
+    let status = match &error {
+        UploadError::InvalidName | UploadError::InvalidChecksum | UploadError::InvalidChunk(_) => {
+            StatusCode::BAD_REQUEST
+        }
+        UploadError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+        UploadError::InsufficientStorage => StatusCode::INSUFFICIENT_STORAGE,
+        UploadError::NotFound => StatusCode::NOT_FOUND,
+        UploadError::ChecksumMismatch => StatusCode::UNPROCESSABLE_ENTITY,
+        UploadError::ChunkConflict | UploadError::Incomplete | UploadError::AlreadyCompleted => {
+            StatusCode::CONFLICT
+        }
+        UploadError::Commit(SaveUploadError::TooLarge) => StatusCode::PAYLOAD_TOO_LARGE,
+        UploadError::Commit(SaveUploadError::InsufficientStorage) => {
+            StatusCode::INSUFFICIENT_STORAGE
+        }
+        UploadError::Commit(SaveUploadError::InvalidName) => StatusCode::BAD_REQUEST,
+        UploadError::Io(_) | UploadError::Commit(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    if status.is_server_error() {
+        warn!("分块上传失败: {error}");
+    }
+    json_error(status, &error.to_string())
 }
 
 async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> Response {

@@ -338,6 +338,37 @@ pub async fn save_upload(
     match catalog.add_received(destination.clone()) {
         Ok(item) => Ok(item),
         Err(err) => {
+            // catalog 写入失败时尽量把文件退回原会话，使客户端可以重试或取消。
+            // 只有回退重命名也失败时才删除未登记的可见文件。
+            if tokio::fs::rename(&destination, temp_path).await.is_err() {
+                let _ = tokio::fs::remove_file(&destination).await;
+            }
+            Err(SaveUploadError::Catalog(err))
+        }
+    }
+}
+
+/// 将已经完整写入并同步的临时文件原子提交到接收目录，并登记到目录表。
+/// 分块上传与传统 multipart 上传共用同一套唯一命名及失败清理语义。
+pub(crate) async fn commit_temporary_upload(
+    catalog: &Catalog,
+    storage_dir: &Path,
+    temp_path: &Path,
+    name: &str,
+    file_mu: &tokio::sync::Mutex<()>,
+) -> Result<Item, SaveUploadError> {
+    let destination = {
+        let _guard = file_mu.lock().await;
+        let destination = unique_destination(storage_dir, name);
+        if let Err(err) = tokio::fs::rename(temp_path, &destination).await {
+            return Err(map_storage_io(&format!("保存文件到 {destination:?}"), err));
+        }
+        destination
+    };
+
+    match catalog.add_received(destination.clone()) {
+        Ok(item) => Ok(item),
+        Err(err) => {
             let _ = tokio::fs::remove_file(&destination).await;
             Err(SaveUploadError::Catalog(err))
         }

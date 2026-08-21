@@ -583,3 +583,192 @@ async fn save_upload_uses_unique_name_and_size_limit() {
     server.abort();
     let _ = std::fs::remove_dir_all(&storage);
 }
+
+#[tokio::test]
+async fn chunk_upload_resumes_validates_and_cleans_up() {
+    use sha2::{Digest, Sha256};
+
+    let storage = temp_dir("chunk-resume");
+    let (url, code, server) = spawn(Config {
+        device_name: "test".into(),
+        storage_dir: storage.clone(),
+        max_upload_bytes: 1024 * 1024,
+        version: "test".into(),
+        catalog: None,
+        progress: None,
+    })
+    .await;
+    let client = cookie_client();
+
+    let create_url = format!("{url}/api/uploads");
+    let unauthorized = client
+        .post(&create_url)
+        .json(&serde_json::json!({ "file_name": "resume.bin", "file_size": 1 }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        pair(&client, &url, &code).await.status(),
+        reqwest::StatusCode::NO_CONTENT
+    );
+
+    let chunk_size = lane_core::uploads::MIN_CHUNK_SIZE as usize;
+    let content: Vec<u8> = (0..chunk_size + 7)
+        .map(|index| (index % 251) as u8)
+        .collect();
+    let created = client
+        .post(&create_url)
+        .json(&serde_json::json!({
+            "file_name": "../resume.bin",
+            "file_size": content.len(),
+            "chunk_size": chunk_size,
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(created.status(), reqwest::StatusCode::CREATED);
+    let session: serde_json::Value = created.json().await.unwrap();
+    assert_eq!(session["file_name"], "resume.bin");
+    assert_eq!(session["total_chunks"], 2);
+    let upload_id = session["id"].as_str().unwrap();
+    let first = &content[..chunk_size];
+    let first_hash = format!("{:x}", Sha256::digest(first));
+    let chunk_url = format!("{url}/api/uploads/{upload_id}/chunks/0");
+
+    let bad_hash = client
+        .put(&chunk_url)
+        .header("X-Chunk-SHA256", "0".repeat(64))
+        .body(first.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_hash.status(), reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+
+    let first_upload = client
+        .put(&chunk_url)
+        .header("X-Chunk-SHA256", &first_hash)
+        .body(first.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first_upload.status(), reqwest::StatusCode::OK);
+
+    // 相同块与相同摘要可安全重试，不重复计入会话进度。
+    let duplicate = client
+        .put(&chunk_url)
+        .header("X-Chunk-SHA256", &first_hash)
+        .body(first.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(duplicate.status(), reqwest::StatusCode::OK);
+    let duplicate_status: serde_json::Value = duplicate.json().await.unwrap();
+    assert_eq!(duplicate_status["uploaded_bytes"], chunk_size);
+
+    // 模拟连接中断：重新查询会话后只需补传第二块。
+    let resumed: serde_json::Value = client
+        .get(format!("{url}/api/uploads/{upload_id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(resumed["received_chunks"], serde_json::json!([0]));
+
+    let incomplete = client
+        .post(format!("{url}/api/uploads/{upload_id}/complete"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(incomplete.status(), reqwest::StatusCode::CONFLICT);
+
+    let second = &content[chunk_size..];
+    let second_hash = format!("{:x}", Sha256::digest(second));
+    let second_upload = client
+        .put(format!("{url}/api/uploads/{upload_id}/chunks/1"))
+        .header("X-Chunk-SHA256", second_hash)
+        .body(second.to_vec())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second_upload.status(), reqwest::StatusCode::OK);
+
+    let completed = client
+        .post(format!("{url}/api/uploads/{upload_id}/complete"))
+        .send()
+        .await
+        .unwrap();
+    let completed_status = completed.status();
+    let completed_body = completed.bytes().await.unwrap();
+    assert_eq!(
+        completed_status,
+        reqwest::StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&completed_body)
+    );
+    let completed: serde_json::Value = serde_json::from_slice(&completed_body).unwrap();
+    let file_id = completed["files"][0]["id"].as_str().unwrap();
+
+    // 最终响应丢失时，客户端可重复 complete，必须返回同一文件而不是产生副本。
+    let completed_again: serde_json::Value = client
+        .post(format!("{url}/api/uploads/{upload_id}/complete"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(completed_again["files"][0]["id"], file_id);
+    let completed_status: serde_json::Value = client
+        .get(format!("{url}/api/uploads/{upload_id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(completed_status["completed"], true);
+
+    let downloaded = client
+        .get(format!("{url}/api/files/{file_id}/download"))
+        .send()
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    assert_eq!(downloaded.as_ref(), content.as_slice());
+
+    let cancelled = client
+        .post(&create_url)
+        .json(&serde_json::json!({ "file_name": "cancel.bin", "file_size": 12 }))
+        .send()
+        .await
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap();
+    let cancelled_id = cancelled["id"].as_str().unwrap();
+    let response = client
+        .delete(format!("{url}/api/uploads/{cancelled_id}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::NO_CONTENT);
+    let missing = client
+        .get(format!("{url}/api/uploads/{cancelled_id}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), reqwest::StatusCode::NOT_FOUND);
+    assert!(std::fs::read_dir(&storage).unwrap().all(|entry| !entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .ends_with(".part")));
+
+    server.abort();
+    let _ = std::fs::remove_dir_all(&storage);
+}

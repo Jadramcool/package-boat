@@ -8,7 +8,8 @@ use futures_util::future::join_all;
 use futures_util::StreamExt;
 use lane_core::server::{Config as ServerConfig, Server};
 use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, RANGE};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -16,7 +17,7 @@ use std::time::{Duration, Instant};
 
 const MIB: u64 = 1024 * 1024;
 const STREAM_CHUNK_SIZE: usize = 256 * 1024;
-const BENCHMARK_VERSION: u32 = 1;
+const BENCHMARK_VERSION: u32 = 2;
 
 type BenchResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -198,10 +199,19 @@ struct UploadResponse {
     files: Vec<FileRecord>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ChunkUploadSession {
+    id: String,
+    file_size: u64,
+    chunk_size: u64,
+    total_chunks: u32,
+    received_chunks: Vec<u32>,
+    uploaded_bytes: u64,
+}
+
 struct BenchServer {
     base_url: String,
     access_code: String,
-    storage_path: PathBuf,
     _storage: tempfile::TempDir,
     task: tokio::task::JoinHandle<()>,
 }
@@ -237,7 +247,6 @@ impl BenchServer {
         Ok(Self {
             base_url,
             access_code,
-            storage_path,
             _storage: storage,
             task,
         })
@@ -393,47 +402,45 @@ async fn run() -> BenchResult<()> {
     ));
 
     let interrupted_bytes = config.interrupted_mib * MIB;
-    let interrupted_spec = UploadSpec {
-        payload_bytes: interrupted_bytes,
-        transmitted_bytes: interrupted_bytes / 3,
-        network: None,
-        pattern: 0x3C,
-        complete_multipart: false,
-    };
-    let abort_outcome = match send_upload(
+    let requested_chunk_size = (interrupted_bytes / 4).clamp(
+        lane_core::uploads::MIN_CHUNK_SIZE,
+        lane_core::uploads::MAX_CHUNK_SIZE,
+    );
+    let session = create_chunk_upload(
         &client,
         &server.base_url,
         "benchmark-interrupted.bin",
-        interrupted_spec,
-    )
-    .await
-    {
-        Ok(response) if response.status().is_success() => {
-            return Err(failure("interrupted upload unexpectedly succeeded"));
-        }
-        Ok(response) => format!("server returned HTTP {}", response.status()),
-        Err(error) => format!("client transport ended: {error}"),
-    };
-    let cleanup_elapsed = wait_for_partial_cleanup(&server.storage_path).await?;
-
-    let started = Instant::now();
-    let retry = upload_file(
-        &client,
-        &server.base_url,
-        "benchmark-interrupted.bin",
-        UploadSpec::complete(interrupted_bytes, 0x3C, None),
+        interrupted_bytes,
+        requested_chunk_size,
     )
     .await?;
+    let initial_chunks = (session.total_chunks / 3).max(1);
+    for index in 0..initial_chunks {
+        upload_pattern_chunk(&client, &server.base_url, &session, index, 0x3C).await?;
+    }
+    // 用新的状态查询模拟客户端断线后重新连接；恢复阶段只发送缺失块。
+    let resumed = get_chunk_upload(&client, &server.base_url, &session.id).await?;
+    if resumed.received_chunks.len() != initial_chunks as usize {
+        return Err(failure("resumable session did not retain uploaded chunks"));
+    }
+    let reused_bytes = resumed.uploaded_bytes;
+    let recovery_bytes = interrupted_bytes.saturating_sub(reused_bytes);
+    let started = Instant::now();
+    for index in initial_chunks..resumed.total_chunks {
+        upload_pattern_chunk(&client, &server.base_url, &resumed, index, 0x3C).await?;
+    }
+    let retry = complete_chunk_upload(&client, &server.base_url, &resumed.id).await?;
     validate_size(&retry, interrupted_bytes)?;
     let elapsed = started.elapsed();
-    print_measurement("interrupted upload retry", interrupted_bytes, elapsed);
+    print_measurement("resumable upload recovery", recovery_bytes, elapsed);
     measurements.push(Measurement::new(
-        "interrupted_upload_retry",
-        interrupted_bytes,
+        "resumable_upload_recovery",
+        recovery_bytes,
         elapsed,
         format!(
-            "{abort_outcome}; partial cleanup completed in {:.3} ms",
-            cleanup_elapsed.as_secs_f64() * 1000.0
+            "{} MiB total, {:.2} MiB retained; only missing chunks transferred after reconnect",
+            config.interrupted_mib,
+            reused_bytes as f64 / MIB as f64,
         ),
     ));
 
@@ -569,6 +576,98 @@ async fn send_upload(
         .await
 }
 
+async fn create_chunk_upload(
+    client: &reqwest::Client,
+    base_url: &str,
+    filename: &str,
+    file_size: u64,
+    chunk_size: u64,
+) -> BenchResult<ChunkUploadSession> {
+    let response = client
+        .post(format!("{base_url}/api/uploads"))
+        .json(&serde_json::json!({
+            "file_name": filename,
+            "file_size": file_size,
+            "chunk_size": chunk_size,
+        }))
+        .send()
+        .await?;
+    parse_success(response, "create chunk upload").await
+}
+
+async fn get_chunk_upload(
+    client: &reqwest::Client,
+    base_url: &str,
+    id: &str,
+) -> BenchResult<ChunkUploadSession> {
+    let response = client
+        .get(format!("{base_url}/api/uploads/{id}"))
+        .send()
+        .await?;
+    parse_success(response, "query chunk upload").await
+}
+
+async fn upload_pattern_chunk(
+    client: &reqwest::Client,
+    base_url: &str,
+    session: &ChunkUploadSession,
+    index: u32,
+    pattern: u8,
+) -> BenchResult<()> {
+    let offset = index as u64 * session.chunk_size;
+    let length = session
+        .chunk_size
+        .min(session.file_size.saturating_sub(offset));
+    let body = vec![pattern; usize::try_from(length)?];
+    let checksum = format!("{:x}", Sha256::digest(&body));
+    let response = client
+        .put(format!(
+            "{base_url}/api/uploads/{}/chunks/{index}",
+            session.id
+        ))
+        .header("X-Chunk-SHA256", checksum)
+        .body(body)
+        .send()
+        .await?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(failure(format!(
+            "upload chunk failed with {status}: {body}"
+        )));
+    }
+    Ok(())
+}
+
+async fn complete_chunk_upload(
+    client: &reqwest::Client,
+    base_url: &str,
+    id: &str,
+) -> BenchResult<FileRecord> {
+    let response = client
+        .post(format!("{base_url}/api/uploads/{id}/complete"))
+        .send()
+        .await?;
+    let payload: UploadResponse = parse_success(response, "complete chunk upload").await?;
+    payload
+        .files
+        .into_iter()
+        .next()
+        .ok_or_else(|| failure("chunk upload response did not contain a file"))
+}
+
+async fn parse_success<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+    operation: &str,
+) -> BenchResult<T> {
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(failure(format!("{operation} failed with {status}: {body}")));
+    }
+    Ok(response.json().await?)
+}
+
 async fn parallel_range_download(
     client: &reqwest::Client,
     base_url: &str,
@@ -624,26 +723,6 @@ async fn parallel_range_download(
         total += result?;
     }
     Ok(total)
-}
-
-async fn wait_for_partial_cleanup(storage: &Path) -> BenchResult<Duration> {
-    let started = Instant::now();
-    loop {
-        let has_partial = std::fs::read_dir(storage)?
-            .filter_map(Result::ok)
-            .any(|entry| {
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                name.starts_with(".laneshare-") && name.ends_with(".part")
-            });
-        if !has_partial {
-            return Ok(started.elapsed());
-        }
-        if started.elapsed() > Duration::from_secs(5) {
-            return Err(failure("partial upload was not cleaned within 5 seconds"));
-        }
-        tokio::time::sleep(Duration::from_millis(25)).await;
-    }
 }
 
 fn validate_size(file: &FileRecord, expected: u64) -> BenchResult<()> {

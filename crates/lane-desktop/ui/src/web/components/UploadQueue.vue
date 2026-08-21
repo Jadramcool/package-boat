@@ -40,6 +40,7 @@ const emit = defineEmits<{
             <span v-else-if="task.status === 'complete'">已投递</span>
             <span v-else-if="task.status === 'queued'">等待中</span>
             <span v-else-if="task.status === 'cancelled'">已取消</span>
+            <span v-else-if="task.resumed">断点续传 · {{ task.progress }}%</span>
             <span v-else>{{ task.progress }}%</span>
           </div>
         </div>

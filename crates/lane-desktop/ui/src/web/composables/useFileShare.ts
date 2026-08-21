@@ -1,5 +1,6 @@
 import { computed, onUnmounted, readonly, ref, shallowRef } from 'vue'
 import {
+  cancelUploadSession,
   deleteSharedFile,
   getFiles,
   getServiceInfo,
@@ -8,6 +9,7 @@ import {
   pairDevice,
   signOutDevice,
 } from '../api'
+import { runResumableUpload } from '../resumableUpload'
 import type { ServiceInfo, SharedFile, UploadTask } from '../types'
 
 const MAX_CONCURRENT_UPLOADS = 2
@@ -19,16 +21,6 @@ function taskID(): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '发生未知错误'
-}
-
-function uploadError(request: XMLHttpRequest): string {
-  try {
-    const payload = JSON.parse(request.responseText) as { error?: string }
-    return payload.error ?? `上传失败（${request.status}）`
-  }
-  catch {
-    return `上传失败（${request.status || '网络错误'}）`
-  }
 }
 
 function pairingCodeFromHash(): string {
@@ -57,7 +49,7 @@ export function useFileShare() {
   const deletingID = shallowRef('')
   const activeUploads = shallowRef(0)
 
-  const requests = new Map<string, XMLHttpRequest>()
+  const uploadControllers = new Map<string, AbortController>()
   let events: EventSource | null = null
 
   const completedUploads = computed(() =>
@@ -125,8 +117,8 @@ export function useFileShare() {
     }
     finally {
       disconnectEvents()
-      for (const request of requests.values())
-        request.abort()
+      for (const controller of uploadControllers.values())
+        controller.abort()
       authenticated.value = false
       files.value = []
       error.value = ''
@@ -173,49 +165,57 @@ export function useFileShare() {
   }
 
   function startUpload(task: UploadTask): void {
+    void performUpload(task)
+  }
+
+  async function performUpload(task: UploadTask): Promise<void> {
     task.status = 'uploading'
-    task.progress = 0
+    if (!task.sessionID)
+      task.progress = 0
     task.error = undefined
     activeUploads.value += 1
+    const controller = new AbortController()
+    uploadControllers.set(task.id, controller)
 
-    const request = new XMLHttpRequest()
-    requests.set(task.id, request)
-    request.open('POST', '/api/files')
-    request.withCredentials = true
-    request.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable)
-        task.progress = Math.min(99, Math.round(event.loaded / event.total * 100))
-    })
-    request.addEventListener('load', () => {
-      if (request.status === 201) {
-        task.status = 'complete'
-        task.progress = 100
-        void loadFiles()
-        return
+    try {
+      await runResumableUpload({
+        file: task.file,
+        sessionID: task.sessionID,
+        signal: controller.signal,
+        onSession: (sessionID) => {
+          task.sessionID = sessionID
+        },
+        onProgress: (progress, resumed) => {
+          task.progress = progress
+          task.resumed = resumed
+        },
+      })
+      task.status = 'complete'
+      task.progress = 100
+      task.sessionID = undefined
+      online.value = true
+      await loadFiles()
+    }
+    catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') {
+        task.status = 'cancelled'
+        task.error = undefined
+        await discardUploadSession(task)
       }
-      if (request.status === 401)
-        authenticated.value = false
-      task.status = 'error'
-      task.error = uploadError(request)
-    })
-    request.addEventListener('error', () => {
-      task.status = 'error'
-      task.error = '网络连接中断，请重试'
-      online.value = false
-    })
-    request.addEventListener('abort', () => {
-      task.status = 'cancelled'
-      task.error = undefined
-    })
-    request.addEventListener('loadend', () => {
-      requests.delete(task.id)
+      else {
+        if (cause instanceof HttpError && cause.status === 401)
+          authenticated.value = false
+        task.status = 'error'
+        task.error = errorMessage(cause)
+        if (!(cause instanceof HttpError))
+          online.value = false
+      }
+    }
+    finally {
+      uploadControllers.delete(task.id)
       activeUploads.value = Math.max(0, activeUploads.value - 1)
       scheduleUploads()
-    })
-
-    const form = new FormData()
-    form.append('file', task.file, task.file.name)
-    request.send(form)
+    }
   }
 
   function cancelUpload(id: string): void {
@@ -224,9 +224,11 @@ export function useFileShare() {
       return
     if (task.status === 'queued') {
       task.status = 'cancelled'
+      void discardUploadSession(task)
       return
     }
-    requests.get(id)?.abort()
+    task.status = 'cancelled'
+    uploadControllers.get(id)?.abort()
   }
 
   function retryUpload(id: string): void {
@@ -236,7 +238,21 @@ export function useFileShare() {
     task.status = 'queued'
     task.progress = 0
     task.error = undefined
+    task.resumed = false
     scheduleUploads()
+  }
+
+  async function discardUploadSession(task: UploadTask): Promise<void> {
+    const sessionID = task.sessionID
+    task.sessionID = undefined
+    if (!sessionID)
+      return
+    try {
+      await cancelUploadSession(sessionID)
+    }
+    catch {
+      // 会话会由服务端在 24 小时后清理；取消操作不覆盖用户界面状态。
+    }
   }
 
   function clearFinishedUploads(): void {
@@ -290,8 +306,8 @@ export function useFileShare() {
 
   onUnmounted(() => {
     disconnectEvents()
-    for (const request of requests.values())
-      request.abort()
+    for (const controller of uploadControllers.values())
+      controller.abort()
   })
 
   return {

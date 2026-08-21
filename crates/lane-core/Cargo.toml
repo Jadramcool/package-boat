@@ -30,6 +30,7 @@ zip = "2"
 multer = "3"
 http-range-header = "0.4"
 tracing = { workspace = true }
+sha2 = { workspace = true }
 rust-embed = "8"
 
 [dev-dependencies]
