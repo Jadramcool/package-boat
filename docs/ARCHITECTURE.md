@@ -3,12 +3,14 @@
 LANE 将传输能力集中在 `lane-core`，CLI 和桌面端只负责生命周期与交互。
 
 ```text
-Browser ── HTTP/SSE ──> lane-core <── lane-cli
-                            ↑
-                            └──────── lane-desktop (Tauri commands)
-                                           ↑
-                                      Vue desktop UI
+Vue browser UI ── HTTP/SSE ──> lane-core <── lane-cli
+                                  ↑
+                                  └────── lane-desktop (Tauri commands)
+                                                   ↑
+                                             Vue desktop UI
 ```
+
+两个 Vue 界面位于同一个 pnpm/Vite 包。根组件根据 Tauri 运行时选择桌面入口，否则加载浏览器入口；浏览器侧的配对、文件架、投递队列等组件集中在 `ui/src/web`。生产构建完成后，脚本会把 Vite 产物及 gzip 变体同步到 `lane-core/assets/dist`，由 `rust-embed` 编入 CLI 和桌面服务。
 
 ## 核心模块
 

@@ -20,10 +20,10 @@ LANE 是一个以 Rust 编写的局域网文件分享工具。发送端只需打
 crates/
 ├── lane-core/       # HTTP 服务、认证、目录表与传输逻辑
 ├── lane-cli/        # laneshare 命令行程序
-└── lane-desktop/    # Tauri 2 Windows 桌面端与 Vue 3 UI
+└── lane-desktop/    # Tauri 2 Windows 桌面端与统一 Vue 3 前端
 ```
 
-浏览器接收页目前以构建产物形式嵌入 `lane-core/assets/dist`；将其源代码纳入同一仓库是近期路线图的一部分。
+桌面端和浏览器接收页源码均位于 `crates/lane-desktop/ui/src`。生产构建会同时生成两个按需加载的入口，并把可嵌入资源同步到 `lane-core/assets/dist`。
 
 ## 快速开始
 
@@ -48,8 +48,8 @@ cargo run -p lane-cli -- --port 8080 --name "My PC"
 除 Rust 外，需要 Node.js、pnpm 以及 [Tauri 2 的 Windows 开发依赖](https://v2.tauri.app/start/prerequisites/)。仓库通过 `packageManager` 固定 pnpm 版本。
 
 ```powershell
+pnpm install --frozen-lockfile
 cd crates/lane-desktop
-pnpm --dir ui install --frozen-lockfile
 & .\ui\node_modules\.bin\tauri.cmd dev
 ```
 
@@ -59,6 +59,15 @@ pnpm --dir ui install --frozen-lockfile
 cd crates/lane-desktop
 & .\ui\node_modules\.bin\tauri.cmd build
 ```
+
+单独开发浏览器接收页时，先在一个终端固定启动本地服务，再在另一个终端启动 Vite；浏览器打开 `http://127.0.0.1:5173` 即可获得热更新：
+
+```powershell
+cargo run -p lane-cli -- --host 127.0.0.1 --port 8080 --name "LANE Dev"
+pnpm run dev:web
+```
+
+如服务使用其他端口，可通过 `LANE_DEV_SERVER_URL` 覆盖 Vite 的 `/api` 代理目标。
 
 ## 质量检查
 
@@ -70,7 +79,6 @@ cargo test --workspace
 # 快速端到端传输基准
 cargo bench -p lane-core --bench transfer -- --profile smoke
 
-cd crates/lane-desktop/ui
 pnpm install --frozen-lockfile
 pnpm run build
 ```

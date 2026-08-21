@@ -6,6 +6,8 @@
 
 ### Added
 
+- 浏览器接收页完整 Vue/TypeScript 源码，以及桌面/浏览器统一构建入口。
+- 根级 pnpm workspace 和嵌入资源同步脚本，CI 会校验浏览器构建产物未过期。
 - 端到端传输基准，覆盖大文件、带宽/延迟/抖动弱网、并发上传、并行 Range 下载和中断恢复。
 - 手动及每周 GitHub Benchmark 工作流，输出 Markdown 和 JSON 报告。
 - 服务启动时回收超过 24 小时的残留上传和文件夹 ZIP 临时文件。

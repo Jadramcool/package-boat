@@ -113,7 +113,10 @@ fn set_content_type(response: &mut Response<Body>, requested: &str) {
     }
 }
 
-/// 判断是否为带内容哈希的构建产物（`assets/<name>-<hash>.<ext>`，哈希 ≥ 8 字符）。
+/// 判断是否为带内容哈希的构建产物。
+///
+/// Vite 使用 URL-safe base64 风格哈希，其中可能包含 `-`（例如 `C-FYbMVH`），
+/// 因此不能只取文件名最后一个 `-` 后的片段。
 fn is_hashed_asset(requested: &str) -> bool {
     if !requested.starts_with("assets/") {
         return false;
@@ -124,10 +127,16 @@ fn is_hashed_asset(requested: &str) -> bool {
         Some(pos) => &base[..pos],
         None => base,
     };
-    match stem.rfind('-') {
-        Some(dash) => stem.len() - dash > 8,
-        None => false,
-    }
+    let Some((_, hash)) = stem.split_once('-') else {
+        return false;
+    };
+    hash.len() >= 8
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        && hash
+            .bytes()
+            .any(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
 }
 
 /// 解析 Accept-Encoding 的 q 值并判断是否接受指定编码（与 Go 版一致）。
@@ -195,8 +204,10 @@ mod tests {
     #[test]
     fn hashed_asset_detection() {
         assert!(is_hashed_asset("assets/index-Cx7t2389.js"));
+        assert!(is_hashed_asset("assets/index-C-FYbMVH.js"));
         assert!(is_hashed_asset("assets/app-12345678.js"));
         assert!(!is_hashed_asset("assets/plain.js"));
+        assert!(!is_hashed_asset("assets/some-long-name.js"));
         assert!(!is_hashed_asset("index.html"));
         assert!(!is_hashed_asset("assets/short-1.js"));
     }

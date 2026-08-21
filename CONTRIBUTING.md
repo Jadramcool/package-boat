@@ -15,12 +15,11 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
-cd crates/lane-desktop/ui
 pnpm install --frozen-lockfile
 pnpm run build
 ```
 
-涉及传输协议时，请补充 `crates/lane-core/tests` 下的集成测试；涉及 UI 时，请至少完成 TypeScript 类型检查和生产构建。
+涉及传输协议时，请补充 `crates/lane-core/tests` 下的集成测试；涉及 UI 时，请至少完成 TypeScript 类型检查和生产构建。`pnpm run build` 会刷新 `lane-core/assets/dist`，请将对应的嵌入资源一并提交。
 
 ## 提交与 PR
 

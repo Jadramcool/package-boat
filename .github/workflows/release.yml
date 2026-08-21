@@ -21,9 +21,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: crates/lane-desktop/ui/pnpm-lock.yaml
-      - name: Install desktop dependencies
-        run: pnpm --dir crates/lane-desktop/ui install --frozen-lockfile
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
       - name: Verify release version
         shell: pwsh
         run: |

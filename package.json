@@ -1,0 +1,10 @@
+{
+  "name": "lane-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "pnpm --filter lane-desktop-ui run build",
+    "dev:web": "pnpm --filter lane-desktop-ui run dev",
+    "typecheck": "pnpm --filter lane-desktop-ui run typecheck"
+  }
+}

@@ -194,9 +194,21 @@ async fn static_asset_compression_and_caching() {
     })
     .await;
 
+    let index = reqwest::get(format!("{url}/"))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    let script_path = index
+        .split("src=\"./")
+        .nth(1)
+        .and_then(|value| value.split('"').next())
+        .expect("built index contains a module script");
+
     // gzip 变体：Content-Encoding + 不可变缓存
     let response = reqwest::Client::new()
-        .get(format!("{url}/assets/index-Cx7t2389.js"))
+        .get(format!("{url}/{script_path}"))
         .header("Accept-Encoding", "br, gzip")
         .send()
         .await
@@ -218,7 +230,7 @@ async fn static_asset_compression_and_caching() {
 
     // 禁用 gzip：返回原始内容（体积大于压缩变体）
     let response = reqwest::Client::new()
-        .get(format!("{url}/assets/index-Cx7t2389.js"))
+        .get(format!("{url}/{script_path}"))
         .header("Accept-Encoding", "gzip;q=0")
         .send()
         .await
