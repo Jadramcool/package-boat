@@ -40,12 +40,22 @@ export interface ChunkUploadSession {
   completed: boolean
 }
 
+export interface UploadProgressSnapshot {
+  uploadedBytes: number
+  totalBytes: number
+  progress: number
+  resumed: boolean
+}
+
 export type UploadStatus = 'queued' | 'uploading' | 'complete' | 'error' | 'cancelled'
 
 export interface UploadTask {
   id: string
   file: File
   progress: number
+  uploadedBytes: number
+  speedBytesPerSecond: number
+  etaSeconds?: number
   status: UploadStatus
   error?: string
   sessionID?: string

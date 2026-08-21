@@ -5,6 +5,7 @@
   "scripts": {
     "build": "pnpm --filter lane-desktop-ui run build",
     "dev:web": "pnpm --filter lane-desktop-ui run dev",
+    "test": "pnpm --filter lane-desktop-ui run test",
     "typecheck": "pnpm --filter lane-desktop-ui run typecheck"
   }
 }

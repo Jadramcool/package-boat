@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Check, CircleX, LoaderCircle, RotateCcw, X } from '@lucide/vue'
-import { formatBytes } from '@/utils/format'
+import { formatBytes, formatDuration } from '@/utils/format'
 import type { UploadTask } from '../types'
 
 defineProps<{
@@ -13,6 +13,16 @@ const emit = defineEmits<{
   retry: [id: string]
   clear: []
 }>()
+
+function transferDetail(task: UploadTask): string {
+  const parts = task.resumed ? ['断点续传'] : []
+  parts.push(`${task.progress}%`)
+  parts.push(`${formatBytes(task.speedBytesPerSecond)}/s`)
+  parts.push(task.etaSeconds === undefined
+    ? '剩余时间计算中'
+    : `剩余 ${formatDuration(task.etaSeconds)}`)
+  return parts.join(' · ')
+}
 </script>
 
 <template>
@@ -40,8 +50,7 @@ const emit = defineEmits<{
             <span v-else-if="task.status === 'complete'">已投递</span>
             <span v-else-if="task.status === 'queued'">等待中</span>
             <span v-else-if="task.status === 'cancelled'">已取消</span>
-            <span v-else-if="task.resumed">断点续传 · {{ task.progress }}%</span>
-            <span v-else>{{ task.progress }}%</span>
+            <span v-else>{{ transferDetail(task) }}</span>
           </div>
         </div>
         <button

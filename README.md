@@ -8,7 +8,7 @@ LANE 是一个以 Rust 编写的局域网文件分享工具。发送端只需打
 
 - 局域网浏览器访问，无需在发送端安装客户端
 - 六位配对码、会话 Cookie 与按 IP 限速
-- 多文件并行分块上传、断点续传与 SHA-256 校验，单文件 Range/断点下载
+- 多文件并行分块上传、断点续传、实时速度/剩余时间与 SHA-256 校验，单文件 Range/断点下载
 - 原位分享文件和文件夹，不复制源文件
 - 文件夹下载时自动打包 ZIP
 - SSE 实时刷新文件列表
@@ -80,6 +80,7 @@ cargo test --workspace
 cargo bench -p lane-core --bench transfer -- --profile smoke
 
 pnpm install --frozen-lockfile
+pnpm run test
 pnpm run build
 ```
 

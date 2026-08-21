@@ -9,6 +9,22 @@ export function formatBytes(value: number): string {
   return `${scaled.toFixed(digits)} ${units[unitIndex]}`
 }
 
+export function formatDuration(value: number): string {
+  if (!Number.isFinite(value) || value <= 0)
+    return '0 秒'
+  const seconds = Math.ceil(value)
+  if (seconds < 60)
+    return `${seconds} 秒`
+  if (seconds < 3_600) {
+    const minutes = Math.floor(seconds / 60)
+    const remainder = seconds % 60
+    return remainder > 0 ? `${minutes} 分 ${remainder} 秒` : `${minutes} 分`
+  }
+  const hours = Math.floor(seconds / 3_600)
+  const minutes = Math.floor(seconds % 3_600 / 60)
+  return minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
+}
+
 export function formatDate(value: string): string {
   const date = new Date(value)
   const today = new Date()

@@ -4,14 +4,14 @@ import {
   getUploadSession,
   HttpError,
 } from './api'
-import type { ChunkUploadSession, UploadResponse } from './types'
+import type { ChunkUploadSession, UploadProgressSnapshot, UploadResponse } from './types'
 
 interface ResumableUploadOptions {
   file: File
   sessionID?: string
   signal: AbortSignal
   onSession: (id: string) => void
-  onProgress: (progress: number, resumed: boolean) => void
+  onProgress: (snapshot: UploadProgressSnapshot) => void
 }
 
 interface ResumableUploadResult {
@@ -29,7 +29,7 @@ export async function runResumableUpload(
   const received = new Set(session.received_chunks)
   let confirmedBytes = session.uploaded_bytes
   const resumed = confirmedBytes > 0
-  onProgress(progressPercent(confirmedBytes, file.size), resumed)
+  reportProgress(onProgress, confirmedBytes, file.size, resumed)
 
   for (let index = 0; index < session.total_chunks; index += 1) {
     throwIfAborted(signal)
@@ -40,16 +40,16 @@ export async function runResumableUpload(
     const chunk = file.slice(start, Math.min(start + session.chunk_size, file.size))
     const checksum = await sha256(chunk, signal)
     await uploadChunk(session, index, chunk, checksum, signal, (loaded) => {
-      onProgress(progressPercent(confirmedBytes + loaded, file.size), resumed)
+      reportProgress(onProgress, confirmedBytes + loaded, file.size, resumed)
     })
     confirmedBytes += chunk.size
     received.add(index)
-    onProgress(progressPercent(confirmedBytes, file.size), resumed)
+    reportProgress(onProgress, confirmedBytes, file.size, resumed)
   }
 
   throwIfAborted(signal)
   const response = await completeUploadSession(session.id, signal)
-  onProgress(100, resumed)
+  reportProgress(onProgress, file.size, file.size, resumed, true)
   return { response, sessionID: session.id }
 }
 
@@ -145,6 +145,21 @@ function progressPercent(done: number, total: number): number {
   if (total === 0)
     return 99
   return Math.min(99, Math.round(done / total * 100))
+}
+
+function reportProgress(
+  callback: (snapshot: UploadProgressSnapshot) => void,
+  uploadedBytes: number,
+  totalBytes: number,
+  resumed: boolean,
+  complete = false,
+): void {
+  callback({
+    uploadedBytes,
+    totalBytes,
+    progress: complete ? 100 : progressPercent(uploadedBytes, totalBytes),
+    resumed,
+  })
 }
 
 function throwIfAborted(signal: AbortSignal): void {

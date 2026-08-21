@@ -10,6 +10,7 @@ import {
   signOutDevice,
 } from '../api'
 import { runResumableUpload } from '../resumableUpload'
+import { createTransferMetricsTracker } from '../transferMetrics'
 import type { ServiceInfo, SharedFile, UploadTask } from '../types'
 
 const MAX_CONCURRENT_UPLOADS = 2
@@ -148,6 +149,8 @@ export function useFileShare() {
         id: taskID(),
         file,
         progress: 0,
+        uploadedBytes: 0,
+        speedBytesPerSecond: 0,
         status: tooLarge ? 'error' : 'queued',
         error: tooLarge ? '文件超过服务器大小限制' : undefined,
       })
@@ -172,10 +175,21 @@ export function useFileShare() {
     task.status = 'uploading'
     if (!task.sessionID)
       task.progress = 0
+    task.speedBytesPerSecond = 0
+    task.etaSeconds = undefined
     task.error = undefined
     activeUploads.value += 1
     const controller = new AbortController()
     uploadControllers.set(task.id, controller)
+    const metricsTracker = createTransferMetricsTracker(task.file.size)
+    let latestUploadedBytes = 0
+    let metricsTimer: ReturnType<typeof setInterval> | undefined
+
+    const refreshMetrics = (): void => {
+      const metrics = metricsTracker.update(latestUploadedBytes)
+      task.speedBytesPerSecond = metrics.speedBytesPerSecond
+      task.etaSeconds = metrics.etaSeconds
+    }
 
     try {
       await runResumableUpload({
@@ -185,13 +199,20 @@ export function useFileShare() {
         onSession: (sessionID) => {
           task.sessionID = sessionID
         },
-        onProgress: (progress, resumed) => {
-          task.progress = progress
-          task.resumed = resumed
+        onProgress: (snapshot) => {
+          latestUploadedBytes = snapshot.uploadedBytes
+          task.uploadedBytes = snapshot.uploadedBytes
+          task.progress = snapshot.progress
+          task.resumed = snapshot.resumed
+          refreshMetrics()
+          metricsTimer ??= setInterval(refreshMetrics, 1_000)
         },
       })
       task.status = 'complete'
       task.progress = 100
+      task.uploadedBytes = task.file.size
+      task.speedBytesPerSecond = 0
+      task.etaSeconds = 0
       task.sessionID = undefined
       online.value = true
       await loadFiles()
@@ -207,11 +228,15 @@ export function useFileShare() {
           authenticated.value = false
         task.status = 'error'
         task.error = errorMessage(cause)
+        task.speedBytesPerSecond = 0
+        task.etaSeconds = undefined
         if (!(cause instanceof HttpError))
           online.value = false
       }
     }
     finally {
+      if (metricsTimer !== undefined)
+        clearInterval(metricsTimer)
       uploadControllers.delete(task.id)
       activeUploads.value = Math.max(0, activeUploads.value - 1)
       scheduleUploads()
@@ -237,6 +262,9 @@ export function useFileShare() {
       return
     task.status = 'queued'
     task.progress = 0
+    task.uploadedBytes = 0
+    task.speedBytesPerSecond = 0
+    task.etaSeconds = undefined
     task.error = undefined
     task.resumed = false
     scheduleUploads()
