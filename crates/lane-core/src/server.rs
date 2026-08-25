@@ -83,10 +83,6 @@ impl Server {
                 Catalog::open(PathBuf::new()).map_err(|err| format!("初始化共享目录表: {err}"))?,
             ),
         };
-        catalog
-            .import_received_directory(&storage_dir)
-            .map_err(|err| format!("导入接收目录: {err}"))?;
-
         let max_upload_bytes = config.max_upload_bytes;
         let uploads = Arc::new(UploadManager::new(
             storage_dir.clone(),

@@ -1,5 +1,5 @@
 //! 共享目录表：`catalog.json`。`linked` 条目只保存源文件绝对路径（不复制、不移动），
-//! `received` 条目指向接收目录中的上传文件。所有变更先落盘再提交内存状态。
+//! `received` 条目只由本次服务明确接收的上传文件产生。所有变更先落盘再提交内存状态。
 
 use crate::CATALOG_VERSION;
 use chrono::{DateTime, Utc};
@@ -154,67 +154,6 @@ impl Catalog {
         Ok(item)
     }
 
-    /// 扫描接收目录并把其中的普通文件登记为 received 条目（跳过子目录、符号链接与临时文件）。
-    pub fn import_received_directory(&self, directory: &Path) -> Result<(), String> {
-        let entries = std::fs::read_dir(directory).map_err(|err| format!("读取接收目录: {err}"))?;
-        let mut candidates = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(|err| err.to_string())?;
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            let file_type = entry.file_type().map_err(|err| err.to_string())?;
-            if !file_type.is_file() || file_type.is_symlink() || name_str.starts_with(".laneshare-")
-            {
-                continue;
-            }
-
-            let absolute =
-                std::path::absolute(entry.path()).map_err(|err| format!("解析接收路径: {err}"))?;
-            let metadata = entry
-                .metadata()
-                .map_err(|err| format!("读取接收文件: {err}"))?;
-            candidates.push(Item {
-                id: new_id(),
-                name: name_str.into_owned(),
-                source_type: SourceType::Received,
-                local_path: absolute.to_string_lossy().into_owned(),
-                size: metadata.len() as i64,
-                modified_at: DateTime::from(
-                    metadata
-                        .modified()
-                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-                ),
-                added_at: Utc::now(),
-                available: true,
-                is_dir: false,
-            });
-        }
-
-        if candidates.is_empty() {
-            return Ok(());
-        }
-
-        // 批量合并后只持久化一次，避免 N 个文件触发 N 次完整 catalog 重写。
-        let mut guard = self.inner.write().expect("catalog lock poisoned");
-        let start_len = guard.len();
-        let mut existing: HashSet<String> = guard
-            .iter()
-            .map(|item| item.local_path.to_lowercase())
-            .collect();
-        for item in candidates {
-            if existing.insert(item.local_path.to_lowercase()) {
-                guard.push(item);
-            }
-        }
-        if guard.len() > start_len {
-            if let Err(err) = self.save_locked(&guard) {
-                guard.truncate(start_len);
-                return Err(err);
-            }
-        }
-        Ok(())
-    }
-
     /// 列出全部条目：刷新每个条目的可用性与大小/修改时间，按加入时间倒序（稳定排序）。
     pub fn list(&self) -> Vec<Item> {
         let mut guard = self.inner.write().expect("catalog lock poisoned");
@@ -296,10 +235,19 @@ impl Catalog {
         };
         let stored: PersistedCatalog =
             serde_json::from_slice(&content).map_err(|err| format!("解析共享目录表: {err}"))?;
-        if stored.version != CATALOG_VERSION {
-            return Err(format!("不支持的共享目录表版本: {}", stored.version));
-        }
-        *self.inner.write().expect("catalog lock poisoned") = stored.items;
+        let mut items = match stored.version {
+            CATALOG_VERSION => stored.items,
+            1 => {
+                // v1 会在启动时扫描接收目录，无法区分自动导入文件与真实上传文件。
+                // 为避免升级后继续意外暴露整个目录，只迁移原位共享条目；磁盘文件不删除。
+                let mut items = stored.items;
+                items.retain(|item| item.source_type != SourceType::Received);
+                self.save_locked(&items)?;
+                items
+            }
+            version => return Err(format!("不支持的共享目录表版本: {version}")),
+        };
+        *self.inner.write().expect("catalog lock poisoned") = std::mem::take(&mut items);
         Ok(())
     }
 
@@ -462,24 +410,54 @@ mod tests {
     }
 
     #[test]
-    fn received_directory_import_is_persisted_without_duplicates() {
-        let root = temp_dir("bulk-import");
+    fn received_files_are_registered_only_when_explicitly_added() {
+        let root = temp_dir("explicit-received");
         let received = root.join("received");
         std::fs::create_dir_all(&received).unwrap();
-        std::fs::write(received.join("one.txt"), b"one").unwrap();
-        std::fs::write(received.join("two.txt"), b"two").unwrap();
-        std::fs::write(received.join(".laneshare-stale.part"), b"partial").unwrap();
-        std::fs::create_dir_all(received.join("nested")).unwrap();
+        let uploaded = received.join("uploaded.txt");
+        std::fs::write(&uploaded, b"uploaded").unwrap();
+        std::fs::write(received.join("unrelated.txt"), b"unrelated").unwrap();
 
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog.add_received(uploaded).unwrap();
+
+        let items = catalog.list();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "uploaded.txt");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn legacy_received_items_are_removed_without_deleting_files() {
+        let root = temp_dir("legacy-received");
+        let existing = root.join("existing.txt");
+        std::fs::write(&existing, b"keep on disk").unwrap();
         let catalog_path = root.join("catalog.json");
-        let catalog = Catalog::open(catalog_path.clone()).unwrap();
-        catalog.import_received_directory(&received).unwrap();
-        catalog.import_received_directory(&received).unwrap();
+        let timestamp = Utc::now();
+        let legacy = serde_json::json!({
+            "version": 1,
+            "items": [{
+                "id": "legacy-received",
+                "name": "existing.txt",
+                "source_type": "received",
+                "local_path": existing.to_string_lossy(),
+                "size": 12,
+                "modified_at": timestamp,
+                "added_at": timestamp,
+                "available": true,
+                "is_dir": false
+            }]
+        });
+        std::fs::write(&catalog_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
 
-        let reloaded = Catalog::open(catalog_path).unwrap();
-        let mut names: Vec<String> = reloaded.list().into_iter().map(|item| item.name).collect();
-        names.sort();
-        assert_eq!(names, vec!["one.txt", "two.txt"]);
+        let catalog = Catalog::open(catalog_path.clone()).unwrap();
+        assert!(catalog.list().is_empty());
+        assert!(existing.exists());
+
+        let migrated: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(catalog_path).unwrap()).unwrap();
+        assert_eq!(migrated["version"], CATALOG_VERSION);
+        assert!(migrated["items"].as_array().unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -153,6 +153,40 @@ async fn file_lifecycle() {
 }
 
 #[tokio::test]
+async fn existing_receive_files_are_not_shared_on_startup() {
+    let storage = temp_dir("receive-isolation");
+    std::fs::write(storage.join("unrelated.txt"), b"must stay private").unwrap();
+    let (url, code, server) = spawn(Config {
+        device_name: "test-station".into(),
+        storage_dir: storage.clone(),
+        max_upload_bytes: 1024 * 1024,
+        version: "test".into(),
+        catalog: None,
+        progress: None,
+    })
+    .await;
+    let client = cookie_client();
+    assert_eq!(
+        pair(&client, &url, &code).await.status(),
+        reqwest::StatusCode::NO_CONTENT
+    );
+
+    let listing: FilesResponse = client
+        .get(format!("{url}/api/files"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(listing.files.is_empty());
+    assert!(storage.join("unrelated.txt").exists());
+
+    server.abort();
+    let _ = std::fs::remove_dir_all(&storage);
+}
+
+#[tokio::test]
 async fn static_app_and_security_headers() {
     let storage = temp_dir("static");
     let (url, _, server) = spawn(Config {

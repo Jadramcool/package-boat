@@ -20,5 +20,8 @@ pub mod uploads;
 pub use catalog::{Item, SourceType};
 pub use settings::Settings;
 
-/// 数据文件中的目录表版本号（与 Go 版一致）。
-pub const CATALOG_VERSION: i32 = 1;
+/// 数据文件中的目录表版本号。
+///
+/// v2 停止把接收目录中的既有文件自动登记为共享条目；旧版 received
+/// 记录会在加载时从目录表移除，但不会删除对应的磁盘文件。
+pub const CATALOG_VERSION: i32 = 2;
