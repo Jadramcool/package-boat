@@ -6,6 +6,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
   addLinkedFiles,
+  clearSharedFiles as clearSharedFilesCommand,
   chooseLinkedFiles,
   chooseReceiveDirectory as chooseReceiveDirectoryCommand,
   errorEvent,
@@ -139,15 +140,32 @@ export function useDesktopHost() {
   }
 
   function showAddedNotice(count: number) {
-    noticeMessage.value = count > 0
+    showNotice(count > 0
       ? `已添加 ${count} 个共享文件`
-      : '所选文件已经在共享清单中。'
+      : '所选文件已经在共享清单中。')
+  }
+
+  function showNotice(message: string) {
+    noticeMessage.value = message
     window.clearTimeout(noticeTimer)
     noticeTimer = window.setTimeout(() => noticeMessage.value = '', 3200)
   }
 
   async function unshare(id: string) {
     await perform(`unshare:${id}`, () => unshareCommand(id))
+  }
+
+  async function clearSharedFiles() {
+    const count = state.value?.items.length ?? 0
+    if (count === 0 || busy.value)
+      return
+    if (!window.confirm(`确定清空 ${count} 个共享条目吗？\n\n只移除共享清单记录，不删除原文件或接收目录中的文件。`))
+      return
+
+    await perform('clear', async () => {
+      const cleared = await clearSharedFilesCommand()
+      showNotice(`已清空 ${cleared} 个共享条目，文件未删除`)
+    })
   }
 
   async function chooseReceiveDirectory() {
@@ -278,6 +296,7 @@ export function useDesktopHost() {
     chooseFiles,
     addDroppedFiles,
     unshare,
+    clearSharedFiles,
     chooseReceiveDirectory,
     toggleServer,
     revealItem,

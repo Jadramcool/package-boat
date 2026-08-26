@@ -227,6 +227,21 @@ impl Catalog {
         Ok(removed)
     }
 
+    /// 清空共享目录表，但不删除任何原位共享文件或接收文件。
+    pub fn clear(&self) -> Result<usize, String> {
+        let mut guard = self.inner.write().expect("catalog lock poisoned");
+        if guard.is_empty() {
+            return Ok(0);
+        }
+
+        let previous = std::mem::take(&mut *guard);
+        if let Err(err) = self.save_locked(&[]) {
+            *guard = previous;
+            return Err(err);
+        }
+        Ok(previous.len())
+    }
+
     fn load(&self) -> Result<(), String> {
         let content = match std::fs::read(&self.path) {
             Ok(content) => content,
@@ -458,6 +473,30 @@ mod tests {
             serde_json::from_slice(&std::fs::read(catalog_path).unwrap()).unwrap();
         assert_eq!(migrated["version"], CATALOG_VERSION);
         assert!(migrated["items"].as_array().unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn clearing_catalog_preserves_files() {
+        let root = temp_dir("clear");
+        let linked_file = root.join("linked.txt");
+        let received_file = root.join("received.txt");
+        std::fs::write(&linked_file, b"linked").unwrap();
+        std::fs::write(&received_file, b"received").unwrap();
+
+        let catalog = Catalog::open(root.join("catalog.json")).unwrap();
+        catalog
+            .add_linked(&[linked_file.to_string_lossy().into_owned()])
+            .unwrap();
+        catalog.add_received(received_file.clone()).unwrap();
+
+        assert_eq!(catalog.clear().unwrap(), 2);
+        assert!(catalog.list().is_empty());
+        assert!(linked_file.exists());
+        assert!(received_file.exists());
+
+        let reloaded = Catalog::open(root.join("catalog.json")).unwrap();
+        assert!(reloaded.list().is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

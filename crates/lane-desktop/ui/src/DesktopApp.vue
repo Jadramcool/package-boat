@@ -66,6 +66,7 @@ onMounted(desktop.initialize)
           @reveal="desktop.revealItem"
           @unshare="desktop.unshare"
           @choose="desktop.chooseFiles"
+          @clear="desktop.clearSharedFiles"
         />
         <div class="side-panel">
           <AccessQrCard

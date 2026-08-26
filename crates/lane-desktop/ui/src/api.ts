@@ -22,6 +22,10 @@ export async function unshare(id: string): Promise<void> {
   return invoke('unshare', { id })
 }
 
+export async function clearSharedFiles(): Promise<number> {
+  return invoke<number>('clear_shared_files')
+}
+
 export async function chooseReceiveDirectory(): Promise<string> {
   return invoke<string>('choose_receive_directory')
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Download, FilePlus2, FolderUp, Inbox, Link2, LoaderCircle, RefreshCw } from '@lucide/vue'
+import { Download, FilePlus2, FolderUp, Inbox, Link2, LoaderCircle, RefreshCw, Trash2 } from '@lucide/vue'
 import DesktopFileRow from '@/components/DesktopFileRow.vue'
 import type { DesktopItem } from '@/types'
 import { formatBytes } from '@/utils/format'
@@ -18,6 +18,7 @@ const emit = defineEmits<{
   reveal: [id: string]
   unshare: [id: string]
   choose: []
+  clear: []
 }>()
 
 const totalSize = computed(() => formatBytes(props.items.reduce((total, item) => total + item.size, 0)))
@@ -48,6 +49,17 @@ const totalSize = computed(() => formatBytes(props.items.reduce((total, item) =>
       <div class="catalog-stats">
         <span class="catalog-stat"><Link2 :size="13" aria-hidden="true" /><b>{{ props.linkedCount }}</b> 原位共享</span>
         <span class="catalog-stat"><Download :size="13" aria-hidden="true" /><b>{{ props.receivedCount }}</b> 远程接收</span>
+        <button
+          class="clear-button"
+          type="button"
+          :disabled="props.items.length === 0 || Boolean(props.busy)"
+          title="清空共享清单（不删除磁盘文件）"
+          @click="emit('clear')"
+        >
+          <LoaderCircle v-if="props.busy === 'clear'" class="spin" :size="15" />
+          <Trash2 v-else :size="15" />
+          一键清空
+        </button>
         <button type="button" title="刷新文件状态" aria-label="刷新文件状态" @click="emit('refresh')">
           <RefreshCw :size="18" />
         </button>
@@ -105,6 +117,9 @@ const totalSize = computed(() => formatBytes(props.items.reduce((total, item) =>
 .catalog-stats b { color: var(--ink); font: 700 16px/1 var(--font-mono); }
 .catalog-stats button { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; color: var(--ink); cursor: pointer; }
 .catalog-stats button:hover { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.catalog-stats .clear-button { width: auto; min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border-color: #d7a99a; color: #8a321d; font: 650 12px/1 var(--font-label); }
+.catalog-stats .clear-button:hover:not(:disabled) { border-color: var(--signal); background: var(--signal); color: #fff; }
+.catalog-stats .clear-button:disabled { cursor: not-allowed; opacity: .42; }
 .table-header { display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(82px, .42fr) minmax(118px, .55fr) minmax(100px, .48fr) 92px; gap: 18px; padding: 14px 20px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .table-header span:last-child { text-align: right; }
 .file-list { margin: 0; padding: 0; list-style: none; }
@@ -136,6 +151,7 @@ const totalSize = computed(() => formatBytes(props.items.reduce((total, item) =>
   .catalog-stats { flex-wrap: wrap; }
   .list-heading h2 { font-size: 22px; }
   .list-heading p { font-size: 13px; }
+  .catalog-stats .clear-button { min-height: 36px; }
 }
 @media (max-width: 640px) {
   .drop-zone { grid-template-columns: 1fr; justify-items: center; gap: 10px; padding: 22px 16px; text-align: center; }

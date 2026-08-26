@@ -116,6 +116,21 @@ fn unshare(app: AppHandle, state: State<'_, Desktop>, id: String) -> Result<(), 
     }
 }
 
+/// 清空共享清单，但不删除原位共享文件或接收目录中的实际文件。
+#[tauri::command]
+fn clear_shared_files(app: AppHandle, state: State<'_, Desktop>) -> Result<usize, String> {
+    match state.catalog.clear() {
+        Ok(count) => {
+            emit_state_changed(&app);
+            Ok(count)
+        }
+        Err(err) => {
+            emit_error(&app, &err);
+            Err(err)
+        }
+    }
+}
+
 /// 选择远程上传文件的接收目录；更新设置后重启局域网服务。
 #[tauri::command]
 async fn choose_receive_directory(
@@ -281,6 +296,7 @@ pub fn run() {
             add_linked_files,
             choose_linked_files,
             unshare,
+            clear_shared_files,
             choose_receive_directory,
             toggle_server,
             reveal_item,
