@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertTriangle, CheckCircle2, LoaderCircle, X } from '@lucide/vue'
+import { AlertTriangle, CheckCircle2, Download, LoaderCircle, X } from '@lucide/vue'
 import { onMounted } from 'vue'
 import AccessQrCard from '@/components/AccessQrCard.vue'
 import DesktopFileList from '@/components/DesktopFileList.vue'
@@ -7,9 +7,14 @@ import DesktopHeader from '@/components/DesktopHeader.vue'
 import StorageSettings from '@/components/StorageSettings.vue'
 import WindowTitleBar from '@/components/WindowTitleBar.vue'
 import { useDesktopHost } from '@/composables/useDesktopHost'
+import { useUpdater } from '@/composables/useUpdater'
 
 const desktop = useDesktopHost()
-onMounted(desktop.initialize)
+const updater = useUpdater()
+onMounted(() => {
+  desktop.initialize()
+  updater.checkForUpdate()
+})
 </script>
 
 <template>
@@ -47,6 +52,30 @@ onMounted(desktop.initialize)
     />
 
     <main>
+      <div v-if="updater.status.value === 'available' || updater.status.value === 'downloading'" class="update-strip" role="status">
+        <Download :size="16" />
+        <span>发现新版本 v{{ updater.updateVersion.value }}</span>
+        <button
+          type="button"
+          class="update-install"
+          :disabled="updater.status.value === 'downloading'"
+          @click="updater.install"
+        >
+          {{ updater.status.value === 'downloading' ? `下载中 ${updater.progressPercent.value}%` : '安装并重启' }}
+        </button>
+        <button v-if="updater.status.value === 'available'" type="button" class="strip-close" aria-label="忽略此更新" @click="updater.dismiss">
+          <X :size="14" />
+        </button>
+      </div>
+
+      <div v-else-if="updater.status.value === 'error'" class="error-strip" role="alert">
+        <AlertTriangle :size="16" />
+        <span>自动更新失败，可稍后重试</span>
+        <button type="button" class="strip-close" aria-label="关闭更新提示" @click="updater.dismiss">
+          <X :size="14" />
+        </button>
+      </div>
+
       <div v-if="desktop.errorMessage.value || desktop.state.value.host.error" class="error-strip" role="alert">
         <AlertTriangle :size="16" />
         <span>{{ desktop.errorMessage.value || desktop.state.value.host.error }}</span>
@@ -111,6 +140,10 @@ onMounted(desktop.initialize)
 .error-strip span { margin-right: auto; }
 .strip-close { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #6d230e; cursor: pointer; }
 .strip-close:hover { background: rgb(240 90 50 / 14%); }
+.update-strip { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; padding: 13px 16px; border: 1px solid rgb(180 214 20 / 45%); border-radius: 7px; background: rgb(217 255 82 / 16%); color: var(--ink); font-size: 14px; }
+.update-strip span { margin-right: auto; }
+.update-install { flex: none; padding: 7px 14px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--acid); font: 700 13px/1 var(--font-label); letter-spacing: .02em; cursor: pointer; }
+.update-install:disabled { opacity: .6; cursor: default; }
 .notice-toast { position: fixed; right: 18px; bottom: 74px; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100vw - 36px)); padding: 13px 18px; border: 1px solid rgb(217 255 82 / 35%); border-radius: 10px; background: var(--ink); color: var(--paper); box-shadow: 0 12px 32px rgb(22 27 20 / 35%); font-size: 14px; }
 .notice-toast svg { flex: none; color: var(--acid); }
 .notice-toast span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -35,3 +35,5 @@ packetboat-core = { path = "../packetboat-core", features = ["specta"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"

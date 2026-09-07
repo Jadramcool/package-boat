@@ -45,6 +45,9 @@ jobs:
         run: Remove-Item "target/release/bundle" -Recurse -Force -ErrorAction SilentlyContinue
       - name: Build Windows installer
         run: pnpm run build:desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - name: Package artifacts and checksums
         shell: pwsh
         run: |
@@ -53,6 +56,29 @@ jobs:
           if ($assets.Count -lt 1) {
             throw "Expected an NSIS installer"
           }
+          $sigFiles = @(Get-ChildItem "target/release/bundle/nsis/*.exe.sig" -File)
+          if ($sigFiles.Count -lt 1) {
+            throw "Expected an updater signature file"
+          }
+
+          # 自动更新清单：客户端 endpoint 指向 releases/latest/download/latest.json
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          $exe = $assets[0]
+          $signature = (Get-Content "$($exe.FullName).sig" -Raw).Trim()
+          $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/$($exe.Name)"
+          $manifest = [ordered]@{
+            version = $version
+            notes = "PacketBoat $version"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = $signature
+                url = $downloadUrl
+              }
+            }
+          }
+          $manifestPath = Join-Path $bundleDir "latest.json"
+          $manifest | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding utf8
 
           $checksumPath = Join-Path $bundleDir "SHA256SUMS.txt"
           $checksums = $assets | ForEach-Object {
@@ -61,7 +87,7 @@ jobs:
           }
           [System.IO.File]::WriteAllLines($checksumPath, $checksums)
 
-          $releaseAssets = @($assets.FullName) + $checksumPath
+          $releaseAssets = @($assets.FullName) + @($sigFiles.FullName) + @($checksumPath, $manifestPath)
           gh release create $env:GITHUB_REF_NAME --verify-tag --generate-notes $releaseAssets
         env:
           GH_TOKEN: ${{ github.token }}
