@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LANE",
-  "version": "0.3.0",
   "identifier": "com.lane.fileshare",
   "build": {
     "beforeDevCommand": "pnpm --filter lane-desktop-ui run dev",
@@ -25,18 +24,18 @@
     ],
     "security": {
       "csp": {
-        "default-src": "'self' customprotocol: asset:",
+        "default-src": "'self'",
         "connect-src": "'self' ipc: http://ipc.localhost",
-        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "img-src": "'self' blob: data:",
         "style-src": "'self' 'unsafe-inline'",
         "object-src": "'none'",
         "base-uri": "'self'",
         "frame-ancestors": "'none'"
       },
       "devCsp": {
-        "default-src": "'self' customprotocol: asset: http://127.0.0.1:5173",
+        "default-src": "'self' http://127.0.0.1:5173",
         "connect-src": "'self' ipc: http://ipc.localhost ws: wss: http://127.0.0.1:5173",
-        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "img-src": "'self' blob: data:",
         "style-src": "'self' 'unsafe-inline'",
         "script-src": "'self' 'unsafe-inline' 'unsafe-eval'",
         "object-src": "'none'",
@@ -48,7 +47,11 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "publisher": "LANE",
+    "copyright": "Copyright © 2026 LANE",
     "category": "Utility",
+    "shortDescription": "局域网文件投递站",
+    "longDescription": "LANE 是一款运行在 Windows 上的局域网文件投递工具：桌面端与浏览器之间通过配对认证共享和接收文件，全程本地直连，不依赖任何云服务。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

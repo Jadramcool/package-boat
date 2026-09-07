@@ -1,0 +1,53 @@
+# cargo-deny 配置：依赖供应链审计（许可证 + 安全公告 + 重复依赖）。
+# 本地运行 `cargo deny check`，CI 由 EmbarkStudios/cargo-deny-action 执行。
+
+[graph]
+# 本项目只分发 Windows（NSIS），按实际目标三元组裁剪依赖图（避免 Linux GTK 依赖的噪音）
+targets = [
+  { triple = "x86_64-pc-windows-msvc" },
+]
+
+[advisories]
+version = 2
+yanked = "warn"
+# 以下均为上游传递依赖的"不再维护"公告（非漏洞）：等上游迁移后应移除对应条目
+ignore = [
+  # paste 1.x：dtolnay 宣布停止维护；由 specta v2 引入
+  { id = "RUSTSEC-2024-0436", reason = "transitive via specta, wait for upstream" },
+  # unic-* 0.9：rust-unic 全家桶已停止维护；由 tauri-utils -> urlpattern 引入
+  { id = "RUSTSEC-2025-0075", reason = "transitive via tauri-utils/urlpattern" },
+  { id = "RUSTSEC-2025-0080", reason = "transitive via tauri-utils/urlpattern" },
+  { id = "RUSTSEC-2025-0081", reason = "transitive via tauri-utils/urlpattern" },
+  { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils/urlpattern" },
+  { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils/urlpattern" },
+]
+
+[licenses]
+version = 2
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "MPL-2.0",
+  "CC0-1.0",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+  "OpenSSL",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# workspace 内部的 path 依赖（lane-core）没有版本要求，允许 path 来源的 wildcard
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

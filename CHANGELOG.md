@@ -16,6 +16,8 @@
 
 - 中断恢复基准改为验证实际的分块续传路径和恢复阶段传输量。
 - 按 Tauri 2 官方规范对齐桌面端工程：启用 CSP（`csp`/`devCsp`），`devUrl` 改用 `127.0.0.1`，显式声明窗口 `label`；前端迁移到顶层 `apps/desktop/`；`lib.rs` 拆分为 commands/state/events/error/tray/window 模块并以 `thiserror` 统一错误类型；接入 `tauri-specta` 从 Rust 生成 `bindings.ts`（命令、事件与数据类型全量类型安全），替换手写 `types.ts`；CI 新增版本一致性校验与 `tauri build --no-bundle` 构建验证。
+- 桌面端配置去重与安全收紧：`tauri.conf.json` 省略 `version` 字段改为自动继承 Cargo 包版本（`check-versions` 与 Release 工作流同步移除该校验点）；移除前端多余的 `@tauri-apps/cli` 依赖；CSP 移除未使用的 `asset:`/`customprotocol:` 来源；CI 新增 `cargo-deny` 依赖审计（许可证、安全公告与来源校验）。
+- 升级传递依赖 `h2` 至 0.4.19，消除 RUSTSEC-2026-0258（无界空 DATA 帧队列）安全公告。
 
 ### Removed
 

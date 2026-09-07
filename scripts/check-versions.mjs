@@ -1,4 +1,5 @@
-// 校验 Cargo.toml、tauri.conf.json 与前端 package.json 的版本号一致。
+// 校验 Cargo.toml 与前端 package.json 的版本号一致。
+// tauri.conf.json 省略 version 字段时自动继承 tauri crate 的 Cargo 包版本，无需单独校验。
 // 任何一处缺失或不一致都以非零码退出（CI 与本地 `pnpm run check:versions` 共用）。
 
 import { readFileSync } from 'node:fs'
@@ -11,14 +12,10 @@ const cargo = readFileSync(resolve(root, 'Cargo.toml'), 'utf8')
 const workspaceSection = cargo.match(/\[workspace\.package\]([\s\S]*?)(?:\n\[|$)/)?.[1] ?? ''
 const cargoVersion = workspaceSection.match(/^version\s*=\s*"([^"]+)"/m)?.[1]
 
-const tauri = JSON.parse(
-  readFileSync(resolve(root, 'crates/lane-desktop/tauri.conf.json'), 'utf8'),
-)
 const ui = JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8'))
 
 const sources = [
   ['Cargo.toml [workspace.package]', cargoVersion],
-  ['crates/lane-desktop/tauri.conf.json', tauri.version],
   ['apps/desktop/package.json', ui.version],
 ]
 

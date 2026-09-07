@@ -34,6 +34,13 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check dependencies (licenses, advisories, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+
   desktop-ui:
     runs-on: ubuntu-latest
     steps:

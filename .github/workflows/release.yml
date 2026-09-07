@@ -34,9 +34,9 @@ jobs:
               Where-Object { $metadata.workspace_members -contains $_.id } |
               Select-Object -ExpandProperty version -Unique
           )
-          $tauriVersion = (Get-Content "crates/lane-desktop/tauri.conf.json" -Raw | ConvertFrom-Json).version
+          # tauri.conf.json 省略 version 时自动继承 Cargo 包版本，无需单独校验
           $uiVersion = (Get-Content "apps/desktop/package.json" -Raw | ConvertFrom-Json).version
-          $versions = @(@($cargoVersions) + $tauriVersion + $uiVersion | Sort-Object -Unique)
+          $versions = @(@($cargoVersions) + $uiVersion | Sort-Object -Unique)
           if ($versions.Count -ne 1 -or $versions[0] -ne $tagVersion) {
             throw "Tag $tagVersion does not match project versions: $($versions -join ', ')"
           }
