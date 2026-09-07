@@ -16,6 +16,7 @@ use tracing::warn;
 
 /// 宿主运行状态（桌面 UI 直接序列化为 JSON）。
 #[derive(Debug, Clone, Default, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub struct HostState {
     pub running: bool,

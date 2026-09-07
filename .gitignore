@@ -3,10 +3,10 @@
 
 # Node / 前端
 node_modules/
-crates/lane-desktop/ui/dist/
+apps/desktop/dist/
+apps/desktop/qa-out.txt
 crates/lane-desktop/gen/
 crates/lane-desktop/dist/
-crates/lane-desktop/ui/qa-out.txt
 
 # Tauri
 crates/lane-desktop/target/
@@ -21,5 +21,6 @@ Thumbs.db
 # 本地代理/质量检查产物
 .codegraph/
 .omo/
+.workbuddy/
 .zcode/
 .screenshot-qa.png

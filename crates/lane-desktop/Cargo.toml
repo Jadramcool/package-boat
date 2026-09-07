@@ -27,7 +27,11 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
-lane-core = { path = "../lane-core" }
+thiserror = "2"
+specta = { version = "2.0.0-rc.25", features = ["derive", "chrono"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "2.0.0-rc.25", features = ["derive", "typescript"] }
+lane-core = { path = "../lane-core", features = ["specta"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

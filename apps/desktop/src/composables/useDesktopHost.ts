@@ -1,5 +1,5 @@
 import { computed, onUnmounted, readonly, shallowRef } from 'vue'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { ProgressBarStatus, getCurrentWindow } from '@tauri-apps/api/window'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
@@ -9,12 +9,10 @@ import {
   clearSharedFiles as clearSharedFilesCommand,
   chooseLinkedFiles,
   chooseReceiveDirectory as chooseReceiveDirectoryCommand,
-  errorEvent,
+  events,
   getState,
   getTransferProgress,
-  noticeEvent,
   revealItem as revealItemCommand,
-  stateChangedEvent,
   toggleServer as toggleServerCommand,
   unshare as unshareCommand,
 } from '@/api'
@@ -65,12 +63,13 @@ export function useDesktopHost() {
     progressTimer = window.setInterval(() => void syncTaskbarProgress(), 500)
     try {
       await refresh()
-      cancelStateEvent = await listen(stateChangedEvent, () => void refresh())
-      cancelErrorEvent = await listen(errorEvent, (event) => {
+      // tauri-specta 类型安全事件：事件名与载荷由 Rust 侧 bindings 同步
+      cancelStateEvent = await events.stateChanged.listen(() => void refresh())
+      cancelErrorEvent = await events.errorNotice.listen((event) => {
         errorMessage.value = typeof event.payload === 'string' ? event.payload : '服务端发生错误，请查看日志'
         void refresh()
       })
-      cancelNoticeEvent = await listen(noticeEvent, (event) => {
+      cancelNoticeEvent = await events.successNotice.listen((event) => {
         noticeMessage.value = typeof event.payload === 'string' ? event.payload : ''
         window.clearTimeout(noticeTimer)
         noticeTimer = window.setTimeout(() => noticeMessage.value = '', 3200)

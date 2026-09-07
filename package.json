@@ -3,9 +3,17 @@
   "private": true,
   "packageManager": "pnpm@11.17.0",
   "scripts": {
-    "build": "pnpm --filter lane-desktop-ui run build",
+    "tauri": "cd crates/lane-desktop && tauri",
+    "dev:desktop": "cd crates/lane-desktop && tauri dev",
     "dev:web": "pnpm --filter lane-desktop-ui run dev",
+    "build": "pnpm --filter lane-desktop-ui run build",
+    "build:desktop": "cd crates/lane-desktop && tauri build",
+    "build:desktop:check": "cd crates/lane-desktop && tauri build --no-bundle",
     "test": "pnpm --filter lane-desktop-ui run test",
-    "typecheck": "pnpm --filter lane-desktop-ui run typecheck"
+    "typecheck": "pnpm --filter lane-desktop-ui run typecheck",
+    "check:versions": "node scripts/check-versions.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
   }
 }

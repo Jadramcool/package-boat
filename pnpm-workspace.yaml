@@ -1,2 +1,2 @@
 packages:
-  - 'crates/lane-desktop/ui'
+  - 'apps/*'

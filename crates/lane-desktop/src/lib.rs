@@ -1,240 +1,62 @@
 //! LANE 桌面端（Tauri 2）：把 lane-core 的服务器/目录表/设置桥接给前端。
-//! 命令命名与 JSON 结构与 Go 版 Wails `DesktopApp` 对齐，前端用 `invoke` 调用。
+//!
+//! 模块划分：
+//! - [`commands`]：暴露给前端的 Tauri 命令
+//! - [`events`]：类型安全的前端事件
+//! - [`state`]：共享状态与前端状态快照
+//! - [`error`]：统一错误类型（序列化为字符串）
+//! - [`tray`]：系统托盘
+//! - [`window`]：窗口与进程生命周期
 
-use lane_core::catalog::{Catalog, Item};
-use lane_core::host::{HostManager, HostState};
-use lane_core::progress::TransferProgress;
-use lane_core::settings::{Settings, Store as SettingsStore};
-use serde::Serialize;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
-use tauri_plugin_dialog::DialogExt;
+mod commands;
+mod error;
+mod events;
+mod state;
+mod tray;
+mod window;
+
+use events::{ErrorNotice, StateChanged, SuccessNotice};
+use state::Desktop;
+use tauri::{Manager, WindowEvent};
+use tauri_specta::{collect_commands, collect_events, Builder};
 use tracing::{info, warn};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// 桌面端共享状态。
-struct Desktop {
-    catalog: Arc<Catalog>,
-    settings: Arc<SettingsStore>,
-    host: Arc<HostManager>,
-    version: String,
+/// 调试构建时把命令/事件/类型导出为 TypeScript 绑定文件。
+/// 路径基于 crate 根目录解析，无论从哪个工作目录启动都有效。
+#[cfg(debug_assertions)]
+fn export_bindings(builder: &Builder<tauri::Wry>) {
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/desktop/src/bindings.ts");
+    builder
+        .export(specta_typescript::Typescript::default(), &path)
+        .expect("导出前端 bindings 失败");
 }
 
-/// 返回给前端的完整状态快照（与 Go 版 `DesktopState` 字段一致）。
-#[derive(Serialize)]
-#[serde(rename_all = "snake_case")]
-struct StatePayload {
-    host: HostState,
-    settings: Settings,
-    items: Vec<Item>,
-    version: String,
-}
+#[cfg(all(test, debug_assertions))]
+mod tests {
+    use super::*;
 
-fn build_state(state: &State<'_, Desktop>) -> StatePayload {
-    StatePayload {
-        host: state.host.state(),
-        settings: state.settings.get(),
-        items: state.catalog.list(),
-        version: state.version.clone(),
+    /// 运行 `cargo test` 即可重新生成前端 bindings.ts。
+    #[test]
+    fn exports_typescript_bindings() {
+        let builder = Builder::<tauri::Wry>::new()
+            .commands(collect_commands![
+                commands::get_state,
+                commands::add_linked_files,
+                commands::choose_linked_files,
+                commands::unshare,
+                commands::clear_shared_files,
+                commands::choose_receive_directory,
+                commands::toggle_server,
+                commands::reveal_item,
+                commands::get_transfer_progress,
+            ])
+            .events(collect_events![StateChanged, ErrorNotice, SuccessNotice]);
+        export_bindings(&builder);
     }
 }
-
-fn emit_state_changed(app: &AppHandle) {
-    let _ = app.emit("desktop:state-changed", ());
-}
-
-fn emit_error(app: &AppHandle, message: &str) {
-    let _ = app.emit("desktop:error", message.to_string());
-}
-
-// ---------------------------------------------------------------------------
-// 命令
-// ---------------------------------------------------------------------------
-
-#[tauri::command]
-fn get_state(state: State<'_, Desktop>) -> StatePayload {
-    build_state(&state)
-}
-
-/// 原位共享一批文件（来自拖拽或选择），返回本次新增的条目。
-#[tauri::command]
-async fn add_linked_files(
-    app: AppHandle,
-    state: State<'_, Desktop>,
-    paths: Vec<String>,
-) -> Result<Vec<Item>, String> {
-    match state.catalog.add_linked(&paths) {
-        Ok(items) => {
-            emit_state_changed(&app);
-            Ok(items)
-        }
-        Err(err) => {
-            emit_error(&app, &err);
-            Err(err)
-        }
-    }
-}
-
-/// 弹出文件选择对话框并原位共享所选文件。
-#[tauri::command]
-async fn choose_linked_files(
-    app: AppHandle,
-    state: State<'_, Desktop>,
-) -> Result<Vec<Item>, String> {
-    let picked = app
-        .dialog()
-        .file()
-        .set_title("选择要共享的文件（不会复制或移动）")
-        .blocking_pick_files();
-    let Some(files) = picked else {
-        return Ok(Vec::new());
-    };
-    let paths: Vec<String> = files
-        .into_iter()
-        .filter_map(|file| file.into_path().ok())
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
-    add_linked_files(app, state, paths).await
-}
-
-/// 取消共享（只移除目录表记录，不删除原文件）。
-#[tauri::command]
-fn unshare(app: AppHandle, state: State<'_, Desktop>, id: String) -> Result<(), String> {
-    match state.catalog.remove(&id) {
-        Ok(_) => {
-            emit_state_changed(&app);
-            Ok(())
-        }
-        Err(err) => {
-            emit_error(&app, &err);
-            Err(err)
-        }
-    }
-}
-
-/// 清空共享清单，但不删除原位共享文件或接收目录中的实际文件。
-#[tauri::command]
-fn clear_shared_files(app: AppHandle, state: State<'_, Desktop>) -> Result<usize, String> {
-    match state.catalog.clear() {
-        Ok(count) => {
-            emit_state_changed(&app);
-            Ok(count)
-        }
-        Err(err) => {
-            emit_error(&app, &err);
-            Err(err)
-        }
-    }
-}
-
-/// 选择远程上传文件的接收目录；更新设置后重启局域网服务。
-#[tauri::command]
-async fn choose_receive_directory(
-    app: AppHandle,
-    state: State<'_, Desktop>,
-) -> Result<String, String> {
-    let current = state.settings.get().receive_dir;
-    let picked = app
-        .dialog()
-        .file()
-        .set_title("选择远程上传文件的接收目录")
-        .set_directory(PathBuf::from(&current))
-        .blocking_pick_folder();
-    let Some(folder) = picked else {
-        return Ok(current);
-    };
-    let directory = folder
-        .into_path()
-        .map_err(|err| err.to_string())?
-        .to_string_lossy()
-        .into_owned();
-
-    let updated = state
-        .settings
-        .set_receive_dir(&directory)
-        .inspect_err(|err| {
-            emit_error(&app, err);
-        })?;
-
-    if let Err(err) = state.host.restart().await {
-        emit_error(&app, &err);
-        return Err(err);
-    }
-    emit_state_changed(&app);
-    Ok(updated.receive_dir)
-}
-
-/// 开关局域网服务器。
-#[tauri::command]
-async fn toggle_server(app: AppHandle, state: State<'_, Desktop>) -> Result<(), String> {
-    let result = if state.host.state().running {
-        state.host.stop().await;
-        Ok(())
-    } else {
-        state.host.start().await
-    };
-    match result {
-        Ok(()) => {
-            emit_state_changed(&app);
-            Ok(())
-        }
-        Err(err) => {
-            emit_error(&app, &err);
-            Err(err)
-        }
-    }
-}
-
-/// 在资源管理器中显示条目所在目录。
-#[tauri::command]
-fn reveal_item(state: State<'_, Desktop>, id: String) -> Result<(), String> {
-    let (item, _) = state
-        .catalog
-        .resolve(&id)
-        .map_err(|_| "文件不可用".to_string())?;
-    tauri_plugin_opener::reveal_item_in_dir(PathBuf::from(item.local_path))
-        .map_err(|err| err.to_string())
-}
-
-/// 当前传输进度（任务栏进度条轮询）。
-#[tauri::command]
-fn get_transfer_progress(state: State<'_, Desktop>) -> TransferProgress {
-    state.host.progress().snapshot()
-}
-
-/// 从任务栏拖入文件：直接把路径加入原位共享。
-fn add_linked_from_paths(app: &AppHandle, paths: Vec<PathBuf>) {
-    if paths.is_empty() {
-        return;
-    }
-    let state = app.state::<Desktop>();
-    let strings: Vec<String> = paths
-        .into_iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
-    match state.catalog.add_linked(&strings) {
-        Ok(items) => {
-            let _ = app.emit("desktop:state-changed", ());
-            let message = if items.is_empty() {
-                "所选文件已经在共享清单中。".to_string()
-            } else {
-                format!("已添加 {} 个共享文件", items.len())
-            };
-            let _ = app.emit("desktop:notice", message);
-        }
-        Err(err) => {
-            let _ = app.emit("desktop:error", err);
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// 应用入口
-// ---------------------------------------------------------------------------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -256,25 +78,47 @@ pub fn run() {
         std::process::exit(1);
     }
 
-    let catalog = match Catalog::open(paths.catalog.clone()) {
-        Ok(catalog) => Arc::new(catalog),
+    let catalog = match lane_core::catalog::Catalog::open(paths.catalog.clone()) {
+        Ok(catalog) => std::sync::Arc::new(catalog),
         Err(message) => {
             eprintln!("读取共享目录表失败：{message}");
             std::process::exit(1);
         }
     };
-    let device_name = default_device_name();
-    let settings = match SettingsStore::open(
+    let device_name = window::default_device_name();
+    let settings = match lane_core::settings::Store::open(
         paths.settings.clone(),
-        Settings::defaults(device_name, paths.receive_dir.clone()),
+        lane_core::settings::Settings::defaults(device_name, paths.receive_dir.clone()),
     ) {
-        Ok(store) => Arc::new(store),
+        Ok(store) => std::sync::Arc::new(store),
         Err(message) => {
             eprintln!("读取设置失败：{message}");
             std::process::exit(1);
         }
     };
-    let host = Arc::new(HostManager::new(catalog.clone(), settings.clone(), VERSION));
+    let host = std::sync::Arc::new(lane_core::host::HostManager::new(
+        catalog.clone(),
+        settings.clone(),
+        VERSION,
+    ));
+
+    let builder = Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            commands::get_state,
+            commands::add_linked_files,
+            commands::choose_linked_files,
+            commands::unshare,
+            commands::clear_shared_files,
+            commands::choose_receive_directory,
+            commands::toggle_server,
+            commands::reveal_item,
+            commands::get_transfer_progress,
+        ])
+        .events(collect_events![StateChanged, ErrorNotice, SuccessNotice]);
+
+    // 调试构建时把命令/事件/类型导出为 TypeScript，前端据此获得类型安全封装。
+    #[cfg(debug_assertions)]
+    export_bindings(&builder);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -291,45 +135,10 @@ pub fn run() {
             host,
             version: VERSION.to_string(),
         })
-        .invoke_handler(tauri::generate_handler![
-            get_state,
-            add_linked_files,
-            choose_linked_files,
-            unshare,
-            clear_shared_files,
-            choose_receive_directory,
-            toggle_server,
-            reveal_item,
-            get_transfer_progress
-        ])
-        .setup(|app| {
-            // 系统托盘：显示主窗口 / 退出
-            let show_item = MenuItem::with_id(app, "show", "打开 LANE", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-            let icon = app.default_window_icon().cloned().ok_or("缺少应用图标")?;
-            TrayIconBuilder::with_id("lane-tray")
-                .icon(icon)
-                .tooltip("LANE · 局域网投递站")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
-                    "quit" => quit_app(app),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    // 左键单击托盘图标 → 显示/聚焦主窗口
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        show_main_window(tray.app_handle());
-                    }
-                })
-                .build(app)?;
+        .invoke_handler(builder.invoke_handler())
+        .setup(move |app| {
+            builder.mount_events(app);
+            tray::create_tray(app)?;
 
             // 启动时自动开启局域网服务（与 Go 版 `startup` 一致）
             let host = app.state::<Desktop>().host.clone();
@@ -350,59 +159,10 @@ pub fn run() {
             }
             // 任务栏/窗口拖放文件 → 原位共享
             WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
-                add_linked_from_paths(window.app_handle(), paths.clone());
+                commands::add_linked_from_paths(window.app_handle(), paths.clone());
             }
             _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running LANE desktop");
-}
-
-fn default_device_name() -> String {
-    std::env::var("COMPUTERNAME")
-        .or_else(|_| std::env::var("HOSTNAME"))
-        .ok()
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "LANE 文件站".to_string())
-}
-
-/// 显示并聚焦主窗口（若窗口未创建则先创建）。
-fn show_main_window(app: &AppHandle) {
-    match app.get_webview_window("main") {
-        Some(window) => {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-        }
-        None => {
-            if let Ok(builder) = tauri::WebviewWindowBuilder::new(
-                app,
-                "main",
-                tauri::WebviewUrl::App("index.html".into()),
-            )
-            .title("LANE · 局域网投递站")
-            .inner_size(1180.0, 780.0)
-            .min_inner_size(860.0, 620.0)
-            .decorations(false)
-            .center()
-            .build()
-            {
-                let _ = builder.set_focus();
-            }
-        }
-    }
-}
-
-/// 退出：先优雅停止局域网服务，再退出进程。
-fn quit_app(app: &AppHandle) {
-    let app = app.clone();
-    if let Some(desktop) = app.try_state::<Desktop>() {
-        let host = desktop.host.clone();
-        tauri::async_runtime::spawn(async move {
-            host.stop().await;
-            app.exit(0);
-        });
-    } else {
-        app.exit(0);
-    }
 }

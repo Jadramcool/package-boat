@@ -11,6 +11,7 @@ use std::sync::RwLock;
 
 /// 条目来源类型，JSON 序列化为小写。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
     Linked,
@@ -19,12 +20,15 @@ pub enum SourceType {
 
 /// 目录表条目，字段与 Go 版 `catalog.Item` 一致（`is_dir` 为文件夹共享新增）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub struct Item {
     pub id: String,
     pub name: String,
     pub source_type: SourceType,
     pub local_path: String,
+    /// 字节数；specta 导出为 number（TS 侧 2^53 内精度安全）。
+    #[cfg_attr(feature = "specta", specta(type = u32))]
     pub size: i64,
     pub modified_at: DateTime<Utc>,
     pub added_at: DateTime<Utc>,

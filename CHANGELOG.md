@@ -15,7 +15,11 @@
 ### Changed
 
 - 中断恢复基准改为验证实际的分块续传路径和恢复阶段传输量。
-- 接收目录不再在服务启动时被批量扫描为共享文件；升级时会移除旧版自动导入记录，但保留磁盘文件。
+- 按 Tauri 2 官方规范对齐桌面端工程：启用 CSP（`csp`/`devCsp`），`devUrl` 改用 `127.0.0.1`，显式声明窗口 `label`；前端迁移到顶层 `apps/desktop/`；`lib.rs` 拆分为 commands/state/events/error/tray/window 模块并以 `thiserror` 统一错误类型；接入 `tauri-specta` 从 Rust 生成 `bindings.ts`（命令、事件与数据类型全量类型安全），替换手写 `types.ts`；CI 新增版本一致性校验与 `tauri build --no-bundle` 构建验证。
+
+### Removed
+
+- 移除独立命令行服务端（`laneshare` CLI），仅保留 Windows 桌面端。
 
 ## [0.3.0] - 2026-08-20
 

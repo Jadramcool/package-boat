@@ -32,6 +32,11 @@ http-range-header = "0.4"
 tracing = { workspace = true }
 sha2 = { workspace = true }
 rust-embed = "8"
+# 可选：为桌面端的前后端类型生成导出 specta::Type 实现
+specta = { version = "2.0.0-rc.25", features = ["derive", "chrono"], optional = true }
+
+[features]
+specta = ["dep:specta"]
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

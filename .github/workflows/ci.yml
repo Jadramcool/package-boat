@@ -8,6 +8,16 @@ permissions:
   contents: read
 
 jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Verify version consistency
+        run: node scripts/check-versions.mjs
+
   rust:
     runs-on: windows-latest
     steps:
@@ -36,6 +46,25 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
+      - run: pnpm run typecheck
       - run: pnpm run build
       - name: Verify embedded browser assets are current
         run: git diff --exit-code -- crates/lane-core/assets/dist
+
+  desktop-bundle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # 编译并解析 tauri.conf.json 与 capabilities，跳过安装包打包以控制时长
+      - name: Validate Tauri build (no bundle)
+        run: pnpm run build:desktop:check

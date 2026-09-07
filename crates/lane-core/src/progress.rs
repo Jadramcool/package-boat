@@ -7,13 +7,16 @@ use std::sync::Arc;
 
 /// 传输进度快照（桌面端序列化为 JSON）。
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub struct TransferProgress {
     /// 是否有传输正在进行。
     pub active: bool,
     /// 已完成字节数。
+    #[cfg_attr(feature = "specta", specta(type = u32))]
     pub done: u64,
     /// 总字节数（`None` 表示未知，如 multipart 上传无明确总大小）。
+    #[cfg_attr(feature = "specta", specta(type = Option<u32>))]
     pub total: Option<u64>,
 }
 

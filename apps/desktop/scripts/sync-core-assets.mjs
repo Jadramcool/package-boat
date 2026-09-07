@@ -6,7 +6,7 @@ import { gzipSync } from 'node:zlib'
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const uiDirectory = resolve(scriptDirectory, '..')
 const sourceDirectory = resolve(uiDirectory, 'dist')
-const targetDirectory = resolve(uiDirectory, '../../lane-core/assets/dist')
+const targetDirectory = resolve(uiDirectory, '../../crates/lane-core/assets/dist')
 
 await rm(targetDirectory, { recursive: true, force: true })
 await mkdir(targetDirectory, { recursive: true })

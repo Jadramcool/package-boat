@@ -7,17 +7,21 @@ use std::sync::RwLock;
 /// 与 Go 版 `settings.Settings` 字段完全一致。所有字段带默认值，
 /// 缺失字段/越界端口不阻塞启动（与 Go 版 `applyFallbacks` 容错语义一致）。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub struct Settings {
     #[serde(default)]
     pub device_name: String,
     #[serde(default)]
     pub host: String,
+    #[cfg_attr(feature = "specta", specta(type = u16))]
     #[serde(default = "default_port", deserialize_with = "deserialize_port")]
     pub port: u16,
     #[serde(default)]
     pub receive_dir: String,
     #[serde(default)]
+    /// 单文件上传上限；specta 导出为 number（TS 侧 2^53 内精度安全）。
+    #[cfg_attr(feature = "specta", specta(type = u32))]
     pub max_upload_bytes: i64,
 }
 
