@@ -57,7 +57,7 @@ jobs:
       - run: pnpm run typecheck
       - run: pnpm run build
       - name: Verify embedded browser assets are current
-        run: git diff --exit-code -- crates/lane-core/assets/dist
+        run: git diff --exit-code -- crates/packetboat-core/assets/dist
 
   desktop-bundle:
     runs-on: windows-latest

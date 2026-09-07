@@ -1,6 +1,6 @@
 // Tauri 命令桥：封装 tauri-specta 生成的 commands，前端组件不直接接触 tauri API。
 // 命令签名与 Rust `commands.rs` 由 bindings.ts 同步，新增命令需在 Rust 侧
-// `collect_commands!` 注册后重跑 `cargo test -p lane-desktop` 重新导出。
+// `collect_commands!` 注册后重跑 `cargo test -p packetboat-desktop` 重新导出。
 import { commands, events, type AppError, type Item, type TransferProgress } from './bindings'
 import type { DesktopState } from './types'
 

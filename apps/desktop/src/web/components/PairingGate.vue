@@ -39,7 +39,7 @@ function submit(): void {
           <span class="route-line" />
           <span class="route-dot destination" />
         </div>
-        <p class="station-label">LANE / LOCAL DELIVERY</p>
+        <p class="station-label">PacketBoat / LOCAL DELIVERY</p>
         <h1 id="pairing-title">近在同一张<br><em>网络里。</em></h1>
         <p class="intro-copy">
           无需上传云端，也不用安装客户端。输入主机屏幕上的配对码，接入这条局域网传输通道。
@@ -80,7 +80,7 @@ function submit(): void {
             aria-describedby="pair-code-hint"
             @input="handleInput"
           >
-          <p id="pair-code-hint" class="form-hint">配对码显示在运行 LANE 的主机界面或终端中</p>
+          <p id="pair-code-hint" class="form-hint">配对码显示在运行 PacketBoat 的主机界面或终端中</p>
           <p v-if="error" class="form-error" role="alert">{{ error }}</p>
           <button class="connect-button" type="submit" :disabled="!canSubmit">
             <span>{{ loading ? '正在验票' : '进入文件站' }}</span>

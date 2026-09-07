@@ -1,16 +1,16 @@
 # Architecture
 
-LANE 将传输能力集中在 `lane-core`，桌面端只负责生命周期与交互。
+PacketBoat 将传输能力集中在 `packetboat-core`，桌面端只负责生命周期与交互。
 
 ```text
-Vue browser UI ── HTTP/SSE ──> lane-core
+Vue browser UI ── HTTP/SSE ──> packetboat-core
                                   ↑
-                                  └────── lane-desktop (Tauri commands)
+                                  └────── packetboat-desktop (Tauri commands)
                                                    ↑
                                              Vue desktop UI
 ```
 
-两个 Vue 界面位于同一个 pnpm/Vite 包。根组件根据 Tauri 运行时选择桌面入口，否则加载浏览器入口；浏览器侧的配对、文件架、投递队列等组件集中在 `apps/desktop/src/web`。生产构建完成后，脚本会把 Vite 产物及 gzip 变体同步到 `lane-core/assets/dist`，由 `rust-embed` 编入 CLI 和桌面服务。
+两个 Vue 界面位于同一个 pnpm/Vite 包。根组件根据 Tauri 运行时选择桌面入口，否则加载浏览器入口；浏览器侧的配对、文件架、投递队列等组件集中在 `apps/desktop/src/web`。生产构建完成后，脚本会把 Vite 产物及 gzip 变体同步到 `packetboat-core/assets/dist`，由 `rust-embed` 编入 CLI 和桌面服务。
 
 ## 核心模块
 
@@ -26,7 +26,7 @@ Vue browser UI ── HTTP/SSE ──> lane-core
 
 浏览器先创建上传会话，再按服务端协商的块大小写入接收目录中的随机 `.part` 文件。每块都携带 SHA-256，服务端验证、定点写入并同步后才记录为已接收；客户端重新连接时查询会话，只补传缺失块。全部块完成后，服务在短临界区内选择唯一文件名并原子重命名，随后更新 catalog。传统 multipart 端点继续保留供兼容客户端使用。空间不足返回 HTTP 507，其他失败也会清理临时文件。
 
-服务启动时不会扫描或共享接收目录中的既有普通文件，只回收接收目录和系统临时目录中严格匹配 LANE 命名规则且超过 24 小时的残留 `.part`/ZIP 文件；普通文件、符号链接和仍然较新的传输文件不会被删除。
+服务启动时不会扫描或共享接收目录中的既有普通文件，只回收接收目录和系统临时目录中严格匹配 PacketBoat 命名规则且超过 24 小时的残留 `.part`/ZIP 文件；普通文件、符号链接和仍然较新的传输文件不会被删除。
 
 单文件下载使用 256 KiB 流缓冲，并在 Reader 层严格限制 Range 长度。文件夹下载当前先在线程池中构建临时 ZIP，再流式发送并在响应结束后删除。
 

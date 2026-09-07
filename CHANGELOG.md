@@ -23,7 +23,7 @@
 
 ### Removed
 
-- 移除独立命令行服务端（`laneshare` CLI），仅保留 Windows 桌面端。
+- 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
 ## [0.3.0] - 2026-08-20
 
@@ -40,7 +40,7 @@
 
 ### Changed
 
-- Windows 产品名称统一为 `LANE`。
+- Windows 产品名称统一为 `PacketBoat`。
 - 桌面端运行时版本改为读取 Cargo 包版本，减少版本漂移。
 
 ## [0.2.0] - 2026-08-18

@@ -1,4 +1,4 @@
-// LANE 桌面端类型定义 —— 由 tauri-specta 生成的 bindings.ts 统一提供。
+// PacketBoat 桌面端类型定义 —— 由 tauri-specta 生成的 bindings.ts 统一提供。
 // 这里基于 bindings 的 Serialize 变体派生旧命名别名，并做只读适配：
 // 1) Vue `readonly()` 会产生 DeepReadonly，可变数组（string[]）无法承载，
 //    故 urls/items 以 readonly 数组声明（可变 → 只读天然兼容）。

@@ -15,9 +15,9 @@ const emit = defineEmits<{
 <template>
   <header class="app-header">
     <div class="header-inner">
-      <a class="brand" href="/" aria-label="LANE 首页">
+      <a class="brand" href="/" aria-label="PacketBoat 首页">
         <span class="brand-glyph" aria-hidden="true">L</span>
-        <span class="brand-word">LANE</span>
+        <span class="brand-word">PacketBoat</span>
         <span class="brand-sub">局域网投递站</span>
       </a>
       <div class="device-status">

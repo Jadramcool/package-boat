@@ -5,11 +5,11 @@
 node_modules/
 apps/desktop/dist/
 apps/desktop/qa-out.txt
-crates/lane-desktop/gen/
-crates/lane-desktop/dist/
+crates/packetboat-desktop/gen/
+crates/packetboat-desktop/dist/
 
 # Tauri
-crates/lane-desktop/target/
+crates/packetboat-desktop/target/
 
 # 系统与编辑器
 .DS_Store

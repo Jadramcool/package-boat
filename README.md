@@ -1,6 +1,6 @@
-# LANE 局域网投递站
+# PacketBoat 局域网投递站
 
-LANE 是一个以 Rust 编写的局域网文件分享工具。发送端只需打开浏览器、输入六位配对码，即可向主机上传文件或下载主机分享的文件；数据不经过公网中转。
+PacketBoat 是一个以 Rust 编写的局域网文件分享工具。发送端只需打开浏览器、输入六位配对码，即可向主机上传文件或下载主机分享的文件；数据不经过公网中转。
 
 > 当前版本为 `0.3.0`，面向 Windows 桌面端。项目仍处于早期阶段，欢迎试用和贡献。
 
@@ -51,13 +51,13 @@ LANE 是一个以 Rust 编写的局域网文件分享工具。发送端只需打
 
 ```text
 crates/
-├── lane-core/       # HTTP 服务、认证、目录表与传输逻辑
-└── lane-desktop/    # Tauri 2 Windows 桌面端
+├── packetboat-core/       # HTTP 服务、认证、目录表与传输逻辑
+└── packetboat-desktop/    # Tauri 2 Windows 桌面端
 apps/
 └── desktop/         # 统一 Vue 3 前端（桌面端 + 浏览器接收页）
 ```
 
-桌面端和浏览器接收页源码均位于 `apps/desktop/src`。生产构建会同时生成两个按需加载的入口，并把可嵌入资源同步到 `lane-core/assets/dist`。
+桌面端和浏览器接收页源码均位于 `apps/desktop/src`。生产构建会同时生成两个按需加载的入口，并把可嵌入资源同步到 `packetboat-core/assets/dist`。
 
 ## 快速开始
 
@@ -82,7 +82,7 @@ pnpm run dev:desktop   # 终端 1：后端服务
 pnpm run dev:web       # 终端 2：浏览器接收页热更新
 ```
 
-如服务使用其他端口，可通过 `LANE_DEV_SERVER_URL` 覆盖 Vite 的 `/api` 代理目标。
+如服务使用其他端口，可通过 `PACKETBOAT_DEV_SERVER_URL` 覆盖 Vite 的 `/api` 代理目标。
 
 ## 质量检查
 
@@ -92,7 +92,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
 # 快速端到端传输基准
-cargo bench -p lane-core --bench transfer -- --profile smoke
+cargo bench -p packetboat-core --bench transfer -- --profile smoke
 
 pnpm install --frozen-lockfile
 pnpm run test
@@ -107,7 +107,7 @@ pnpm run build
 
 ## 安全说明
 
-LANE 设计用于可信局域网，不提供公网暴露所需的 TLS、账户体系或端到端加密。请勿直接映射到公网；发现安全问题请按照 [SECURITY.md](SECURITY.md) 私下报告。
+PacketBoat 设计用于可信局域网，不提供公网暴露所需的 TLS、账户体系或端到端加密。请勿直接映射到公网；发现安全问题请按照 [SECURITY.md](SECURITY.md) 私下报告。
 
 ## 参与贡献
 
@@ -115,4 +115,4 @@ LANE 设计用于可信局域网，不提供公网暴露所需的 TLS、账户�
 
 ## License
 
-[MIT](LICENSE) © LANE contributors
+[MIT](LICENSE) © PacketBoat contributors

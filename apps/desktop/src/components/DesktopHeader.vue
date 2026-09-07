@@ -28,7 +28,7 @@ function handleAddressChange(event: Event) {
     <div class="brand-block">
       <div class="brand-mark" aria-hidden="true">L</div>
       <div class="brand-copy">
-        <p>LANE 局域网投递站</p>
+        <p>PacketBoat 局域网投递站</p>
         <h1>{{ props.deviceName }}</h1>
       </div>
     </div>

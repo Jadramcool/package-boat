@@ -36,7 +36,7 @@ async function confirmDelete(id: string, name: string): Promise<void> {
 
   <PairingGate
     v-else-if="!share.authenticated.value"
-    :server-name="share.serviceInfo.value?.device_name ?? 'LANE 文件站'"
+    :server-name="share.serviceInfo.value?.device_name ?? 'PacketBoat 文件站'"
     :loading="share.pairing.value"
     :offline="!share.online.value"
     :error="share.error.value"
@@ -46,7 +46,7 @@ async function confirmDelete(id: string, name: string): Promise<void> {
 
   <div v-else class="app-shell">
     <AppHeader
-      :device-name="share.serviceInfo.value?.device_name ?? 'LANE 文件站'"
+      :device-name="share.serviceInfo.value?.device_name ?? 'PacketBoat 文件站'"
       :online="share.online.value"
       :version="share.serviceInfo.value?.version ?? ''"
       @sign-out="share.signOut"
@@ -89,7 +89,7 @@ async function confirmDelete(id: string, name: string): Promise<void> {
       />
     </main>
     <footer class="app-footer">
-      <span>LANE / LOCAL TRANSFER</span><span>关闭主机程序即停止共享</span>
+      <span>PacketBoat / LOCAL TRANSFER</span><span>关闭主机程序即停止共享</span>
     </footer>
   </div>
 </template>

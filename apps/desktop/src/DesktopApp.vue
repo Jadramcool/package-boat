@@ -89,7 +89,7 @@ onMounted(desktop.initialize)
     </main>
 
     <footer>
-      <span>LANE DESKTOP / {{ desktop.state.value.version }}</span>
+      <span>PacketBoat DESKTOP / {{ desktop.state.value.version }}</span>
       <span class="footer-note">文件通过本机局域网直达 · 无云端中转</span>
     </footer>
     </div>

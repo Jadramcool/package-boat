@@ -1,0 +1,301 @@
+/* PacketBoat · 玻璃拟态设计系统
+ * 适用：Windows 桌面端 (Tauri 2) 与浏览器接收页
+ * 替换方式：在 main.css 中将原有的 :root 变量块整段替换为本文件开头，
+ *           组件样式可整文件 import 或按需复制。
+ * 设计语言：深色基底 + 分层磨砂玻璃 + 单一强调色（薄荷青）
+ */
+
+:root {
+  /* === 色彩 === */
+  --canvas: #0B100E;          /* 页面底，文本反白阅读 */
+  --surface: #16201C;         /* 玻璃层下方实底或隔离区块 */
+  --accent: #4FD9A6;          /* 强调：传输中、激活、链接 */
+  --accent-hi: #6BE3B6;       /* 强调高亮：hover */
+  --warn: #F5A524;            /* 警告：暂停、低磁盘 */
+  --danger: #FF6B5A;          /* 危险：失败、移除 */
+  --info: #5AA9FF;            /* 信息：上传中、提示 */
+  --text: #EAF2EE;            /* 主文字 */
+  --text-muted: #8FA39A;      /* 次文字 */
+  --text-faint: #6F8079;      /* 弱化文字、标签、表头 */
+  --text-ghost: #5A6B62;      /* 极弱文字 */
+  --text-code: #C8D8D0;       /* 代码/数值 */
+  --accent-ink: #04231A;      /* 强调色上的反白文字 */
+
+  /* === 玻璃层级 === */
+  --glass-l1-fill:  rgba(255, 255, 255, 0.05);  /* 页面底板、文件列表容器 */
+  --glass-l1-stroke: rgba(255, 255, 255, 0.10);
+  --glass-l1-blur: 24px;
+  --glass-l1-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), inset 0 1px 2px rgba(255, 255, 255, 0.12);
+
+  --glass-l2-fill:  rgba(255, 255, 255, 0.07);  /* 文件行、设置卡、二维码卡 */
+  --glass-l2-stroke: rgba(255, 255, 255, 0.12);
+  --glass-l2-blur: 18px;
+  --glass-l2-shadow: 0 12px 32px rgba(0, 0, 0, 0.26), inset 0 1px 2px rgba(255, 255, 255, 0.16);
+
+  --glass-l3-fill:  rgba(255, 255, 255, 0.13);  /* 弹窗、Toast、下拉、悬停蒙层 */
+  --glass-l3-stroke: rgba(255, 255, 255, 0.19);
+  --glass-l3-blur: 12px;
+  --glass-l3-shadow: 0 18px 44px rgba(0, 0, 0, 0.32), inset 0 1px 2px rgba(255, 255, 255, 0.22);
+
+  /* === 圆角 === */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-2xl: 24px;
+  --r-pill: 999px;
+
+  /* === 字阶 === */
+  --font-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", "Geist Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+
+  --fs-display: 34px;
+  --fs-title: 22px;
+  --fs-body: 15px;
+  --fs-caption: 13px;
+  --fs-numeric: 13px;
+
+  /* === 光晕 / 渐变背景 === */
+  --bg-glow: radial-gradient(at 75% 0%, rgba(79, 217, 166, 0.18) 0%, transparent 35%),
+             radial-gradient(at 85% 60%, rgba(90, 169, 255, 0.16) 0%, transparent 40%),
+             radial-gradient(at 5% 90%, rgba(245, 165, 36, 0.10) 0%, transparent 35%),
+             var(--canvas);
+
+  color: var(--text);
+  background: var(--canvas);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--canvas); scroll-behavior: smooth; }
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg-glow);
+}
+
+button, input { font: inherit; color: inherit; }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 3px;
+}
+
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+.visually-hidden {
+  position: absolute !important; width: 1px !important; height: 1px !important;
+  overflow: hidden !important; clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important; clip-path: inset(50%) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* === 自定义滚动条（WebView2 / Chromium） === */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.20); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* === 玻璃层级 mixin 风格的实用类 === */
+.glass-l1 {
+  background: var(--glass-l1-fill);
+  border: 1px solid var(--glass-l1-stroke);
+  box-shadow: var(--glass-l1-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur));
+  backdrop-filter: blur(var(--glass-l1-blur));
+}
+.glass-l2 {
+  background: var(--glass-l2-fill);
+  border: 1px solid var(--glass-l2-stroke);
+  box-shadow: var(--glass-l2-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-l2-blur));
+  backdrop-filter: blur(var(--glass-l2-blur));
+}
+.glass-l3 {
+  background: var(--glass-l3-fill);
+  border: 1px solid var(--glass-l3-stroke);
+  box-shadow: var(--glass-l3-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-l3-blur));
+  backdrop-filter: blur(var(--glass-l3-blur));
+}
+
+/* === 按钮 === */
+.packetboat-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font: 600 14px/1 var(--font-sans);
+  letter-spacing: .01em;
+  cursor: pointer;
+  transition: background-color .18s ease, border-color .18s ease, transform .08s ease;
+}
+.packetboat-btn:active { transform: translateY(1px); }
+
+.packetboat-btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.34), 0 6px 18px rgba(79, 217, 166, 0.28);
+}
+.packetboat-btn--primary:hover:not(:disabled) { background: var(--accent-hi); }
+.packetboat-btn--primary:disabled { cursor: wait; opacity: .6; }
+
+.packetboat-btn--ghost {
+  background: var(--glass-l3-fill);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.packetboat-btn--ghost:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.22); }
+
+.packetboat-btn--danger {
+  background: rgba(255, 107, 90, 0.10);
+  border-color: rgba(255, 107, 90, 0.38);
+  color: #FF8E80;
+}
+.packetboat-btn--danger:hover:not(:disabled) { background: rgba(255, 107, 90, 0.16); }
+
+/* === 输入 / 拖放区 === */
+.packetboat-input {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--text);
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.30);
+}
+.packetboat-input::placeholder { color: var(--text-faint); }
+
+.packetboat-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 210px;
+  padding: 28px;
+  border-radius: var(--r-xl);
+  background: var(--glass-l1-fill);
+  border: 1px solid var(--glass-l1-stroke);
+  box-shadow: var(--glass-l1-shadow), inset 0 3px 10px rgba(0, 0, 0, 0.24);
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur));
+  backdrop-filter: blur(var(--glass-l1-blur));
+  color: var(--text);
+}
+
+/* === 状态徽章 === */
+.packetboat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--r-pill);
+  font: 600 11px/1.4 var(--font-sans);
+  letter-spacing: .01em;
+}
+.packetboat-badge--accent  { background: rgba(79, 217, 166, 0.13); color: var(--accent);     border: 1px solid rgba(79, 217, 166, 0.30); }
+.packetboat-badge--warn    { background: rgba(245, 165, 36, 0.12); color: var(--warn);       border: 1px solid rgba(245, 165, 36, 0.30); }
+.packetboat-badge--danger  { background: rgba(255, 107, 90, 0.12); color: #FF8E80;           border: 1px solid rgba(255, 107, 90, 0.28); }
+.packetboat-badge--neutral { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); border: 1px solid rgba(255, 255, 255, 0.12); }
+
+/* === 进度条 === */
+.packetboat-progress {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.10);
+  overflow: hidden;
+}
+.packetboat-progress__bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(79, 217, 166, 0.55);
+}
+.packetboat-progress__bar--warn { background: var(--warn); box-shadow: 0 0 10px rgba(245, 165, 36, 0.45); }
+
+/* === 错误提示条 === */
+.packetboat-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: rgba(255, 107, 90, 0.10);
+  color: #FFB8AE;
+  font-size: 14px;
+}
+
+/* === Toast === */
+.packetboat-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 420px;
+  padding: 13px 18px;
+  border: 1px solid rgba(79, 217, 166, 0.35);
+  border-radius: var(--r-lg);
+  background: rgba(11, 16, 14, 0.92);
+  color: var(--text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  -webkit-backdrop-filter: blur(var(--glass-l3-blur));
+  backdrop-filter: blur(var(--glass-l3-blur));
+}
+
+/* === 配对门 6 位输入格 === */
+.packetboat-pair-grid { display: flex; gap: 12px; justify-content: center; }
+.packetboat-pair-cell {
+  width: 60px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.32);
+  font: 700 30px/1 var(--font-mono);
+  color: var(--text-faint);
+}
+.packetboat-pair-cell--filled {
+  background: rgba(79, 217, 166, 0.10);
+  border-color: rgba(79, 217, 166, 0.50);
+  color: var(--text);
+}
+
+/* === 资源占位辅助类（保留以备后））） ===
+ */

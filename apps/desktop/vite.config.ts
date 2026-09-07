@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: env.LANE_DEV_SERVER_URL || 'http://127.0.0.1:8080',
+          target: env.PACKETBOAT_DEV_SERVER_URL || 'http://127.0.0.1:8080',
           changeOrigin: true,
         },
       },

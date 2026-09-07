@@ -44,7 +44,7 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
-# workspace 内部的 path 依赖（lane-core）没有版本要求，允许 path 来源的 wildcard
+# workspace 内部的 path 依赖（packetboat-core）没有版本要求，允许 path 来源的 wildcard
 allow-wildcard-paths = true
 
 [sources]

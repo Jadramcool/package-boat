@@ -33,7 +33,7 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
       - name: Run transfer benchmark
-        run: cargo bench -p lane-core --bench transfer -- --profile "$BENCH_PROFILE" --output-dir target/benchmarks
+        run: cargo bench -p packetboat-core --bench transfer -- --profile "$BENCH_PROFILE" --output-dir target/benchmarks
       - name: Add report to job summary
         run: cat target/benchmarks/transfer-report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload machine-readable reports

@@ -42,7 +42,7 @@ function closeWindow() {
   <div class="window-titlebar" data-tauri-drag-region="deep">
     <div class="titlebar-brand" aria-hidden="true">
       <span class="titlebar-mark">L</span>
-      <span class="titlebar-title">LANE · 局域网投递站</span>
+      <span class="titlebar-title">PacketBoat · 局域网投递站</span>
     </div>
     <div class="titlebar-actions">
       <button

@@ -1,6 +1,6 @@
 # Transfer benchmarks
 
-LANE 的传输基准是一个独立的端到端程序：它启动真实 Axum 服务，通过 HTTP 完成配对、multipart 上传和 Range 下载，并在临时接收目录中执行真实文件写入与同步。
+PacketBoat 的传输基准是一个独立的端到端程序：它启动真实 Axum 服务，通过 HTTP 完成配对、multipart 上传和 Range 下载，并在临时接收目录中执行真实文件写入与同步。
 
 ## 场景
 
@@ -19,19 +19,19 @@ LANE 的传输基准是一个独立的端到端程序：它启动真实 Axum 服
 快速验证：
 
 ```powershell
-cargo bench -p lane-core --bench transfer -- --profile smoke
+cargo bench -p packetboat-core --bench transfer -- --profile smoke
 ```
 
 开发机基准：
 
 ```powershell
-cargo bench -p lane-core --bench transfer -- --profile standard
+cargo bench -p packetboat-core --bench transfer -- --profile standard
 ```
 
 长时间、大磁盘压力测试：
 
 ```powershell
-cargo bench -p lane-core --bench transfer -- --profile stress
+cargo bench -p packetboat-core --bench transfer -- --profile stress
 ```
 
 | Profile | 大文件 | 弱网上传 | 并发上传 | 中断重试 |
@@ -52,17 +52,17 @@ cargo bench -p lane-core --bench transfer -- --profile stress
 预设可以用环境变量覆盖：
 
 ```powershell
-$env:LANE_BENCH_LARGE_MIB = "512"
-$env:LANE_BENCH_WEAK_MIB = "32"
-$env:LANE_BENCH_WEAK_MBPS = "5"
-$env:LANE_BENCH_WEAK_LATENCY_MS = "120"
-$env:LANE_BENCH_WEAK_JITTER_MS = "80"
-$env:LANE_BENCH_CONCURRENT_FILES = "6"
-$env:LANE_BENCH_CONCURRENT_MIB = "64"
-$env:LANE_BENCH_RANGE_WORKERS = "6"
-$env:LANE_BENCH_INTERRUPTED_MIB = "64"
+$env:PACKETBOAT_BENCH_LARGE_MIB = "512"
+$env:PACKETBOAT_BENCH_WEAK_MIB = "32"
+$env:PACKETBOAT_BENCH_WEAK_MBPS = "5"
+$env:PACKETBOAT_BENCH_WEAK_LATENCY_MS = "120"
+$env:PACKETBOAT_BENCH_WEAK_JITTER_MS = "80"
+$env:PACKETBOAT_BENCH_CONCURRENT_FILES = "6"
+$env:PACKETBOAT_BENCH_CONCURRENT_MIB = "64"
+$env:PACKETBOAT_BENCH_RANGE_WORKERS = "6"
+$env:PACKETBOAT_BENCH_INTERRUPTED_MIB = "64"
 
-cargo bench -p lane-core --bench transfer -- --profile standard
+cargo bench -p packetboat-core --bench transfer -- --profile standard
 ```
 
 ## 结果解读

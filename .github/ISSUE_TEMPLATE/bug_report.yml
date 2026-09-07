@@ -9,7 +9,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: LANE 版本
+      label: PacketBoat 版本
       placeholder: 0.2.0
     validations:
       required: true

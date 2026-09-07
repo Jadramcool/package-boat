@@ -18,8 +18,8 @@ import {
 } from '@/api'
 import type { DesktopState } from '@/types'
 
-const autoPairPreferenceKey = 'lane:auto-pair-by-qr'
-const alwaysOnTopPreferenceKey = 'lane:always-on-top'
+const autoPairPreferenceKey = 'packetboat:auto-pair-by-qr'
+const alwaysOnTopPreferenceKey = 'packetboat:always-on-top'
 
 export function useDesktopHost() {
   const state = shallowRef<DesktopState | null>(null)
