@@ -17,7 +17,11 @@ for (const relativePath of await assetFiles(targetDirectory)) {
     continue
   const path = resolve(targetDirectory, relativePath)
   const source = await readFile(path)
-  await writeFile(`${path}.gz`, gzipSync(source, { level: 9 }))
+  const compressed = gzipSync(source, { level: 9, mtime: 0 })
+  // gzip 头部第 10 字节是 OS 字段：Windows 的 zlib 写 0x0a、Linux 写 0x03，
+  // 会让 CI 的嵌入资源新鲜度校验误报差异。统一固定为 0xff（unknown）。
+  compressed[9] = 0xff
+  await writeFile(`${path}.gz`, compressed)
 }
 
 console.log(`Synced browser assets to ${targetDirectory}`)
