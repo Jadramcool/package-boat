@@ -2,7 +2,7 @@
 
 PacketBoat 是一个以 Rust 编写的局域网文件分享工具。发送端只需打开浏览器、输入六位配对码，即可向主机上传文件或下载主机分享的文件；数据不经过公网中转。
 
-> 当前版本为 `0.3.0`，面向 Windows 桌面端。项目仍处于早期阶段，欢迎试用和贡献。
+> 当前版本为 `0.1.0`，面向 Windows 桌面端。项目仍处于早期阶段，欢迎试用和贡献。
 
 ## 功能
 
@@ -103,7 +103,7 @@ pnpm run build
 
 ## 发布
 
-推送形如 `v0.3.0` 的 Git 标签会触发 GitHub Release：自动构建 Windows NSIS 安装包，并附带 `SHA256SUMS.txt`。正式发布前应确保标签版本与 Cargo、Tauri 配置中的版本一致。
+推送形如 `v0.1.0` 的 Git 标签会触发 GitHub Release：自动构建 Windows NSIS 安装包，并附带 `SHA256SUMS.txt`。正式发布前应确保标签版本与 Cargo、Tauri 配置中的版本一致。
 
 ## 安全说明
 

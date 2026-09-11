@@ -3060,7 +3060,7 @@ dependencies = [
 
 [[package]]
 name = "packetboat-core"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "async-stream",
  "axum",
@@ -3094,7 +3094,7 @@ dependencies = [
 
 [[package]]
 name = "packetboat-desktop"
-version = "0.3.0"
+version = "0.1.0"
 dependencies = [
  "packetboat-core",
  "serde",

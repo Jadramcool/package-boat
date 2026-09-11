@@ -4,32 +4,16 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-11
+
+首次公开发布。此前的 0.2.0 / 0.3.0 为内部迭代版本，从未公开发布，历史条目已并入本版本。
+
 ### Added
 
-- 应用内自动更新：接入 `tauri-plugin-updater`，启动时静默检查、发现新版本后一键安装重启；Release 工作流自动生成 `latest.json` 清单并对更新包签名。
+- 局域网浏览器文件分享：发送端无需安装客户端，输入六位配对码即可上传/下载。
 - 浏览器分块上传、连接中断后的缺块续传、失败重试和逐块 SHA-256 完整性校验。
 - 受认证保护的上传会话 API，支持进度查询、幂等块重试、完成提交和取消清理。
 - 上传队列实时速度与预计剩余时间，弱网停滞时会清除过期估算。
-- 基于 Node.js 内置测试运行器的前端传输指标单元测试，并接入 CI。
-- 桌面端一键清空共享清单，清空操作只移除记录，不删除磁盘文件。
-
-### Changed
-
-- 中断恢复基准改为验证实际的分块续传路径和恢复阶段传输量。
-- 接收目录不再在服务启动时被批量扫描为共享文件；升级时会移除旧版自动导入记录，但保留磁盘文件。
-- 按 Tauri 2 官方规范对齐桌面端工程：启用 CSP（`csp`/`devCsp`），`devUrl` 改用 `127.0.0.1`，显式声明窗口 `label`；前端迁移到顶层 `apps/desktop/`；`lib.rs` 拆分为 commands/state/events/error/tray/window 模块并以 `thiserror` 统一错误类型；接入 `tauri-specta` 从 Rust 生成 `bindings.ts`（命令、事件与数据类型全量类型安全），替换手写 `types.ts`；CI 新增版本一致性校验与 `tauri build --no-bundle` 构建验证。
-- 桌面端配置去重与安全收紧：`tauri.conf.json` 省略 `version` 字段改为自动继承 Cargo 包版本（`check-versions` 与 Release 工作流同步移除该校验点）；移除前端多余的 `@tauri-apps/cli` 依赖；CSP 移除未使用的 `asset:`/`customprotocol:` 来源；CI 新增 `cargo-deny` 依赖审计（许可证、安全公告与来源校验）。
-- 升级传递依赖 `h2` 至 0.4.19，消除 RUSTSEC-2026-0258（无界空 DATA 帧队列）安全公告。
-- 前端接入 ESLint 10（`eslint-plugin-vue` essential + TypeScript recommended），存量代码零违规，CI 新增 lint 门禁。
-
-### Removed
-
-- 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
-
-## [0.3.0] - 2026-08-20
-
-### Added
-
 - 浏览器接收页完整 Vue/TypeScript 源码，以及桌面/浏览器统一构建入口。
 - 根级 pnpm workspace 和嵌入资源同步脚本，CI 会校验浏览器构建产物未过期。
 - 端到端传输基准，覆盖大文件、带宽/延迟/抖动弱网、并发上传、并行 Range 下载和中断恢复。
@@ -37,17 +21,32 @@
 - 服务启动时回收超过 24 小时的残留上传和文件夹 ZIP 临时文件。
 - 上传前检查接收目录可用空间，空间不足时返回 HTTP 507。
 - 识别上传过程中发生的磁盘写满错误，并返回明确错误信息。
-- GitHub 标签发布自动构建 Windows NSIS、CLI ZIP 和 SHA-256 校验清单。
+- 应用内自动更新：接入 `tauri-plugin-updater`，启动时静默检查、发现新版本后一键安装重启；Release 工作流自动生成 `latest.json` 清单并对更新包签名。
+- 桌面端一键清空共享清单，清空操作只移除记录，不删除磁盘文件。
+- 基于 Node.js 内置测试运行器的前端传输指标单元测试，并接入 CI。
 
 ### Changed
 
-- Windows 产品名称统一为 `PacketBoat`。
-- 桌面端运行时版本改为读取 Cargo 包版本，减少版本漂移。
+- 原位共享文件与文件夹，只记录路径，不复制也不移动源文件；接收目录不再被自动扫描为共享文件。
+- 中断恢复基准改为验证实际的分块续传路径和恢复阶段传输量。
+- 按 Tauri 2 官方规范对齐桌面端工程：启用 CSP（`csp`/`devCsp`），`devUrl` 改用 `127.0.0.1`，显式声明窗口 `label`；`lib.rs` 拆分为 commands/state/events/error/tray/window 模块并以 `thiserror` 统一错误类型；接入 `tauri-specta` 从 Rust 生成 `bindings.ts`（命令、事件与数据类型全量类型安全）。
+- 桌面端配置去重与安全收紧：`tauri.conf.json` 省略 `version` 字段改为自动继承 Cargo 包版本；CSP 移除未使用的 `asset:`/`customprotocol:` 来源；CI 集成版本一致性校验、`tauri build --no-bundle` 构建验证与 `cargo-deny` 依赖审计。
+- 升级传递依赖 `h2` 至 0.4.19，消除 RUSTSEC-2026-0258（无界空 DATA 帧队列）安全公告。
+- 前端接入 ESLint 10（`eslint-plugin-vue` essential + TypeScript recommended），CI 新增 lint 门禁。
 
-## [0.2.0] - 2026-08-18
+### Fixed
 
-### Added
+- 修复分块上传在目录表登记失败时丢失已上传数据的问题：现在会回滚到临时文件，客户端重试提交即可恢复。
+- 修复桌面端冷启动时界面可能停留在「服务已停止」状态的问题：自动开服完成后主动广播状态变更。
+- 修复浏览器接收页 SSE 断线重连后文件列表不补拉的问题，断线窗口内的变更现在会自动同步。
+- 修复一次 multipart 上传超过 50 个文件时被静默截断的问题，现在返回明确错误。
+- 修复并发打包文件夹下载时 ZIP 临时文件名可能冲突、下载内容被污染的问题，改用密码学随机命名。
+- 目录表列表的磁盘元数据读取移出锁外，避免大目录或慢速盘阻塞并发的列表、下载与上传操作。
+- 配对失败后清空输入并进入短暂冷却；桌面端新增手动「检查更新」入口与更新失败重试。
 
-- Rust workspace、CLI、Tauri 桌面端和局域网浏览器文件传输。
-- 配对认证、Range 下载、文件夹 ZIP、SSE 刷新和传输进度。
-- 开源文档、CI 和社区模板。
+### Removed
+
+- 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
+
+[Unreleased]: https://github.com/package-boat/packet-boat/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/package-boat/packet-boat/releases/tag/v0.1.0
