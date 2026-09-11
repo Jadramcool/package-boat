@@ -231,8 +231,8 @@ mod tests {
             r#"{"device_name":"X","host":"0.0.0.0","port":70000,"receive_dir":"C:\\T","max_upload_bytes":1}"#,
             r#"{"device_name":"X","host":"0.0.0.0","port":null,"receive_dir":"C:\\T","max_upload_bytes":1}"#,
         ] {
-            let dir =
-                std::env::temp_dir().join(format!("packetboat-settings-bad-{}", std::process::id()));
+            let dir = std::env::temp_dir()
+                .join(format!("packetboat-settings-bad-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
             let path = dir.join("settings.json");

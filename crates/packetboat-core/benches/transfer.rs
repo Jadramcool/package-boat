@@ -102,12 +102,27 @@ impl BenchConfig {
         override_u64("PACKETBOAT_BENCH_LARGE_MIB", &mut config.large_mib)?;
         override_u64("PACKETBOAT_BENCH_WEAK_MIB", &mut config.weak_mib)?;
         override_f64("PACKETBOAT_BENCH_WEAK_MBPS", &mut config.weak_mbps)?;
-        override_u64("PACKETBOAT_BENCH_WEAK_LATENCY_MS", &mut config.weak_latency_ms)?;
-        override_u64("PACKETBOAT_BENCH_WEAK_JITTER_MS", &mut config.weak_jitter_ms)?;
-        override_usize("PACKETBOAT_BENCH_CONCURRENT_FILES", &mut config.concurrent_files)?;
-        override_u64("PACKETBOAT_BENCH_CONCURRENT_MIB", &mut config.concurrent_mib)?;
+        override_u64(
+            "PACKETBOAT_BENCH_WEAK_LATENCY_MS",
+            &mut config.weak_latency_ms,
+        )?;
+        override_u64(
+            "PACKETBOAT_BENCH_WEAK_JITTER_MS",
+            &mut config.weak_jitter_ms,
+        )?;
+        override_usize(
+            "PACKETBOAT_BENCH_CONCURRENT_FILES",
+            &mut config.concurrent_files,
+        )?;
+        override_u64(
+            "PACKETBOAT_BENCH_CONCURRENT_MIB",
+            &mut config.concurrent_mib,
+        )?;
         override_usize("PACKETBOAT_BENCH_RANGE_WORKERS", &mut config.range_workers)?;
-        override_u64("PACKETBOAT_BENCH_INTERRUPTED_MIB", &mut config.interrupted_mib)?;
+        override_u64(
+            "PACKETBOAT_BENCH_INTERRUPTED_MIB",
+            &mut config.interrupted_mib,
+        )?;
         config.validate()?;
         Ok(config)
     }

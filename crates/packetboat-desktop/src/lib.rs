@@ -16,7 +16,7 @@ mod tray;
 mod window;
 
 use events::{ErrorNotice, StateChanged, SuccessNotice};
-use state::Desktop;
+use state::{emit_state_changed, Desktop};
 use tauri::{Manager, WindowEvent};
 use tauri_specta::{collect_commands, collect_events, Builder};
 use tracing::{info, warn};
@@ -144,12 +144,17 @@ pub fn run() {
 
             // 启动时自动开启局域网服务（与 Go 版 `startup` 一致）
             let host = app.state::<Desktop>().host.clone();
+            let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(err) = host.start().await {
+                let result = host.start().await;
+                if let Err(err) = &result {
                     warn!("启动局域网服务失败: {err}");
                 } else {
                     info!("局域网服务已启动");
                 }
+                // 无论成败都广播状态：前端 initialize 的 get_state 会与本任务
+                // 竞速，缺少这一步 UI 会卡在"服务已停止"直到下一次用户操作。
+                emit_state_changed(&handle);
             });
             Ok(())
         })

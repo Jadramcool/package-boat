@@ -590,7 +590,9 @@ mod tests {
         assert!(is_packetboat_transfer_temp_name(
             ".packetboat-zip-1234-18d7a0ff.zip"
         ));
-        assert!(!is_packetboat_transfer_temp_name(".packetboat-not-a-temp.part"));
+        assert!(!is_packetboat_transfer_temp_name(
+            ".packetboat-not-a-temp.part"
+        ));
         assert!(!is_packetboat_transfer_temp_name(
             ".packetboat-1234-0123456789abcdef.txt"
         ));
