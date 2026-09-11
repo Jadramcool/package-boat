@@ -47,7 +47,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+        "https://github.com/Jadramcool/package-boat/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBMThENEVDNjI2NjA4NTQKUldSVUNHWmk3TlFZYWlEUndudkljelhMYTR6Mm02eUhlanZHajF6NXdJNnBqN1BxQkUweE9iZTMK"
     }
