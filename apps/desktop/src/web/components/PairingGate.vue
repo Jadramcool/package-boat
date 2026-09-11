@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight, RadioTower, RefreshCw, ShieldCheck } from '@lucide/vue'
-import { computed, shallowRef } from 'vue'
+import { computed, onUnmounted, shallowRef, watch } from 'vue'
 
 const props = defineProps<{
   serverName: string
@@ -15,7 +15,11 @@ const emit = defineEmits<{
 }>()
 
 const code = shallowRef('')
-const canSubmit = computed(() => code.value.length === 6 && !props.loading)
+const cooldown = shallowRef(0)
+let cooldownTimer: ReturnType<typeof setInterval> | undefined
+
+const canSubmit = computed(() =>
+  code.value.length === 6 && !props.loading && cooldown.value === 0)
 
 function handleInput(event: Event): void {
   const input = event.target as HTMLInputElement
@@ -27,6 +31,22 @@ function submit(): void {
   if (canSubmit.value)
     emit('submit', code.value)
 }
+
+// 配对失败：清空输入并短暂冷却，避免原样重复提交；服务端另有按 IP 限速兜底
+watch(() => props.error, (error) => {
+  if (!error)
+    return
+  code.value = ''
+  cooldown.value = 3
+  clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    cooldown.value = Math.max(0, cooldown.value - 1)
+    if (cooldown.value === 0)
+      clearInterval(cooldownTimer)
+  }, 1000)
+})
+
+onUnmounted(() => clearInterval(cooldownTimer))
 </script>
 
 <template>
@@ -83,7 +103,7 @@ function submit(): void {
           <p id="pair-code-hint" class="form-hint">配对码显示在运行 PacketBoat 的主机界面或终端中</p>
           <p v-if="error" class="form-error" role="alert">{{ error }}</p>
           <button class="connect-button" type="submit" :disabled="!canSubmit">
-            <span>{{ loading ? '正在验票' : '进入文件站' }}</span>
+            <span>{{ loading ? '正在验票' : cooldown > 0 ? `${cooldown}s 后可重试` : '进入文件站' }}</span>
             <ArrowRight :size="19" aria-hidden="true" />
           </button>
         </form>

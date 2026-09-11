@@ -70,7 +70,14 @@ onMounted(() => {
 
       <div v-else-if="updater.status.value === 'error'" class="error-strip" role="alert">
         <AlertTriangle :size="16" />
-        <span>自动更新失败，可稍后重试</span>
+        <span>自动更新检查失败，可稍后重试</span>
+        <button
+          type="button"
+          class="strip-retry"
+          @click="updater.checkForUpdate(false)"
+        >
+          重试
+        </button>
         <button type="button" class="strip-close" aria-label="关闭更新提示" @click="updater.dismiss">
           <X :size="14" />
         </button>
@@ -120,6 +127,14 @@ onMounted(() => {
     <footer>
       <span>PacketBoat DESKTOP / {{ desktop.state.value.version }}</span>
       <span class="footer-note">文件通过本机局域网直达 · 无云端中转</span>
+      <button
+        type="button"
+        class="footer-action"
+        :disabled="updater.status.value === 'checking' || updater.status.value === 'downloading'"
+        @click="updater.checkForUpdate(false)"
+      >
+        {{ updater.status.value === 'checking' ? '正在检查…' : '检查更新' }}
+      </button>
     </footer>
     </div>
   </div>
@@ -140,6 +155,9 @@ onMounted(() => {
 .error-strip span { margin-right: auto; }
 .strip-close { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #6d230e; cursor: pointer; }
 .strip-close:hover { background: rgb(240 90 50 / 14%); }
+.strip-retry { flex: none; padding: 6px 14px; border: 1px solid #6d230e; border-radius: 6px; background: transparent; color: #6d230e; font: 700 13px/1 var(--font-label); cursor: pointer; }
+.strip-retry:hover:not(:disabled) { background: rgb(240 90 50 / 14%); }
+.strip-retry:disabled { opacity: .5; cursor: not-allowed; }
 .update-strip { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; padding: 13px 16px; border: 1px solid rgb(180 214 20 / 45%); border-radius: 7px; background: rgb(217 255 82 / 16%); color: var(--ink); font-size: 14px; }
 .update-strip span { margin-right: auto; }
 .update-install { flex: none; padding: 7px 14px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--acid); font: 700 13px/1 var(--font-label); letter-spacing: .02em; cursor: pointer; }
@@ -154,6 +172,9 @@ onMounted(() => {
 .desktop-file-list { min-width: 0; }
 .side-panel { min-width: 0; display: flex; flex-direction: column; gap: 24px; position: sticky; top: 24px; align-self: start; }
 footer { display: flex; justify-content: space-between; flex: none; padding: 16px 4px 0; color: var(--muted); font: 600 12px/1 var(--font-label); letter-spacing: .08em; }
+.footer-action { padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: transparent; color: var(--muted); font: 600 12px/1 var(--font-label); letter-spacing: .08em; cursor: pointer; transition: color .15s, border-color .15s; }
+.footer-action:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
+.footer-action:disabled { opacity: .5; cursor: not-allowed; }
 .desktop-boot, .fatal-state { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 13px; background: var(--ink); color: var(--paper); }
 .boot-symbol { width: 66px; height: 66px; display: grid; place-items: center; margin-bottom: 10px; border: 1px solid var(--acid); color: var(--acid); font: 750 29px/1 var(--font-display); }
 .desktop-boot span { color: rgb(241 238 228 / 62%); font-size: 14px; letter-spacing: .08em; }

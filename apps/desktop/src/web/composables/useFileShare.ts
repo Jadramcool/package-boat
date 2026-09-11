@@ -309,6 +309,9 @@ export function useFileShare() {
     events = new EventSource('/api/events')
     events.addEventListener('ready', () => {
       online.value = true
+      // 服务端在每次 SSE 连接建立时都会发送 ready：EventSource 断线自动重连后，
+      // 断线窗口内错过的文件变更靠这里全量补拉
+      void loadFiles()
     })
     events.addEventListener('update', () => {
       online.value = true

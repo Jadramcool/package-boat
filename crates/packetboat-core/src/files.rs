@@ -369,7 +369,12 @@ pub(crate) async fn commit_temporary_upload(
     match catalog.add_received(destination.clone()) {
         Ok(item) => Ok(item),
         Err(err) => {
-            let _ = tokio::fs::remove_file(&destination).await;
+            // catalog 写入失败时把文件退回临时路径，与 save_upload 保持一致的
+            // 回滚语义：会话保持 active，客户端重试 complete 时临时文件仍存在，
+            // 已上传的数据不会丢失。只有回退重命名也失败时才删除未登记文件。
+            if tokio::fs::rename(&destination, temp_path).await.is_err() {
+                let _ = tokio::fs::remove_file(&destination).await;
+            }
             Err(SaveUploadError::Catalog(err))
         }
     }
@@ -413,7 +418,7 @@ fn map_storage_io(context: &str, err: std::io::Error) -> SaveUploadError {
     }
 }
 
-fn random_hex(length: usize) -> String {
+pub(crate) fn random_hex(length: usize) -> String {
     let mut bytes = vec![0u8; length];
     rand::rng().fill_bytes(&mut bytes);
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()

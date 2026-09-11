@@ -159,9 +159,14 @@ impl Catalog {
     }
 
     /// 列出全部条目：刷新每个条目的可用性与大小/修改时间，按加入时间倒序（稳定排序）。
+    /// 磁盘元数据读取在锁外进行：慢速盘/大目录的 stat 不再阻塞并发的
+    /// 列表查询、下载解析与上传登记。
     pub fn list(&self) -> Vec<Item> {
-        let mut guard = self.inner.write().expect("catalog lock poisoned");
-        for item in guard.iter_mut() {
+        let mut result = {
+            let guard = self.inner.read().expect("catalog lock poisoned");
+            guard.clone()
+        };
+        for item in result.iter_mut() {
             if let Ok(metadata) = std::fs::symlink_metadata(&item.local_path) {
                 let file_type = metadata.file_type();
                 let valid = !file_type.is_symlink() && (file_type.is_file() || file_type.is_dir());
@@ -181,7 +186,6 @@ impl Catalog {
             }
             item.available = false;
         }
-        let mut result = guard.clone();
         result.sort_by_key(|item| std::cmp::Reverse(item.added_at));
         result
     }

@@ -4,7 +4,7 @@
 use crate::assets;
 use crate::auth::{AuthManager, SESSION_COOKIE_NAME};
 use crate::catalog::{Catalog, Item, SourceType};
-use crate::files::{save_upload, SaveUploadError};
+use crate::files::{random_hex, save_upload, SaveUploadError};
 use crate::hub::Hub;
 use crate::uploads::{UploadError, UploadManager, MAX_CHUNK_SIZE};
 use axum::body::Body;
@@ -462,6 +462,9 @@ fn upload_error_response(error: UploadError) -> Response {
     json_error(status, &error.to_string())
 }
 
+/// 单次 multipart 请求允许携带的文件数量上限（超出整请求报错，不做静默截断）。
+const MAX_MULTIPART_FILES: usize = 50;
+
 async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> Response {
     // 手动构造 multipart（multer）：需要统计 body 字节以驱动任务栏进度
     let content_type = match request.headers().get(header::CONTENT_TYPE) {
@@ -508,8 +511,13 @@ async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> R
 
     let mut uploaded: Vec<FileRecord> = Vec::new();
     loop {
-        if uploaded.len() >= 50 {
-            break;
+        if uploaded.len() >= MAX_MULTIPART_FILES {
+            // 明确报错而非静默截断：否则客户端会误以为全部上传成功
+            server.progress.finish();
+            return json_error(
+                StatusCode::BAD_REQUEST,
+                "单次上传最多 50 个文件，请分批发送",
+            );
         }
         let field = match multipart.next_field().await {
             Ok(Some(field)) => field,
@@ -925,11 +933,9 @@ impl Drop for ZipCleanupStream {
 }
 
 fn random_suffix() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    format!("{nanos:x}")
+    // 使用密码学随机而非时间戳：同进程内并发打包时纳秒时间戳可能重复，
+    // 导致 ZIP 临时文件互相覆盖、下载内容被污染
+    random_hex(8)
 }
 
 async fn handle_delete(State(server): State<Arc<Server>>, Path(id): Path<String>) -> Response {
