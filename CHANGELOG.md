@@ -48,5 +48,5 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/package-boat/packet-boat/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/package-boat/packet-boat/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Jadramcool/package-boat/releases/tag/v0.1.0
