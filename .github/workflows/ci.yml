@@ -32,7 +32,17 @@ jobs:
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        shell: pwsh
+        run: |
+          # build.rs 的 /MANIFEST:EMBED workaround（tao 测试二进制需要 comctl32 v6
+          # manifest）会让链接器调用 Windows SDK 的 mt.exe，确保它在 PATH 中
+          $sdkBin = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64' } |
+            Where-Object { Test-Path (Join-Path $_ 'mt.exe') } |
+            Select-Object -First 1
+          if ($sdkBin) { $env:PATH = "$sdkBin;$env:PATH" }
+          cargo test --workspace
 
   deny:
     runs-on: ubuntu-latest
