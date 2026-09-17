@@ -28,6 +28,7 @@ tokio-util = { workspace = true }
 async-stream = "0.3"
 async_zip = { version = "0.0.19", features = ["tokio", "deflate"] }
 futures-lite = "2"
+notify = "8"
 zip = "2"
 multer = "3"
 http-range-header = "0.4"

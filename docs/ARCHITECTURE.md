@@ -17,10 +17,11 @@ Vue browser UI ── HTTP/SSE ──> packetboat-core
 - `server.rs`：Axum 路由、认证中间件、上传、Range 下载、SSE 和安全响应头。
 - `files.rs`：文件名净化、临时文件落盘、唯一命名和文件夹 ZIP。
 - `uploads.rs`：分块上传会话、块摘要校验、缺块查询、取消和原子提交。
-- `catalog.rs`：共享条目持久化。`linked` 只引用用户明确选择的原文件，`received` 只指向本次服务明确接收的上传文件。
+- `catalog.rs`：共享条目持久化。`linked` 只引用用户明确选择的原文件，`received` 只指向本次服务明确接收的上传文件。`list()` 带短 TTL 缓存；文件系统事件通过 `apply_path_event` 增量刷新命中条目。
 - `auth.rs`：随机配对码、IP 尝试限制和内存会话。
 - `host.rs`：服务启动、停止、端口回退和状态管理。
 - `hub.rs`：非阻塞 SSE 广播；慢消费者不会阻塞文件操作。
+- `watch.rs`：非递归监听条目父目录，事件去抖后增量刷新目录表并广播。
 
 ## 传输路径
 

@@ -1,5 +1,8 @@
 //! 共享目录表：`catalog.json`。`linked` 条目只保存源文件绝对路径（不复制、不移动），
 //! `received` 条目只由本次服务明确接收的上传文件产生。所有变更先落盘再提交内存状态。
+//!
+//! `list()` 结果带短 TTL 缓存；文件系统监听通过 `apply_path_event` 只重读命中的条目，
+//! 避免每次列表都对全部路径做磁盘 stat。
 
 use crate::CATALOG_VERSION;
 use chrono::{DateTime, Utc};
@@ -7,7 +10,14 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
+use std::time::{Duration, Instant};
+
+/// 列表缓存有效期：窗口内重复列表不再触发全量 stat。
+const LIST_CACHE_TTL: Duration = Duration::from_millis(1_500);
+
+/// 监听父目录数量上限；超出后依赖 TTL 全量刷新兜底。
+pub const MAX_WATCH_ROOTS: usize = 256;
 
 /// 条目来源类型，JSON 序列化为小写。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,6 +58,8 @@ struct PersistedCatalog {
 pub struct Catalog {
     path: PathBuf,
     inner: RwLock<Vec<Item>>,
+    /// `list()` 的短 TTL 缓存；`None` 表示需要重建。
+    list_cache: Mutex<Option<(Instant, Vec<Item>)>>,
 }
 
 impl Catalog {
@@ -56,11 +68,16 @@ impl Catalog {
         let catalog = Catalog {
             path,
             inner: RwLock::new(Vec::new()),
+            list_cache: Mutex::new(None),
         };
         if !catalog.path.as_os_str().is_empty() {
             catalog.load()?;
         }
         Ok(catalog)
+    }
+
+    fn invalidate_list_cache(&self) {
+        *self.list_cache.lock().expect("list cache poisoned") = None;
     }
 
     /// 原位共享：验证并追加多个源文件路径。任一文件无效则整体失败，不做任何修改。
@@ -117,6 +134,7 @@ impl Catalog {
                 guard.truncate(start_len);
                 return Err(err);
             }
+            self.invalidate_list_cache();
         }
         Ok(added)
     }
@@ -155,39 +173,115 @@ impl Catalog {
             guard.pop();
             return Err(err);
         }
+        self.invalidate_list_cache();
         Ok(item)
     }
 
-    /// 列出全部条目：刷新每个条目的可用性与大小/修改时间，按加入时间倒序（稳定排序）。
+    /// 列出全部条目：优先返回短 TTL 缓存；过期时重建（全量 stat）。
     /// 磁盘元数据读取在锁外进行：慢速盘/大目录的 stat 不再阻塞并发的
     /// 列表查询、下载解析与上传登记。
     pub fn list(&self) -> Vec<Item> {
+        {
+            let cache = self.list_cache.lock().expect("list cache poisoned");
+            if let Some((at, items)) = cache.as_ref() {
+                if at.elapsed() < LIST_CACHE_TTL {
+                    return items.clone();
+                }
+            }
+        }
+        self.rebuild_list_cache()
+    }
+
+    fn rebuild_list_cache(&self) -> Vec<Item> {
         let mut result = {
             let guard = self.inner.read().expect("catalog lock poisoned");
             guard.clone()
         };
         for item in result.iter_mut() {
-            if let Ok(metadata) = std::fs::symlink_metadata(&item.local_path) {
-                let file_type = metadata.file_type();
-                let valid = !file_type.is_symlink() && (file_type.is_file() || file_type.is_dir());
-                if valid {
-                    item.available = true;
-                    item.name = file_name_of(Path::new(&item.local_path))
-                        .to_string_lossy()
-                        .into_owned();
-                    item.size = metadata.len() as i64;
-                    item.modified_at = DateTime::from(
-                        metadata
-                            .modified()
-                            .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-                    );
-                    continue;
-                }
-            }
-            item.available = false;
+            apply_disk_meta(item);
         }
         result.sort_by_key(|item| std::cmp::Reverse(item.added_at));
+        *self.list_cache.lock().expect("list cache poisoned") =
+            Some((Instant::now(), result.clone()));
         result
+    }
+
+    /// 文件系统事件：只重读路径命中的条目并更新列表缓存，返回是否有变化。
+    /// 事件可能是文件本身或其父目录，按路径相等或父目录关系匹配。
+    pub fn apply_path_event(&self, changed: &Path) -> bool {
+        let changed_str = normalize_path_key(&changed.to_string_lossy());
+        let matched = {
+            let guard = self.inner.read().expect("catalog lock poisoned");
+            guard
+                .iter()
+                .any(|item| path_event_matches_item(item, &changed_str))
+        };
+        if !matched {
+            return false;
+        }
+
+        let mut cache = self.list_cache.lock().expect("list cache poisoned");
+        let Some((_, items)) = cache.as_mut() else {
+            // 无缓存时下次 list 会全量重建，这里只需让调用方知道应广播。
+            return true;
+        };
+        let mut changed_any = false;
+        for item in items.iter_mut() {
+            if path_event_matches_item(item, &changed_str) {
+                let before = (
+                    item.available,
+                    item.size,
+                    item.modified_at,
+                    item.name.clone(),
+                );
+                apply_disk_meta(item);
+                let after = (
+                    item.available,
+                    item.size,
+                    item.modified_at,
+                    item.name.clone(),
+                );
+                if before != after {
+                    changed_any = true;
+                }
+            }
+        }
+        if changed_any {
+            *cache = Some((Instant::now(), items.clone()));
+        }
+        changed_any
+    }
+
+    /// 强制下次 `list` 全量重建（周期性兜底或监听失败时）。
+    pub fn mark_list_stale(&self) {
+        self.invalidate_list_cache();
+    }
+
+    /// 需要非递归监听的根目录：每个条目的父目录；文件夹条目额外监听自身。
+    /// 数量受 `MAX_WATCH_ROOTS` 限制。
+    pub fn watch_roots(&self) -> Vec<PathBuf> {
+        let guard = self.inner.read().expect("catalog lock poisoned");
+        let mut roots: Vec<PathBuf> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        for item in guard.iter() {
+            let path = Path::new(&item.local_path);
+            if let Some(parent) = path.parent() {
+                let key = normalize_path_key(&parent.to_string_lossy());
+                if seen.insert(key) {
+                    roots.push(parent.to_path_buf());
+                }
+            }
+            if item.is_dir {
+                let key = normalize_path_key(&item.local_path);
+                if seen.insert(key) {
+                    roots.push(path.to_path_buf());
+                }
+            }
+            if roots.len() >= MAX_WATCH_ROOTS {
+                break;
+            }
+        }
+        roots
     }
 
     /// 按 id 解析条目与文件元数据；目标不可用（缺失/符号链接/非普通文件或目录）时返回错误。
@@ -232,6 +326,7 @@ impl Catalog {
             guard.insert(index, removed.clone());
             return Err(err);
         }
+        self.invalidate_list_cache();
         Ok(removed)
     }
 
@@ -247,6 +342,7 @@ impl Catalog {
             *guard = previous;
             return Err(err);
         }
+        self.invalidate_list_cache();
         Ok(previous.len())
     }
 
@@ -271,6 +367,7 @@ impl Catalog {
             version => return Err(format!("不支持的共享目录表版本: {version}")),
         };
         *self.inner.write().expect("catalog lock poisoned") = std::mem::take(&mut items);
+        self.invalidate_list_cache();
         Ok(())
     }
 
@@ -301,6 +398,46 @@ fn validate_shareable(path: &Path, metadata: &std::fs::Metadata) -> Result<(), S
         ));
     }
     Ok(())
+}
+
+/// 用磁盘元数据刷新条目的可用性/名称/大小/修改时间；缺失或非法目标标记不可用。
+fn apply_disk_meta(item: &mut Item) {
+    if let Ok(metadata) = std::fs::symlink_metadata(&item.local_path) {
+        let file_type = metadata.file_type();
+        let valid = !file_type.is_symlink() && (file_type.is_file() || file_type.is_dir());
+        if valid {
+            item.available = true;
+            item.name = file_name_of(Path::new(&item.local_path))
+                .to_string_lossy()
+                .into_owned();
+            item.size = metadata.len() as i64;
+            item.modified_at = DateTime::from(
+                metadata
+                    .modified()
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            );
+            return;
+        }
+    }
+    item.available = false;
+}
+
+fn normalize_path_key(path: &str) -> String {
+    path.replace('/', "\\").to_lowercase()
+}
+
+fn path_event_matches_item(item: &Item, changed_key: &str) -> bool {
+    let item_path = normalize_path_key(&item.local_path);
+    if item_path == changed_key {
+        return true;
+    }
+    if item_path.starts_with(&format!("{changed_key}\\")) {
+        return true;
+    }
+    Path::new(&item.local_path)
+        .parent()
+        .map(|parent| normalize_path_key(&parent.to_string_lossy()) == changed_key)
+        .unwrap_or(false)
 }
 
 fn file_name_of(path: &Path) -> &std::ffi::OsStr {
@@ -506,6 +643,63 @@ mod tests {
 
         let reloaded = Catalog::open(root.join("catalog.json")).unwrap();
         assert!(reloaded.list().is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn list_cache_avoids_immediate_restat_and_path_events_refresh_single_entry() {
+        let root = temp_dir("cache-event");
+        let file = root.join("note.txt");
+        std::fs::write(&file, b"v1").unwrap();
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog
+            .add_linked(&[file.to_string_lossy().into_owned()])
+            .unwrap();
+
+        let first = catalog.list();
+        assert!(first[0].available);
+        assert_eq!(first[0].size, 2);
+
+        // 窗口内改文件：list 仍返回缓存旧大小
+        std::fs::write(&file, b"version-two").unwrap();
+        let cached = catalog.list();
+        assert_eq!(cached[0].size, 2);
+
+        // 文件系统事件只重读命中条目
+        assert!(catalog.apply_path_event(&file));
+        let updated = catalog.list();
+        assert_eq!(updated[0].size, 11);
+        assert!(updated[0].available);
+
+        // 删除后事件标记不可用
+        std::fs::remove_file(&file).unwrap();
+        assert!(catalog.apply_path_event(&file));
+        assert!(!catalog.list()[0].available);
+
+        // 无关路径不触发
+        assert!(!catalog.apply_path_event(&root.join("other.txt")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn watch_roots_are_parents_and_shared_folders() {
+        let root = temp_dir("watch-roots");
+        let folder = root.join("shared");
+        std::fs::create_dir_all(&folder).unwrap();
+        let file = folder.join("a.txt");
+        std::fs::write(&file, b"x").unwrap();
+
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog
+            .add_linked(&[
+                folder.to_string_lossy().into_owned(),
+                file.to_string_lossy().into_owned(),
+            ])
+            .unwrap();
+
+        let roots = catalog.watch_roots();
+        assert!(roots.contains(&root));
+        assert!(roots.contains(&folder));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

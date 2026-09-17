@@ -16,6 +16,7 @@ pub mod progress;
 pub mod server;
 pub mod settings;
 pub mod uploads;
+pub mod watch;
 
 pub use catalog::{Item, SourceType};
 pub use settings::Settings;

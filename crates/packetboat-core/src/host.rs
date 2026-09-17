@@ -137,6 +137,7 @@ impl HostManager {
         let router = app.router();
         let token = CancellationToken::new();
         let shutdown_token = token.clone();
+        crate::watch::spawn_catalog_watcher(app.catalog_handle(), app.hub_handle(), token.clone());
         let task = tokio::spawn(async move {
             let serve = axum::serve(
                 listener,

@@ -112,6 +112,16 @@ impl Server {
         Arc::clone(&self.progress)
     }
 
+    /// 共享目录表（文件系统监听等外围组件使用）。
+    pub fn catalog_handle(&self) -> Arc<Catalog> {
+        Arc::clone(&self.catalog)
+    }
+
+    /// SSE 事件中枢（文件系统监听广播使用）。
+    pub fn hub_handle(&self) -> Arc<Hub> {
+        Arc::clone(&self.hub)
+    }
+
     /// 当前配对码。
     pub fn access_code(&self) -> String {
         self.auth.code().to_string()
