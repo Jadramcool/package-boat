@@ -50,6 +50,7 @@ mod tests {
                 commands::clear_shared_files,
                 commands::choose_receive_directory,
                 commands::toggle_server,
+                commands::set_require_pairing,
                 commands::reveal_item,
                 commands::get_transfer_progress,
             ])
@@ -111,6 +112,7 @@ pub fn run() {
             commands::clear_shared_files,
             commands::choose_receive_directory,
             commands::toggle_server,
+            commands::set_require_pairing,
             commands::reveal_item,
             commands::get_transfer_progress,
         ])

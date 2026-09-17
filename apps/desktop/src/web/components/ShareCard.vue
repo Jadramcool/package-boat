@@ -49,10 +49,10 @@ async function copyURL(): Promise<void> {
 </template>
 
 <style scoped>
-.share-card { position: relative; padding: 20px; border: 1px solid var(--line-strong); background: var(--surface); box-shadow: 8px 8px 0 var(--ink); }
+.share-card { position: relative; padding: 20px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); box-shadow: 8px 8px 0 var(--ink); }
 .card-index { margin-bottom: 18px; color: var(--muted); font: 650 9px/1 var(--font-label); letter-spacing: .18em; }
-.qr-frame { padding: 19px; display: grid; place-items: center; position: relative; background: #fff; }
-.corner { width: 15px; height: 15px; position: absolute; border-color: var(--signal); }
+.qr-frame { padding: 19px; display: grid; place-items: center; position: relative; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.corner { width: 15px; height: 15px; position: absolute; border-color: var(--acid-deep); }
 .top-left { top: 8px; left: 8px; border-top: 2px solid; border-left: 2px solid; }
 .top-right { top: 8px; right: 8px; border-top: 2px solid; border-right: 2px solid; }
 .bottom-left { bottom: 8px; left: 8px; border-bottom: 2px solid; border-left: 2px solid; }
@@ -60,7 +60,16 @@ async function copyURL(): Promise<void> {
 .scan-label { margin: 16px 0 12px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
 .url-button { width: 100%; min-width: 0; padding: 10px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 0; border-top: 1px dashed var(--line-strong); color: var(--ink); background: transparent; cursor: pointer; font: 650 12px/1.2 var(--font-mono); }
 .url-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.url-button:hover { color: var(--signal); }
-@media (max-width: 820px) { .share-card { width: min(100%, 330px); } }
-@media (max-width: 420px) { .share-card { width: auto; box-shadow: 5px 5px 0 var(--ink); } }
+.url-button:hover { color: var(--info); }
+/* 手机上这张卡是被折叠起来的补充信息，而且用户正是扫码进来的——
+   再给同一个地址看一遍二维码没有意义，只留可复制的地址 */
+@media (max-width: 820px) {
+  .share-card { width: auto; padding: 14px; box-shadow: 4px 4px 0 var(--ink); }
+  .card-index { margin-bottom: 10px; }
+  .qr-frame, .scan-label { display: none; }
+  .url-button { padding-top: 0; border-top: 0; }
+}
+@media (max-width: 420px) {
+  .share-card { box-shadow: 3px 3px 0 var(--ink); }
+}
 </style>

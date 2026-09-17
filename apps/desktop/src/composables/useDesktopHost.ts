@@ -13,13 +13,32 @@ import {
   getState,
   getTransferProgress,
   revealItem as revealItemCommand,
+  setRequirePairing as setRequirePairingCommand,
   toggleServer as toggleServerCommand,
   unshare as unshareCommand,
 } from '@/api'
-import type { DesktopState } from '@/types'
+import type { DesktopState, LocalAddress } from '@/types'
 
 const autoPairPreferenceKey = 'packetboat:auto-pair-by-qr'
 const alwaysOnTopPreferenceKey = 'packetboat:always-on-top'
+
+/** 地址列表兜底：老版本后端只给 `urls`，没有 `addresses` 元信息。 */
+function addressMetaOf(state: DesktopState | null): readonly LocalAddress[] {
+  const host = state?.host
+  if (!host) return []
+  if (host.addresses.length > 0) return host.addresses
+  return host.urls.map(url => {
+    const ip = url.replace(/^https?:\/\//, '').replace(/:\d+$/, '')
+    return {
+      url,
+      interface: '',
+      ip,
+      prefix_len: null,
+      virtual_link: false,
+      tier: 0,
+    } satisfies LocalAddress
+  })
+}
 
 export function useDesktopHost() {
   const state = shallowRef<DesktopState | null>(null)
@@ -42,15 +61,45 @@ export function useDesktopHost() {
 
   const linkedCount = computed(() => state.value?.items.filter(item => item.source_type === 'linked').length ?? 0)
   const receivedCount = computed(() => state.value?.items.filter(item => item.source_type === 'received').length ?? 0)
+
+  /** 候选地址（带可达性元信息），已由后端按可达性排序。 */
+  const addresses = computed<readonly LocalAddress[]>(() => addressMetaOf(state.value))
+  /** 首选地址：可达性最高的一条（tier 最小，后端已排好序）。 */
+  const primaryAddress = computed(() => addresses.value[0] ?? null)
+  /** 当前选中的地址元信息；选中项失效时回落到首选地址。 */
+  const activeAddress = computed(() =>
+    addresses.value.find(a => a.url === accessURL.value) ?? primaryAddress.value,
+  )
+  /**
+   * 明确不可达（虚拟网卡 / 点对点链路）：需要给用户黄色警示。
+   * 仅在存在更优候选时告警，避免全机只有虚拟网卡时满屏红字。
+   */
+  const addressUnreachable = computed(() => {
+    const active = activeAddress.value
+    if (!active || addresses.value.length < 2) return false
+    return active.tier >= 2
+  })
+  /** 除当前地址外还有别的候选（决定是否显示地址切换器）。 */
+  const hasAlternateAddresses = computed(() =>
+    addresses.value.filter(a => a.tier < 2).length > 1 || addresses.value.length > 1,
+  )
+
   const accessURL = computed(() => {
     const urls = state.value?.host.urls ?? []
     return urls.includes(selectedAccessURL.value) ? selectedAccessURL.value : (urls[0] ?? '')
   })
   const accessURLIndex = computed(() => Math.max(0, state.value?.host.urls.indexOf(accessURL.value) ?? 0))
+  /** 是否需要配对码访问（服务端设置）；旧后端无此字段时按开启处理。 */
+  const requirePairing = computed(() => state.value?.settings.require_pairing ?? true)
   const qrAccessURL = computed(() => {
     const url = accessURL.value
     const code = state.value?.host.access_code.replace(/\D/g, '') ?? ''
-    if (!autoPairByQR.value || !url || code.length !== 6)
+    if (!url)
+      return url
+    // 免配对模式下二维码不需要携带配对码
+    if (!requirePairing.value)
+      return url
+    if (!autoPairByQR.value || code.length !== 6)
       return url
     return `${url.replace(/#.*$/, '')}#code=${encodeURIComponent(code)}`
   })
@@ -177,6 +226,11 @@ export function useDesktopHost() {
     await perform('server', () => toggleServerCommand())
   }
 
+  /** 切换「是否需要配对码访问」；后端写设置并在服务运行中时重启。 */
+  async function setPairingRequired(enabled: boolean) {
+    await perform('pairing', () => setRequirePairingCommand(enabled))
+  }
+
   async function revealItem(id: string) {
     await perform(`reveal:${id}`, () => revealItemCommand(id))
   }
@@ -285,11 +339,17 @@ export function useDesktopHost() {
     autoPairByQR: readonly(autoPairByQR),
     alwaysOnTop: readonly(alwaysOnTop),
     dragActive: readonly(dragActive),
+    addresses,
+    primaryAddress,
+    activeAddress,
+    addressUnreachable,
+    hasAlternateAddresses,
     accessURL,
     accessURLIndex,
     qrAccessURL,
     linkedCount,
     receivedCount,
+    requirePairing,
     initialize,
     refresh,
     chooseFiles,
@@ -298,6 +358,7 @@ export function useDesktopHost() {
     clearSharedFiles,
     chooseReceiveDirectory,
     toggleServer,
+    setPairingRequired,
     revealItem,
     copyURL,
     openURL,

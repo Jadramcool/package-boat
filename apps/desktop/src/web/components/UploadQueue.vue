@@ -75,7 +75,7 @@ function transferDetail(task: UploadTask): string {
 </template>
 
 <style scoped>
-.upload-queue { margin-top: 26px; border: 1px solid var(--line-strong); background: var(--surface); }
+.upload-queue { margin-top: 26px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgb(31 39 28 / 5%); }
 .queue-header { min-height: 74px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .section-index { color: var(--muted); font: 650 8px/1 var(--font-label); letter-spacing: .16em; }
 .queue-header h2 { margin: 6px 0 0; font: 700 18px/1 var(--font-display); }
@@ -83,7 +83,7 @@ function transferDetail(task: UploadTask): string {
 .task-list { margin: 0; padding: 0; list-style: none; }
 .task-row { padding: 16px 20px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); }
 .task-row:last-child { border-bottom: 0; }
-.task-state { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); color: var(--muted); }
+.task-state { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--muted); }
 .task-state.uploading svg { animation: spin 1.2s linear infinite; }
 .task-state.complete { border-color: var(--ink); color: var(--ink); background: var(--acid); }
 .task-state.error { border-color: var(--signal); color: var(--signal); }
@@ -91,11 +91,11 @@ function transferDetail(task: UploadTask): string {
 .task-line { display: flex; justify-content: space-between; gap: 18px; font-size: 12px; }
 .task-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 .task-size { flex: none; color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
-.progress-track { height: 3px; margin-top: 9px; overflow: hidden; background: var(--line); }
-.progress-track span { height: 100%; display: block; background: var(--ink); transition: width .12s linear; }
-.task-detail { min-height: 13px; margin-top: 6px; color: var(--muted); font: 600 9px/1.3 var(--font-label); letter-spacing: .06em; }
-.task-error { color: #a32d13; }
-.task-action { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid transparent; color: var(--muted); background: transparent; cursor: pointer; }
+.progress-track { height: 6px; margin-top: 9px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.progress-track span { height: 100%; display: block; border-radius: 999px; background: linear-gradient(90deg, var(--acid), var(--acid-hi)); transition: width .12s linear; }
+.task-detail { min-height: 13px; margin-top: 7px; color: var(--muted); font: 600 10px/1.3 var(--font-label); letter-spacing: .04em; }
+.task-error { color: var(--signal-deep); }
+.task-action { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; }
 .task-action:hover { border-color: var(--line-strong); color: var(--signal); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .task-state.uploading svg { animation: none; } }

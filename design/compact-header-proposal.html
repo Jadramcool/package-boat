@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PacketBoat · 紧凑头部重构方案 PB-UI-03</title>
+<style>
+/* ==========================================================
+   PB-UI-03 紧凑头部重构方案
+   问题：头部堆叠吃掉半屏（桌面 49.2% / 手机 70-89%），
+        文件列表被推到首屏之外。
+   解法：驾驶舱收成 56px 命令条 + 次级信息折叠入抽屉 +
+        拖放区降为图标级 + 文件列表升为第一视觉主体。
+   展板样式仅供本提案；.win/.deck/.bar 系列即未来落地样式。
+   ========================================================== */
+:root {
+  --dock-0: #f2f4ec;  --dock-1: #fbfcf7;  --surface: #fbfcf7;
+  --ink: #1f271c;  --ink-2: #39432f;
+  --muted: #646c57;  --line: #dfe2d2;  --line-strong: #b9bfa6;
+  --acid: #d7f954;  --acid-hi: #e6ff85;  --acid-deep: #4d6707;  --acid-wash: #eef9c8;
+  --signal: #ef5a32;  --signal-deep: #b23a1c;  --signal-wash: #fde9e0;  --signal-soft: #fde9e0;
+  --info: #2f6fd3;  --info-wash: #e4edfb;  --info-lit: #78b6ff;  --ok: #35874a;
+  --paper: #fbfcf7;
+  --on-ink: rgb(251 252 247 / 66%);
+  --on-ink-strong: rgb(251 252 247 / 88%);
+  --on-ink-dim: rgb(251 252 247 / 55%);
+  --f-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --f-label: "Bahnschrift SemiCondensed", "Bahnschrift", "Noto Sans SC", sans-serif;
+  --f-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --f-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --r-s: 8px; --r-m: 12px; --r-l: 16px;
+  --sh-card: 0 1px 2px rgb(31 39 28 / 5%), 0 10px 28px rgb(31 39 28 / 7%);
+}
+* { box-sizing: border-box; margin: 0; }
+html { background: #e9ebe2; }
+body {
+  font-family: var(--f-sans); color: var(--ink); line-height: 1.6;
+  background:
+    linear-gradient(rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    #e9ebe2;
+  background-size: 28px 28px, 28px 28px, auto;
+  text-rendering: optimizeLegibility; padding-bottom: 80px;
+}
+::selection { background: var(--acid); color: var(--ink); }
+
+.board-top { max-width: 1400px; margin: 0 auto; padding: 40px 32px 0; }
+.board-title { margin: 0 0 8px; font: 720 clamp(28px, 4vw, 42px)/1.1 var(--f-display); letter-spacing: -.02em; }
+.board-title em { font-style: normal; background: var(--acid); padding: 0 10px; box-shadow: 3px 3px 0 var(--ink); }
+.board-sub { max-width: 900px; color: var(--muted); font-size: 15px; }
+.board-sub b { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 22px 0 0; font: 600 12px/1 var(--f-mono); color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; }
+.l-good { background: var(--acid); border: 1px solid var(--acid-deep); }
+.l-bad { background: var(--signal-wash); border: 1px solid var(--signal); }
+.l-new { background: var(--info-wash); border: 1px solid var(--info); }
+
+main { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
+.sec { margin-top: 52px; }
+.sec-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.sec-h h2 { font: 720 22px/1.2 var(--f-display); letter-spacing: -.01em; }
+.sec-h span { color: var(--muted); font: 600 12px/1 var(--f-label); letter-spacing: .08em; }
+.sec-lead { max-width: 900px; margin: 8px 0 22px; color: var(--muted); font-size: 14px; line-height: 1.75; }
+.sec-lead b { color: var(--ink); }
+.sec-lead code { padding: 1px 5px; border-radius: 4px; background: rgb(31 39 28 / 7%); font: 550 12.5px/1 var(--f-mono); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font: 650 11px/1 var(--f-label); letter-spacing: .08em; border-bottom-color: var(--line-strong); }
+td code { padding: 1px 5px; border-radius: 4px; background: rgb(31 39 28 / 7%); font: 550 12px/1.5 var(--f-mono); }
+td b { color: var(--ink); }
+.t-good { color: var(--ok); font-weight: 700; }
+.t-bad { color: var(--signal-deep); font-weight: 700; }
+
+/* —— 迷你对照卡 —— */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.mini { padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--paper); }
+.mini h4 { margin: 0 0 12px; font: 700 13px/1 var(--f-label); letter-spacing: .04em; }
+.mini h4.bad { color: var(--signal-deep); }
+.mini h4.good { color: var(--acid-deep); }
+.mini .stack { display: grid; gap: 2px; }
+.mini .seg { border-radius: 4px; display: flex; align-items: center; padding: 0 9px; font: 600 10.5px/1.2 var(--f-mono); color: #fff; }
+.mini .seg.tiny { padding: 0; font-size: 0; }
+.mini .cap { margin-top: 8px; color: var(--muted); font: 600 10.5px/1 var(--f-mono); text-align: right; }
+.s-ink { background: var(--ink); }
+.s-deck { background: #b23a1c; }
+.s-drop { background: #c98a2e; }
+.s-list { background: #4d6707; }
+.s-ghost { background: repeating-linear-gradient(45deg, #e2e4d8, #e2e4d8 6px, #eef0e6 6px, #eef0e6 12px); color: var(--ink); }
+
+/* —— 窗口模型 —— */
+.win { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--r-m); overflow: hidden; box-shadow: var(--sh-card); background: var(--dock-0); }
+.win-bar { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; background: var(--ink); color: #fff; }
+.win-bar .wb-brand { display: flex; align-items: center; gap: 8px; font: 600 11px/1 var(--f-label); letter-spacing: .12em; color: rgb(251 252 247 / 62%); }
+.win-bar .wb-mark { width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid var(--acid); color: var(--acid); font: 800 9px/1 var(--f-display); transform: rotate(-3deg); }
+.win-bar .wb-ctrl { display: flex; gap: 2px; }
+.win-bar .wb-ctrl i { width: 26px; height: 20px; display: grid; place-items: center; color: rgb(251 252 247 / 60%); font-style: normal; font-size: 10px; }
+
+.win-body { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+
+/* —— 56px 命令条（新） —— */
+.cmdbar { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--ink); color: var(--paper); }
+.cmdbar .cb-mark { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--acid); color: var(--acid); font: 800 13px/1 var(--f-display); transform: rotate(-3deg); }
+.cmdbar .cb-name { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.cmdbar .cb-name strong { font: 700 14px/1 var(--f-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.cmdbar .cb-state { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 3px 8px; border-radius: 999px; background: rgb(120 182 255 / 16%); color: var(--info-lit); font: 650 10.5px/1 var(--f-label); }
+.cmdbar .cb-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--info-lit); flex: none; }
+.cmdbar .cb-state.stop { background: rgb(255 255 255 / 8%); color: var(--on-ink-dim); }
+.cmdbar .cb-state.stop i { background: #79826f; }
+.cmdbar .cb-url { flex: 1; min-width: 0; max-width: 330px; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 8px; background: rgb(255 255 255 / 5%); }
+.cmdbar .cb-url code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 11.5px/1 var(--f-mono); }
+.cmdbar .cb-act { flex: none; height: 22px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 5px; background: rgb(255 255 255 / 10%); color: var(--paper); font: 650 10px/1 var(--f-label); }
+.cmdbar .cb-code { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; height: 30px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 8px; background: rgb(215 249 84 / 8%); }
+.cmdbar .cb-code strong { color: var(--acid); font: 700 13px/1 var(--f-mono); letter-spacing: .14em; }
+.cmdbar .cb-more { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid rgb(255 255 255 / 20%); border-radius: 8px; background: transparent; color: var(--on-ink-strong); font: 700 10px/1 var(--f-label); }
+.cmdbar .cb-power { flex: none; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border: 1px solid rgb(251 252 247 / 32%); border-radius: 8px; background: transparent; color: var(--paper); font: 680 12.5px/1 var(--f-label); }
+.cmdbar .cb-power.go { border-color: var(--acid); background: var(--acid); color: var(--ink); }
+.cmdbar .cb-qr { flex: none; width: 34px; height: 34px; padding: 3px; border-radius: 7px; background: #fff; }
+.cmdbar .cb-qr svg { display: block; width: 100%; height: 100%; }
+
+/* —— 展开态抽屉 —— */
+.drawer { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--dock-1); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.drawer .d-cell { min-width: 0; }
+.drawer .d-label { display: block; margin-bottom: 6px; color: var(--muted); font: 650 10px/1 var(--f-label); letter-spacing: .1em; }
+.drawer .d-value { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--ink); font: 550 12px/1.4 var(--f-mono); }
+.drawer .d-note { margin-top: 6px; color: var(--muted); font-size: 11px; }
+
+/* —— 紧凑拖放条（单行，40px） —— */
+.dropbar { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.dropbar .db-icon { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 6px; background: var(--acid); }
+.dropbar .db-text { flex: 1; min-width: 0; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropbar .db-text b { color: var(--ink); }
+.dropbar .db-btn { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--paper); font: 660 12px/1 var(--f-label); }
+
+/* —— 清单卡（主体） —— */
+.shelf { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; margin: 10px 12px 8px; border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--surface); overflow: hidden; }
+.shelf-head { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-bottom: 1px solid var(--line); }
+.shelf-head h2 { font: 720 19px/1 var(--f-display); letter-spacing: -.01em; }
+.shelf-head .sh-count { color: var(--muted); font-size: 12.5px; }
+.shelf-head .sh-tools { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.shelf-head .sh-stat { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.shelf-head .sh-stat b { color: var(--ink); font: 700 13px/1 var(--f-mono); }
+.shelf-head .sh-btn { height: 30px; display: grid; place-items: center; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; color: var(--muted); font: 650 11.5px/1 var(--f-label); }
+.shelf-head .sh-icon { width: 30px; padding: 0; }
+
+.tbl-head { display: grid; grid-template-columns: minmax(220px, 1.6fr) minmax(76px, .4fr) minmax(110px, .55fr) minmax(96px, .48fr) 84px; gap: 16px; padding: 9px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11.5px; }
+.tbl-head span:last-child { text-align: right; }
+.rows { display: grid; align-content: start; }
+.row { display: grid; grid-template-columns: minmax(220px, 1.6fr) minmax(76px, .4fr) minmax(110px, .55fr) minmax(96px, .48fr) 84px; gap: 16px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.row:last-child { border-bottom: 0; }
+.row .r-name { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.row .r-ico { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 6px; background: var(--info-wash); color: var(--info); font: 700 9px/1 var(--f-mono); }
+.row .r-ico.linked { background: var(--acid-wash); color: var(--acid-deep); }
+.row .r-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .r-sub { color: var(--muted); font-size: 11px; }
+.row .r-dim { color: var(--muted); font: 550 12px/1 var(--f-mono); }
+.row .r-actions { text-align: right; color: var(--muted); font-size: 12px; }
+.rows-scroll { min-height: 0; }
+
+/* —— 空态 —— */
+.empty { display: grid; place-content: center; justify-items: center; height: 100%; min-height: 150px; padding: 22px; color: var(--muted); text-align: center; }
+.empty strong { margin-top: 12px; color: var(--ink); font: 700 17px/1 var(--f-display); }
+.empty p { margin-top: 8px; font-size: 13px; }
+
+/* —— 宽屏双列：左主区 + 右侧边栏 —— */
+.wide { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 14px; padding: 12px 14px 0; }
+.wide-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.wide-main .shelf { margin: 10px 0 0; }
+.wide-main .dropbar { border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); }
+.aside { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 11px; overflow: hidden; }
+.card-side { flex: none; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--surface); box-shadow: 0 1px 2px rgb(31 39 28 / 4%); }
+.card-side > h4 { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--dock-0); color: var(--muted); font: 650 10px/1 var(--f-label); letter-spacing: .11em; }
+.card-side .cs-body { display: grid; gap: 10px; padding: 11px 12px; }
+.cs-field { min-width: 0; }
+.cs-label { display: block; margin-bottom: 5px; color: var(--muted); font: 600 10.5px/1 var(--f-label); }
+.cs-select { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; }
+.cs-select svg { flex: none; color: var(--muted); }
+.cs-select span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 550 11px/1 var(--f-mono); }
+.cs-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.cs-row .cs-txt { min-width: 0; }
+.cs-row strong { display: block; color: var(--ink); font: 600 11.5px/1.3 var(--f-sans); }
+.cs-note { margin: 4px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.6; }
+.cs-toggle { position: relative; width: 34px; height: 20px; flex: none; border-radius: 999px; background: var(--info-lit); }
+.cs-toggle::after { position: absolute; top: 2px; left: 16px; width: 16px; height: 16px; border-radius: 50%; content: ''; background: var(--ink); }
+.cs-toggle.off { background: var(--line-strong); }
+.cs-toggle.off::after { left: 2px; background: #fff; }
+.cs-path { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--dock-0); }
+.cs-path span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font: 550 10.5px/1.4 var(--f-mono); }
+.cs-btn { height: 29px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; color: var(--ink); font: 650 11px/1 var(--f-label); }
+.cs-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; background: var(--line); }
+.cs-metrics > div { padding: 9px 11px; background: var(--surface); }
+.cs-metrics dt { color: var(--muted); font: 600 9.5px/1 var(--f-label); letter-spacing: .06em; }
+.cs-metrics dd { margin: 5px 0 0; color: var(--ink); font: 700 15px/1 var(--f-mono); }
+.cs-metrics dd small { color: var(--muted); font: 600 10px/1 var(--f-label); }
+.wide-lbl { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border-radius: 999px; background: var(--info-wash); color: var(--info); font: 650 9.5px/1 var(--f-label); letter-spacing: .05em; }
+
+/* —— 手机端 mockup —— */
+.phone-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 26px; }
+.phone-wrap { display: grid; justify-items: center; gap: 12px; }
+.phone-wrap > figcaption { color: var(--muted); font: 650 11px/1.4 var(--f-label); letter-spacing: .06em; text-align: center; }
+.phone { width: 320px; height: 640px; padding: 9px; border-radius: 34px; background: var(--ink); box-shadow: 0 16px 40px rgb(31 39 28 / 22%); }
+.phone-screen { height: 100%; border-radius: 26px; background: var(--dock-0); overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.ph-status { height: 26px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: 4px; color: var(--ink); font: 600 10px/1 var(--f-mono); background: var(--paper); }
+.ph-head { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.ph-head .pb-mark { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 6px; background: var(--acid); font: 750 11px/1 var(--f-display); transform: rotate(-3deg); }
+.ph-head .pb-word { font: 750 13px/1 var(--f-display); letter-spacing: .07em; }
+.ph-head .pb-live { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 999px; background: var(--info-wash); color: var(--info); font: 650 9.5px/1 var(--f-label); }
+.ph-head .pb-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--info); }
+.ph-head .pb-exit { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--muted); font-size: 11px; }
+.ph-body { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.ph-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.ph-strip > div { padding: 8px 4px; background: var(--paper); text-align: center; }
+.ph-strip dt { color: var(--muted); font: 600 9px/1 var(--f-label); letter-spacing: .08em; }
+.ph-strip dd { margin: 5px 0 0; color: var(--ink); font: 650 12px/1 var(--f-display); }
+.ph-main { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); padding: 12px 14px 0; }
+.ph-upload { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--paper); }
+.ph-upload .pu-icon { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 6px; background: var(--acid); font-size: 11px; }
+.ph-upload .pu-text { min-width: 0; font-size: 12px; color: var(--muted); }
+.ph-upload .pu-text b { color: var(--ink); }
+.ph-shelf { margin-top: 12px; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.ph-shelf-head { display: flex; align-items: baseline; gap: 8px; padding-bottom: 8px; }
+.ph-shelf-head h3 { font: 700 15px/1 var(--f-display); }
+.ph-shelf-head span { margin-left: auto; color: var(--muted); font: 600 10px/1 var(--f-label); letter-spacing: .08em; }
+.ph-rows { display: grid; align-content: start; gap: 7px; overflow: hidden; }
+.ph-file { display: flex; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.ph-file .pf-ico { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 7px; background: var(--acid-wash); color: var(--acid-deep); font: 700 9px/1 var(--f-mono); }
+.ph-file .pf-body { min-width: 0; flex: 1; }
+.ph-file .pf-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.ph-file .pf-meta { display: block; margin-top: 3px; color: var(--muted); font: 550 10px/1 var(--f-mono); white-space: nowrap; }
+.ph-foot { padding: 8px 14px 12px; color: var(--muted); font: 600 9px/1.4 var(--f-label); letter-spacing: .1em; text-align: center; border-top: 1px solid var(--line); }
+.ph-folded { opacity: .42; }
+
+.callout { margin-top: 18px; padding: 14px 16px; border: 1px solid var(--line-strong); border-left: 3px solid var(--acid-deep); border-radius: 0 var(--r-m) var(--r-m) 0; background: var(--paper); font-size: 13.5px; line-height: 1.75; }
+.callout b { color: var(--ink); }
+.callout.warn { border-left-color: var(--signal); }
+.callout.warn b { color: var(--signal-deep); }
+.notes { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.85; }
+.notes li { margin-bottom: 5px; }
+.notes b { color: var(--ink); }
+.notes code { padding: 1px 5px; border-radius: 4px; background: rgb(31 39 28 / 7%); font: 550 12px/1.5 var(--f-mono); color: var(--ink); }
+
+.badgeline { display: inline-block; padding: 3px 9px; border-radius: 999px; font: 650 10.5px/1 var(--f-label); letter-spacing: .06em; }
+.bl-bad { background: var(--signal-wash); color: var(--signal-deep); }
+.bl-good { background: var(--acid-wash); color: var(--acid-deep); }
+.bl-new { background: var(--info-wash); color: var(--info); }
+
+@media (max-width: 980px) {
+  .duo, .drawer { grid-template-columns: 1fr; }
+  .cmdbar .cb-url { max-width: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="board-top">
+  <h1 class="board-title">PacketBoat · <em>紧凑头部重构</em></h1>
+  <p class="board-sub">
+    全屏实测：桌面端 1280×764 下，<b>标题栏 + 内边距 + 驾驶舱 + 拖放区 = 376px，占窗口 49.2%</b>；
+    文件列表第一行数据直到 <b>494px</b> 才出现，只留 4 行可见。手机端更极端 —— hero 区把文件架推到 <b>70–89%</b> 视口处。
+    本方案把「服务控制」从舞台中央降为一条 <b>56px 命令条</b>，把低频设置竖着收进 <b>右侧 296px 常驻边栏</b>（宽屏），
+    把文件列表升为第一视觉主体。
+  </p>
+  <div class="legend">
+    <span><i class="l-bad"></i>问题区域</span>
+    <span><i class="l-good"></i>修复后</span>
+    <span><i class="l-new"></i>新增内容</span>
+    <span>设计 token：晴空码头（acid 绿 = 品牌行动 / info 蓝 = 状态开关 / signal 橙 = 危险）</span>
+  </div>
+</div>
+
+<main>
+
+<!-- ============ 1. 问题 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>1. 问题拆解</h2><span>MEASURED @ 1280×764 + 手机视口</span></div>
+  <p class="sec-lead">
+    三个问题叠加。核心不是「头部高」，而是 <b>头部承担了太多「配置」职责</b> —— 访问地址、切换地址、配对码、拖放区，
+    这四件都是「设置一次、之后不再看」的东西，却各占一行横向空间，把「文件在哪」这个真正的日常任务挤出了首屏。
+  </p>
+
+  <div class="duo">
+    <div class="mini">
+      <h4 class="bad">现状 · 头部吃掉半屏</h4>
+      <div class="stack">
+        <div class="seg s-ink" style="height:15px">标题栏 30px</div>
+        <div class="seg s-ghost tiny" style="height:9px">内边距</div>
+        <div class="seg s-deck" style="height:110px">驾驶舱 220px（占 28.8%）</div>
+        <div class="seg s-drop" style="height:54px">拖放区 108px</div>
+        <div class="seg s-ink" style="height:37px;background:#5a6350">清单标题 74px</div>
+        <div class="seg s-ghost" style="height:22px">列头 44px</div>
+        <div class="seg s-list" style="height:135px">可见文件行 270px ≈ 4 行</div>
+      </div>
+      <p class="cap">合计 764px（图示 1 : 2）</p>
+    </div>
+    <div class="mini">
+      <h4 class="good">重构后 · 清单占据主体</h4>
+      <div class="stack">
+        <div class="seg s-ink" style="height:16px">标题栏 32px</div>
+        <div class="seg s-ink" style="height:28px;background:#2b3427">命令条 56px</div>
+        <div class="seg s-ghost tiny" style="height:6px">内边距</div>
+        <div class="seg s-drop" style="height:20px;background:#c98a2e">拖放条 40px</div>
+        <div class="seg s-ghost tiny" style="height:5px">间距</div>
+        <div class="seg s-ink" style="height:24px;background:#5a6350">清单标题 48px</div>
+        <div class="seg s-ghost" style="height:18px">列头 36px</div>
+        <div class="seg s-list" style="height:248px">可见文件行 495px ≈ 10 行</div>
+      </div>
+      <p class="cap">合计 764px（图示 1 : 2）</p>
+    </div>
+  </div>
+
+  <table style="margin-top:22px">
+    <thead>
+      <tr><th style="width:22%">问题</th><th style="width:24%">实测</th><th>根因</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>头部堆叠 49.2%</b></td>
+        <td>376px / 764px</td>
+        <td><code>DesktopHeader</code> 是常驻大卡：logo 52px + 设备名 h1 22px + 状态灯 + 3 行地址信息 + 二维码席位 + 启动按钮，垂直 <code>gap: 15px</code>，实测 220px</td>
+      </tr>
+      <tr>
+        <td><b>首行数据 64.7% 处才出现</b></td>
+        <td>y = 494px</td>
+        <td>头部 376px 之后，清单卡自己还有 74px 标题行 + 44px 列头 = 118px 的「开机画面」，两段叠加</td>
+      </tr>
+      <tr>
+        <td><b>拖放区重达 108px</b></td>
+        <td><code>min-height: 108px</code></td>
+        <td>56px 图标 + 22px 大标题 + 一整句解释文案 + 42px 按钮，四件东西横排，实际只需「能拖、能点」</td>
+      </tr>
+      <tr>
+        <td><b>手机端被 hero 顶穿</b></td>
+        <td>文件架起点 70–89% 视口</td>
+        <td><code>AppHeader</code> 68px + <code>padding-top</code> 74px + hero 约 400px（h1 用 <code>clamp(46px, 6.8vw, 88px)</code> 两行）+ 52px 下边距 = 594px，644×667 屏上文件架直接落到首屏之外</td>
+      </tr>
+      <tr>
+        <td><b>视觉重心错位</b></td>
+        <td>——</td>
+        <td>「启动/停止服务」与「拖入文件」是<b>每会话最多用一次</b>的操作，却占据最强的酸绿实心与最大字号；「看文件列表」每会话看几十次，却在最下面</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 2. 桌面端方案 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>2. 桌面端方案</h2><span>1280 × 764 实际渲染 · 宽屏保留右侧边栏</span></div>
+  <p class="sec-lead">
+    <b>宽屏（≥ 1100px）保持右侧边栏。</b>把驾驶舱拆成 <b>「常看的一行」</b> 与 <b>「设置一次的其余部分」</b>：
+    服务在跑吗、地址是什么、配对码多少 —— 压进一条 56px 命令条；切换地址、扫码行为、接收目录、关闭行为 —— 
+    <b>竖着住在右侧 296px 边栏里</b>，靠 <code>sticky</code> 常驻。设置不消失、不折叠、不占纵向高度，只是从「横着铺在头部」改为「竖着收在右列」。
+  </p>
+
+  <div class="win" style="height:764px; display:grid; grid-template-rows:32px minmax(0,1fr)">
+    <div class="win-bar">
+      <span class="wb-brand"><span class="wb-mark">L</span>PacketBoat · 局域网投递站</span>
+      <span class="wb-ctrl"><i>—</i><i>□</i><i>×</i></span>
+    </div>
+
+    <div class="win-body">
+      <!-- 56px 命令条 -->
+      <div class="cmdbar">
+        <span class="cb-mark">L</span>
+        <span class="cb-name">
+          <strong>JAY</strong>
+        </span>
+        <span class="cb-state"><i></i>运行中</span>
+
+        <span class="cb-url">
+          <code>http://10.80.40.166:8081</code>
+          <span class="cb-act">复制</span>
+          <span class="cb-act">↗</span>
+        </span>
+
+        <span class="cb-code"><strong>732323</strong></span>
+
+        <span class="cb-power">停止</span>
+        <span class="cb-qr">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="24" height="24" fill="#fff"/>
+            <g fill="#1f271c">
+              <rect x="1" y="1" width="7" height="7"/><rect x="2.5" y="2.5" width="4" height="4" fill="#fff"/><rect x="3.5" y="3.5" width="2" height="2"/>
+              <rect x="16" y="1" width="7" height="7"/><rect x="17.5" y="2.5" width="4" height="4" fill="#fff"/><rect x="18.5" y="3.5" width="2" height="2"/>
+              <rect x="1" y="16" width="7" height="7"/><rect x="2.5" y="17.5" width="4" height="4" fill="#fff"/><rect x="3.5" y="18.5" width="2" height="2"/>
+              <rect x="10" y="1" width="2" height="2"/><rect x="13" y="1" width="2" height="2"/><rect x="10" y="4" width="2" height="2"/><rect x="12" y="5" width="2" height="2"/>
+              <rect x="1" y="10" width="2" height="2"/><rect x="4" y="10" width="2" height="2"/><rect x="7" y="11" width="2" height="2"/><rect x="1" y="13" width="2" height="2"/>
+              <rect x="10" y="10" width="2" height="2"/><rect x="13" y="10" width="2" height="2"/><rect x="16" y="10" width="2" height="2"/><rect x="19" y="11" width="2" height="2"/>
+              <rect x="11" y="13" width="2" height="2"/><rect x="14" y="13" width="2" height="2"/><rect x="17" y="14" width="2" height="2"/><rect x="21" y="13" width="2" height="2"/>
+              <rect x="10" y="16" width="2" height="2"/><rect x="13" y="17" width="2" height="2"/><rect x="16" y="16" width="2" height="2"/><rect x="19" y="18" width="2" height="2"/>
+              <rect x="11" y="19" width="2" height="2"/><rect x="14" y="20" width="2" height="2"/><rect x="17" y="21" width="2" height="2"/><rect x="21" y="20" width="2" height="2"/>
+            </g>
+          </svg>
+        </span>
+      </div>
+
+      <!-- 主体：宽屏双列（左主区 + 右侧边栏设置） -->
+      <div class="wide">
+        <div class="wide-main">
+          <!-- 紧凑拖放条 -->
+          <div class="dropbar">
+            <span class="db-icon">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1f271c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L11 5H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1Z"/><path d="M12 11v6"/><path d="m9 14 3-3 3 3"/></svg>
+            </span>
+            <span class="db-text"><b>把文件拖到这里</b>，或点右侧选择 · 只记录原始路径，不复制不移动</span>
+            <span class="db-btn">＋ 选择文件</span>
+          </div>
+
+        <!-- 清单卡 -->
+        <div class="shelf">
+          <div class="shelf-head">
+            <h2>共享文件</h2>
+            <span class="sh-count">4 个文件 · 2.4 MB</span>
+            <span class="sh-tools">
+              <span class="sh-stat">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b9bfa6" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7L11.5 5.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12.5 19"/></svg>
+                <b>2</b> 原位共享
+              </span>
+              <span class="sh-stat">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b9bfa6" stroke-width="2" stroke-linecap="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
+                <b>2</b> 远程接收
+              </span>
+              <span class="sh-btn">清空</span>
+              <span class="sh-btn sh-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v5h-5"/></svg>
+              </span>
+            </span>
+          </div>
+
+          <div class="rows-scroll">
+            <div class="tbl-head">
+              <span>文件名</span><span>大小</span><span>修改时间</span><span>来源</span><span>操作</span>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="r-name"><span class="r-ico">ZIP</span><span><span class="r-label">产品发布会素材.zip</span></span></span>
+                <span class="r-dim">1.4 MB</span><span class="r-dim">09-14 10:22</span><span class="r-sub">原位共享</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico">PNG</span><span><span class="r-label">ICON_256.PNG</span></span></span>
+                <span class="r-dim">862 B</span><span class="r-dim">09-14 10:34</span><span class="r-sub">远程接收</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico linked">PDF</span><span><span class="r-label">2026Q3 应收对账明细.pdf</span></span></span>
+                <span class="r-dim">386 KB</span><span class="r-dim">09-13 18:05</span><span class="r-sub">原位共享</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico">MP4</span><span><span class="r-label">会议录屏_0912.mp4</span></span></span>
+                <span class="r-dim">184 MB</span><span class="r-dim">09-12 15:40</span><span class="r-sub">远程接收</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico linked">DOC</span><span><span class="r-label">接口对接说明 v3.docx</span></span></span>
+                <span class="r-dim">52 KB</span><span class="r-dim">09-11 09:18</span><span class="r-sub">原位共享</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico">JPG</span><span><span class="r-label">界面走查_全屏.png</span></span></span>
+                <span class="r-dim">2.1 MB</span><span class="r-dim">09-11 08:02</span><span class="r-sub">远程接收</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico linked">XLS</span><span><span class="r-label">库存盘点_周表.xlsx</span></span></span>
+                <span class="r-dim">118 KB</span><span class="r-dim">09-10 16:44</span><span class="r-sub">原位共享</span><span class="r-actions">定位 · 取消</span>
+              </div>
+              <div class="row">
+                <span class="r-name"><span class="r-ico">TXT</span><span><span class="r-label">部署备忘.txt</span></span></span>
+                <span class="r-dim">3 KB</span><span class="r-dim">09-10 11:20</span><span class="r-sub">远程接收</span><span class="r-actions">定位 · 取消</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧边栏：宽屏下设置常驻，不占纵向高度 -->
+      <aside class="aside">
+          <div class="card-side">
+            <h4>连接设置</h4>
+            <div class="cs-body">
+              <div class="cs-field">
+                <span class="cs-label">访问地址</span>
+                <div class="cs-select">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>
+                  <span>局域网 · 10.80.40.166</span>
+                </div>
+                <p class="cs-note">以太网 2 /22 · 当前 1 / 4</p>
+              </div>
+              <div class="cs-row">
+                <div class="cs-txt">
+                  <strong>扫码自动进入</strong>
+                  <p class="cs-note">关闭后需手动输配对码</p>
+                </div>
+                <span class="cs-toggle" aria-hidden="true"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-side">
+            <h4>接收设置</h4>
+            <div class="cs-body">
+              <div class="cs-field">
+                <span class="cs-label">接收目录</span>
+                <div class="cs-path">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#646c57" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L11 5H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1Z"/></svg>
+                  <span>C:\Users\jdm\Downloads\PacketBoat\</span>
+                </div>
+              </div>
+              <span class="cs-btn">更改目录</span>
+              <div class="cs-row">
+                <div class="cs-txt">
+                  <strong>关闭窗口时</strong>
+                  <p class="cs-note">最小化到托盘，服务保持运行</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-side">
+            <h4>传输记录</h4>
+            <dl class="cs-metrics">
+              <div><dt>原位共享</dt><dd>2</dd></div>
+              <div><dt>远程接收</dt><dd>2</dd></div>
+              <div><dt>已发送</dt><dd>7</dd></div>
+              <div><dt>失败</dt><dd>0</dd></div>
+            </dl>
+          </div>
+        </aside>
+      </div>
+
+      <footer style="display:flex; justify-content:space-between; padding:9px 16px; border-top:1px solid var(--line); color:var(--muted); font:600 10.5px/1 var(--f-label); letter-spacing:.08em;">
+        <span>PacketBoat 桌面端 · v0.1.0</span>
+        <span>文件通过本机局域网直达 · 无云端中转</span>
+      </footer>
+    </div>
+  </div>
+  <div class="callout">
+    <b>关键取舍：二维码从「席位」降为「图标」。</b>
+    全屏时桌面端用户就在电脑前，扫二维码的是<b>手机</b>——手机用户打开接收页并不需要桌面端这块二维码，
+    真正需要它的是「第一次配对」那一次。因此二维码收成命令条右端的 34px 缩略图，点击展开成大图浮层。
+    这样驾驶舱侧栏那 232px 的整条竖带连同它的边框、内边距、提示文字全部释放出来。
+  </div>
+
+  <h3 style="margin:30px 0 12px; font:720 16px/1 var(--f-display)">窄屏替代：更多抽屉 <span class="wide-lbl">&lt; 1100px 才出现</span></h3>
+  <p class="sec-lead" style="margin-top:0">
+    边栏需要横向空间。窗口收窄到 1100px 以下时右列放不下，同一批设置改为命令条下方的一次性抽屉 —— 
+    <b>内容不变，只是从竖排改横排</b>，展开时占约 78px 高度，收起后与宽屏版完全一致。
+  </p>
+  <div class="win" style="height:auto">
+    <div class="win-body" style="grid-template-rows:auto auto auto">
+      <div class="cmdbar">
+        <span class="cb-mark">L</span>
+        <span class="cb-name"><strong>JAY</strong></span>
+        <span class="cb-state"><i></i>运行中</span>
+        <span class="cb-url"><code>http://10.80.40.166:8081</code><span class="cb-act">复制</span><span class="cb-act">↗</span></span>
+        <span class="cb-code"><strong>732323</strong></span>
+        <span class="cb-more" style="border-color:var(--acid); color:var(--acid)">收起</span>
+        <span class="cb-power">停止</span>
+        <span class="cb-qr">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" fill="#fff"/><g fill="#1f271c"><rect x="1" y="1" width="7" height="7"/><rect x="16" y="1" width="7" height="7"/><rect x="1" y="16" width="7" height="7"/><rect x="10" y="1" width="2" height="2"/><rect x="13" y="3" width="2" height="2"/><rect x="10" y="10" width="2" height="2"/><rect x="14" y="11" width="2" height="2"/><rect x="18" y="12" width="2" height="2"/><rect x="11" y="15" width="2" height="2"/><rect x="16" y="18" width="2" height="2"/><rect x="20" y="20" width="2" height="2"/><rect x="12" y="20" width="2" height="2"/></g></svg>
+        </span>
+      </div>
+      <div class="drawer">
+        <div class="d-cell">
+          <span class="d-label">切换访问地址</span>
+          <span class="d-value">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#646c57" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>
+            局域网 · 10.80.40.166 （以太网 2 /22）
+          </span>
+          <p class="d-note">当前 1 / 4 · 虚拟网卡地址不可达时会在此提示切换</p>
+        </div>
+        <div class="d-cell">
+          <span class="d-label">扫码行为</span>
+          <span class="d-value">扫码自动携带配对码进入</span>
+          <p class="d-note">关闭后，手机扫码需手动输入配对码</p>
+        </div>
+        <div class="d-cell">
+          <span class="d-label">关闭窗口时</span>
+          <span class="d-value">最小化到托盘，服务保持运行</span>
+          <p class="d-note">接收目录：C:\Users\jdm\Downloads\PacketBoat\</p>
+        </div>
+      </div>
+      <div class="dropbar" style="border-top:1px solid var(--line); border-bottom:0">
+        <span class="db-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1f271c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L11 5H4a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1Z"/><path d="M12 11v6"/><path d="m9 14 3-3 3 3"/></svg>
+        </span>
+        <span class="db-text"><b>把文件拖到这里</b>，或点右侧选择 · 只记录原始路径，不复制不移动</span>
+        <span class="db-btn">＋ 选择文件</span>
+      </div>
+    </div>
+  </div>
+  <p class="notes">
+    抽屉只在用户主动展开时占据高度，内容是<b>横向三列</b>——同一批设置从纵向 3 行 + 1 个二维码带，压成一行三格。
+    注意抽屉版与边栏版承载<b>完全相同</b>的四项设置，不存在「窄屏就少功能」。
+  </p>
+</section>
+
+<!-- ============ 3. 手机端方案 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>3. 手机端方案</h2><span>接收页 · 320 × 640 视口</span></div>
+  <p class="sec-lead">
+    手机端问题更极端：<code>AppHeader</code> 下面还压着一个 <b>约 400px 的 hero 区</b>（巨型两行 h1 + 长段说明 + 三项统计），
+    文件架要滚过近整个视口才看得到。方案是把 hero 降级为 <b>一行数据条</b>，把「文件架」直接提到折线以上。
+  </p>
+
+  <div class="phone-row">
+
+    <figure class="phone-wrap">
+      <div class="phone">
+        <div class="phone-screen">
+          <div>
+            <div class="ph-status"><span>9:41</span><span>▲ ● ▮</span></div>
+            <div class="ph-head">
+              <span class="pb-mark">L</span>
+              <span class="pb-word">PacketBoat</span>
+              <span class="pb-live"><i></i>在线</span>
+              <span class="pb-exit">⏻</span>
+            </div>
+          </div>
+
+          <div class="ph-body">
+            <dl class="ph-strip" style="margin:0">
+              <div><dt>当前货架</dt><dd>8 份</dd></div>
+              <div><dt>占用空间</dt><dd>188 MB</dd></div>
+              <div><dt>单件上限</dt><dd>2.0 GB</dd></div>
+            </dl>
+
+            <div class="ph-main">
+              <div class="ph-upload">
+                <span class="pu-icon">↑</span>
+                <span class="pu-text"><b>投递文件</b> · 或直接拖进来</span>
+              </div>
+
+              <div class="ph-shelf">
+                <div class="ph-shelf-head">
+                  <h3>共享文件架</h3>
+                  <span>8 ITEMS</span>
+                </div>
+                <div class="ph-rows">
+                  <div class="ph-file">
+                    <span class="pf-ico">ZIP</span>
+                    <span class="pf-body"><span class="pf-name">产品发布会素材.zip</span><span class="pf-meta">1.4 MB · 原位共享</span></span>
+                  </div>
+                  <div class="ph-file">
+                    <span class="pf-ico">PNG</span>
+                    <span class="pf-body"><span class="pf-name">ICON_256.PNG</span><span class="pf-meta">862 B · 远程接收</span></span>
+                  </div>
+                  <div class="ph-file">
+                    <span class="pf-ico">PDF</span>
+                    <span class="pf-body"><span class="pf-name">2026Q3 应收对账明细.pdf</span><span class="pf-meta">386 KB · 原位共享</span></span>
+                  </div>
+                  <div class="ph-file">
+                    <span class="pf-ico">MP4</span>
+                    <span class="pf-body"><span class="pf-name">会议录屏_0912.mp4</span><span class="pf-meta">184 MB · 远程接收</span></span>
+                  </div>
+                  <div class="ph-file ph-folded">
+                    <span class="pf-ico">DOC</span>
+                    <span class="pf-body"><span class="pf-name">接口对接说明 v3.docx</span><span class="pf-meta">52 KB · 原位共享</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ph-foot">共享靠主机程序维持 · 关闭即停止</div>
+        </div>
+      </div>
+      <figcaption><span class="badgeline bl-good">方案</span> 文件架进入首屏<br>折线以上可见 4 行</figcaption>
+    </figure>
+
+    <figure class="phone-wrap">
+      <div class="phone">
+        <div class="phone-screen">
+          <div>
+            <div class="ph-status"><span>9:41</span><span>▲ ● ▮</span></div>
+            <div class="ph-head">
+              <span class="pb-mark">L</span>
+              <span class="pb-word">PacketBoat</span>
+              <span class="pb-live"><i></i>在线</span>
+              <span class="pb-exit">⏻</span>
+            </div>
+          </div>
+
+          <div class="ph-body" style="grid-template-rows:minmax(0,1fr)">
+            <div style="min-height:0; overflow:hidden; padding:14px">
+              <p style="color:var(--muted); font:650 10px/1 var(--f-label); letter-spacing:.15em; margin-bottom:10px">LOCAL / 01　局域网共享中</p>
+              <h1 style="font:720 34px/1.02 var(--f-display); letter-spacing:-.04em; margin-bottom:12px">把文件放到<br><em style="color:var(--signal); font-style:normal">同一条网路上。</em></h1>
+              <p style="color:var(--muted); font-size:12.5px; line-height:1.75; margin-bottom:16px">文件只在当前局域网内流动，未经云端。拖进来，另一台设备马上就能拿走。</p>
+
+              <div style="border:1px solid var(--line-strong); border-radius:12px; background:var(--paper); padding:12px; margin-bottom:14px">
+                <p style="color:var(--muted); font:650 10px/1 var(--f-label); letter-spacing:.1em; margin-bottom:8px">扫码直达主机</p>
+                <div style="width:96px; height:96px; margin:0 auto; background:#fff; border:1px solid var(--line); border-radius:8px; display:grid; place-items:center">
+                  <svg width="76" height="76" viewBox="0 0 24 24" aria-hidden="true"><g fill="#1f271c"><rect x="1" y="1" width="7" height="7"/><rect x="16" y="1" width="7" height="7"/><rect x="1" y="16" width="7" height="7"/><rect x="10" y="1" width="2" height="2"/><rect x="13" y="3" width="2" height="2"/><rect x="10" y="10" width="2" height="2"/><rect x="14" y="11" width="2" height="2"/><rect x="18" y="12" width="2" height="2"/><rect x="11" y="15" width="2" height="2"/><rect x="16" y="18" width="2" height="2"/><rect x="20" y="20" width="2" height="2"/><rect x="12" y="20" width="2" height="2"/></g></svg>
+                </div>
+              </div>
+
+              <div style="padding:11px 13px; border:1px solid var(--line-strong); border-radius:11px; background:var(--acid-wash); color:var(--acid-deep); font-size:12px; line-height:1.6">
+                <b>文件架在更下方 —— 当前位置 y ≈ 620px</b><br>已滚出首屏，需一次完整滑动才能看到。
+              </div>
+            </div>
+          </div>
+
+          <div class="ph-foot">共享靠主机程序维持 · 关闭即停止</div>
+        </div>
+      </div>
+      <figcaption><span class="badgeline bl-bad">现状</span> hero 占满首屏<br>文件架在 70–89% 视口处</figcaption>
+    </figure>
+
+  </div>
+
+  <div class="callout warn">
+    <b>手机端最该保留、也最该搬家的东西：二维码。</b>
+    现在二维码在<b>桌面端</b>驾驶舱里，而扫码的人拿着手机 —— 扫码这个动作本质上是「手机去认主机」，
+    但把二维码放在电脑屏幕上、让用户用手机去拍电脑屏幕，是<b>扫码场景里最别扭的一种</b>。
+    更自然的做法是给主机地址一个短链，手机直接输或直接点；二维码只在「第一次邀请别人」时才需要出现在桌面端。
+    本方案桌面端保留缩略二维码（点击放大），手机端在折叠的内容里不再重复放二维码。
+  </div>
+</section>
+
+<!-- ============ 4. 改动清单 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>4. 改动清单</h2><span>WHAT CHANGED</span></div>
+  <table>
+    <thead>
+      <tr><th style="width:20%">项目</th><th style="width:26%">原值 / 原规则</th><th style="width:30%">新值 / 新规则</th><th>解决的问题</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>驾驶舱容器</b><br><code>DesktopHeader</code></td>
+        <td>220px 大卡，网格 <code>1fr / 186px</code>，纵向 <code>gap:15px</code></td>
+        <td>拆为 <b>56px 命令条</b>（横向）+ <b>296px 右侧边栏</b>（纵向）；命令条单行 flex，无纵向 gap</td>
+        <td class="t-good">头部 220 → 56px</td>
+      </tr>
+      <tr>
+        <td><b>右侧边栏</b><br><span class="wide-lbl">宽屏新增</span></td>
+        <td>无（原设计里设置散在驾驶舱各行）</td>
+        <td><b>296px 常驻边栏</b>，内含「连接设置」「接收设置」「传输记录」三张卡，<code>sticky</code> 跟随滚动</td>
+        <td class="t-good">设置常驻不折叠，且不占纵向高度</td>
+      </tr>
+      <tr>
+        <td><b>设备标识</b></td>
+        <td>52px logo + 12px 小标 + 22px h1 设备名</td>
+        <td>28px logo + 14px 设备名，小标并入命令条不复用</td>
+        <td class="t-good">省 34px 纵高</td>
+      </tr>
+      <tr>
+        <td><b>服务状态</b></td>
+        <td>独立状态灯 + 15px 文字，占一行右侧</td>
+        <td>压成 10.5px 胶囊（<code>运行中</code>），紧跟设备名</td>
+        <td class="t-good">省 1 行</td>
+      </tr>
+      <tr>
+        <td><b>访问地址行</b></td>
+        <td><code>deck-label</code> 60px 标签 + 34px 输入框 + 复制 + 外链</td>
+        <td>去掉 60px 文字标签（地址形状自明），框高 30px，按钮收为 22px 内嵌</td>
+        <td class="t-good">省 1 行 + 4px</td>
+      </tr>
+      <tr>
+        <td><b>切换地址行</b></td>
+        <td>常驻一行：图标 + select + <code>1 / 4</code> 计数</td>
+        <td><b>移入右侧边栏「连接设置」</b>；<b>&lt; 1100px</b> 时改入「更多」抽屉</td>
+        <td class="t-good">省 1 行</td>
+      </tr>
+      <tr>
+        <td><b>配对码行</b></td>
+        <td>60px 标签 + 34px 框 + 11.5px 长解释</td>
+        <td>30px 胶囊，解释文案删除（胶囊本身就是提示）</td>
+        <td class="t-good">省 1 行</td>
+      </tr>
+      <tr>
+        <td><b>启动/停止按钮</b></td>
+        <td>40px 高 + 12px 旁注「关闭窗口会最小化到托盘」</td>
+        <td>32px 高，旁注移入边栏「接收设置」卡</td>
+        <td class="t-good">省 8px + 旁注</td>
+      </tr>
+      <tr>
+        <td><b>二维码</b></td>
+        <td>186px（后续方案 232px）整条右侧栏，含边框/内边距/提示/开关</td>
+        <td>34px 缩略图置于命令条右端，点击展开浮层；「扫码自动进入」开关移入边栏「连接设置」卡</td>
+        <td class="t-good">释放整条纵向侧栏</td>
+      </tr>
+      <tr>
+        <td><b>拖放区</b><br><code>DesktopFileList</code></td>
+        <td><code>min-height: 108px</code>，56px 图标 + 22px h3 + 13px 说明 + 42px 按钮</td>
+        <td><b>40px 单行拖放条</b>：24px 图标 + 12.5px 内联文案 + 28px 按钮</td>
+        <td class="t-good">拖放区 108 → 40px</td>
+      </tr>
+      <tr>
+        <td><b>清单标题行</b></td>
+        <td><code>min-height: 74px</code>，27px h2 + 14px 说明</td>
+        <td>48px：19px h2 + 12.5px 计数，工具按钮 30px（实测值），统计项字号 13 → 12px</td>
+        <td class="t-good">省 26px</td>
+      </tr>
+      <tr>
+        <td><b>表格列头</b></td>
+        <td><code>padding: 14px 20px</code>，13px 字</td>
+        <td><code>padding: 9px 16px</code>，11.5px 字 → 36px（实测值）</td>
+        <td class="t-good">省 8px</td>
+      </tr>
+      <tr>
+        <td><b>行高</b></td>
+        <td>约 56px（<code>padding: 12px 20px</code> + 图标）</td>
+        <td>约 49px（<code>padding: 11px 16px</code>，实测值）</td>
+        <td class="t-good">同高度多挤 1 行</td>
+      </tr>
+      <tr>
+        <td><b>手机 hero 区</b><br><code>FileShareApp</code></td>
+        <td>约 400px：eyebrow + <code>clamp(46px, 6.8vw, 88px)</code> 两行 h1 + 16px 长段 + 3 项统计 + 52px 下边距</td>
+        <td>降为 <b>一行 3 格数据条</b>（当前货架/占用空间/单件上限），h1 与长段移入「关于本页」折叠</td>
+        <td class="t-good">省约 340px</td>
+      </tr>
+      <tr>
+        <td><b>手机顶部内边距</b></td>
+        <td><code>padding-top: 74px</code></td>
+        <td>12px（sticky 头本身已有间距）</td>
+        <td class="t-good">省 62px</td>
+      </tr>
+      <tr>
+        <td><b>手机文件架</b></td>
+        <td><code>margin-top: 60px</code>，88px 深色标题行</td>
+        <td><code>margin-top: 12px</code>，标题行改浅色 44px</td>
+        <td class="t-good">省约 92px</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 5. 实测预算 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>5. 预算对账</h2><span>BEFORE / AFTER</span></div>
+  <p class="sec-lead">按上表逐项累加，得到两端的头部预算与首屏可见行数。<b>数字来自渲染后逐行扫描像素的实测值</b>，非估算。</p>
+  <table>
+    <thead>
+      <tr><th style="width:28%">指标</th><th style="width:22%">现状</th><th style="width:22%">重构后</th><th>变化</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>桌面 · 头部堆叠（到清单卡顶）</td>
+        <td class="t-bad">376px（占窗口 49.2%）</td>
+        <td class="t-good">150px（占窗口 19.6%）</td>
+        <td>↓ 226px，<b>压缩 60%</b></td>
+      </tr>
+      <tr>
+        <td>桌面 · 首行数据出现位置</td>
+        <td class="t-bad">y = 494px（64.7%）</td>
+        <td class="t-good">y = 237px（31.0%）</td>
+        <td>↑ 提前 257px，<b>提到窗口上三分之一</b></td>
+      </tr>
+      <tr>
+        <td>桌面 · 首屏可容纳文件行</td>
+        <td class="t-bad">4 行（56px/行）</td>
+        <td class="t-good">10 行（49px/行）</td>
+        <td>↑ 多 6 行，<b>翻 1.5 倍</b></td>
+      </tr>
+      <tr>
+        <td>手机 · 文件架起点</td>
+        <td class="t-bad">594px（844 屏的 70.4%）</td>
+        <td class="t-good">约 172px（20.4%）</td>
+        <td>↑ 提到首屏内，<b>折线以上可见 4 行</b></td>
+      </tr>
+      <tr>
+        <td>手机 · 首屏可见文件数</td>
+        <td class="t-bad">0（完全在视口外）</td>
+        <td class="t-good">4 行</td>
+        <td>↑ 从「看不到」到「看到 4 份」</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>桌面端 150px 是怎么构成的（像素级实测）。</b>
+    在窗口内沿列表中线逐行扫描像素得到：<code>0–88</code> 标题栏 32 + 命令条 56 →
+    <code>88–100</code> 主区内边距 12 → <code>100–139</code> 拖放条 40 → <code>140–150</code> 间距 10 →
+    <code>150</code> 清单卡顶边 → <code>151–199</code> 清单标题 48 → <code>200–236</code> 列头 36 →
+    <b><code>237</code> 第一行数据</b>，行高恒定 49px，页脚上沿在 732px。
+    行区 495px ÷ 49px = <b>10 行整</b>。
+  </div>
+
+  <div class="callout">
+    <b>为什么设置进边栏，而不是收进折叠抽屉？</b>
+    本方案没有删除任何一项能力：切换地址、扫码开关、关闭行为、接收目录、二维码，全部保留，只是从「横着铺在头部」改为「竖着收在右列」。
+    判断依据是<b>访问频率 × 屏幕预算</b>——一个会话里用户看文件列表几十次、看服务状态几次、改地址几乎零次。
+    宽屏的横向空间本来就富余，把设置竖着放进右列，<b>纵向一分不占、横向零成本</b>；
+    只有窗口窄到边栏放不下（&lt; 1100px）时，才降级为一次性抽屉。让最高频的内容获得最大的纵向面积，这是布局分配的第一性原则。
+  </div>
+
+  <div class="callout">
+    <b>与 PB-UI-02 的关系：不是推翻，是继承。</b>
+    PB-UI-02 方案已经把右列定为「接收设置 + 传输记录」双卡。
+    本方案<b>继承这个右列并扩充为三卡</b>（新增「连接设置」承接从头部搬下来的地址切换与扫码开关），
+    同时把纵向三段式改为「命令条 + 双列主区 + 页脚」。换句话说，PB-UI-02 解决「纵向死区」，本方案解决「横向铺张」，
+    两者叠加后是同一套骨架。
+  </div>
+</section>
+
+<!-- ============ 6. 响应式 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>6. 响应式策略</h2><span>RESPONSIVE</span></div>
+  <p class="sec-lead">
+    两个维度同时降级：<b>命令条</b>是单行弹性容器，先丢最不重要的、保住核心三件（状态 / 地址 / 电源）；
+    <b>右侧边栏</b>在横向空间不足时先收窄、再退化为抽屉。
+  </p>
+  <table>
+    <thead>
+      <tr><th style="width:14%">档位</th><th style="width:13%">宽度</th><th style="width:26%">右侧边栏</th><th style="width:26%">命令条保留</th><th>丢弃 / 折叠</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>宽屏</b></td><td>≥ 1500px</td>
+        <td><b>296px 三卡常驻</b>（连接 / 接收 / 传输记录）</td>
+        <td>品牌 · 名 · 状态 · 地址 · 配对码 · 电源 · 二维码</td>
+        <td>无</td>
+      </tr>
+      <tr>
+        <td><b>标准</b></td><td>1100–1500px</td>
+        <td><b>296px 三卡常驻</b></td>
+        <td>同上（地址框 <code>max-width: 300px</code>）</td>
+        <td>无</td>
+      </tr>
+      <tr>
+        <td><b>紧凑</b></td><td>860–1100px</td>
+        <td>退化为<b>命令条下方抽屉</b>，命令条出现「更多」按钮</td>
+        <td>品牌 · 名 · 状态 · 地址 · 配对码 · 更多 · 电源</td>
+        <td>二维码缩略图（移入抽屉）</td>
+      </tr>
+      <tr>
+        <td><b>平板</b></td><td>720–860px</td>
+        <td>抽屉（同上）</td>
+        <td>logo · 状态 · 地址 · 配对码 · 电源</td>
+        <td>设备名（<code>title</code> 提示）· 更多 | 清单表格隐藏「来源」列</td>
+      </tr>
+      <tr>
+        <td><b>窄</b></td><td>&lt; 720px</td>
+        <td>抽屉内容改为单列堆叠</td>
+        <td>logo · 状态 · 地址 · 电源</td>
+        <td>配对码入抽屉 · 清单列收为「文件名 + 大小」两列</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>1100px 这条断点为什么选这里？</b>
+    边栏 296px + 主区最小可用宽度 640px（清单表五列在 640px 以下会挤成两行）+ 两侧内边距 28px + 栅格间距 14px ≈ <b>978px</b>，
+    留出约 120px 余量取整到 1100px。这恰好与现有代码里 <code>.main-grid</code> 的 <code>@media (max-width: 1100px)</code> 折行断点重合，
+    <b>不需要新增断点</b>，直接复用。
+  </div>
+</section>
+
+<!-- ============ 7. 落地提示 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>7. 落地提示</h2><span>NOTES</span></div>
+  <ul class="notes">
+    <li><b>边栏宽度 296px 而非现有 <code>.main-grid</code> 的 320px</b>：清单表五列（文件名 / 大小 / 修改时间 / 来源 / 操作）在 1280 窗口下，主区多留 24px 能少一次列压缩。横向值与纵向预算无关，若想零改动也可以直接沿用 320px。</li>
+    <li><b>边栏两张来源不同的卡要统一外壳</b>：「连接设置」是从 <code>DesktopHeader</code> 搬下来的新内容，「接收设置」来自现有 <code>StorageSettings.vue</code>。两者视觉外壳必须一致（同 <code>h4</code> 标题条 / 同内边距 / 同卡片描边），否则会露出「拼接感」。建议抽一个 <code>SideCard.vue</code> 包壳组件。</li>
+    <li><b><code>sticky</code> 要挂在边栏容器上</b>，不是每张卡：现有代码是 <code>.side-panel { position: sticky; top: 24px }</code>。命令条固定后 <code>top</code> 要改成「命令条高度 + 间距」＝ 56 + 12 = <code>68px</code>，否则卡片会被命令条压住。</li>
+    <li><b>「更多」抽屉用 <code>&lt;details&gt;</code> 还是自管 state？</b>建议自管 —— 抽屉里要放 <code>&lt;select&gt;</code> 和 <code>&lt;label&gt;</code>，<code>&lt;details&gt;</code> 的 toggle 语义在 Vue 里与 <code>v-model</code> 配合更绕。且宽屏 / 窄屏是同一批数据的两种渲染，用 <code>v-if</code> 切换即可，不需要两套组件。</li>
+    <li><b>二维码浮层</b>需要焦点陷阱与 <code>Esc</code> 关闭，尺寸建议 220px（不放大原始 QR 矢量，避免糊）。</li>
+    <li><b>命令条的地址框</b>在原设计里承担了「警告态」（虚拟网卡不可达时变橙）。压缩后仍要保留：建议改为地址框 <b>1px 橙描边</b>，警告详情落到边栏「连接设置」卡（宽屏）或抽屉第一格（窄屏）。</li>
+    <li><b>配色沿用 PB-UI-02 结论</b>：acid 绿只给「启动服务」主行动 + 品牌标识 + 配对码；状态灯与所有开关（含边栏里的「扫码自动进入」）用 <code>--info-lit</code>；危险用 signal 橙。命令条是深色底（<code>--ink</code>），半透明反白文字 α ≥ .66 以保 AA；边栏是浅色底，用常规 <code>--ink</code> / <code>--muted</code>。</li>
+    <li><b>手机端不要把 hero 删净</b>：首次访问的用户需要知道「这是干嘛的」。折中做法是把 h1 与说明放进页面底部「关于本页」的可折叠区，或者仅在文件数为 0 时展开。</li>
+    <li><b>拖放条要保住拖拽热区</b>：40px 高对鼠标拖放足够，但触屏拖放在移动端不成立（无拖放 API），所以手机端用「投递文件」按钮即可。</li>
+  </ul>
+</section>
+
+<!-- ============ 8. 实施回填 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>8. 实施回填</h2><span>AS BUILT · 已落地</span></div>
+  <p class="sec-lead">
+    本方案已落地到代码。下面所有数字都是<b>从真实组件的渲染产物量取</b>的（无 Tauri 环境下用 vite alias 把
+    <code>@/api</code> 换成桩件、注入最小 <code>__TAURI_INTERNALS__</code>，再用 CDP 精确指定视口读数），
+    不是 CSS 值累加。
+  </p>
+
+  <div class="callout" style="margin-top:16px">
+    <b>第 8.1 节先落地了「紧凑版」，随后按用户反馈回改为「宽松版」。</b>
+    紧凑版实测首行数据 y=231、行高 49px、可见 9 行，但用户反馈「桌面端太紧凑了，特别是头部和顶部的标题」。
+    8.2 节是放宽后的数字，<b>8.1 节保留作为演进记录</b>。手机端两版完全一致（用户明确认可，未回改）。
+  </div>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">8.1 紧凑版（首版落地）· 1280 × 764</h3><span>已被 8.2 取代</span></div>
+  <table>
+    <thead><tr><th style="width:34%">项目</th><th style="width:22%">设计目标</th><th style="width:22%">实测</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr><td>标题栏 + 命令条</td><td>88px（32 + 56）</td><td><b>94px（38 + 56）</b></td><td>标题栏实际 38px，命令条 56px 精确命中</td></tr>
+      <tr><td>拖放条</td><td>40px，顶边 y=100</td><td><b>40px，y=107</b></td><td>高精确，位置差 7px 来自标题栏差异</td></tr>
+      <tr><td>清单标题行</td><td>48px</td><td><b>50px</b></td><td>一致</td></tr>
+      <tr><td>表格列头</td><td>36px</td><td><b>34px</b></td><td>一致</td></tr>
+      <tr><td><b>首行数据</b></td><td><b>y=237（31.0%）</b></td><td><b>y=231（30.2%）</b></td><td class="t-good">命中，较改造前 494px 提前 263px</td></tr>
+      <tr><td><b>行高</b></td><td>49px</td><td><b>49px</b></td><td class="t-good">逐像素一致</td></tr>
+      <tr><td>首屏可见行数</td><td>10 行</td><td><b>9 行</b></td><td>差 1 行（标题栏 +6px、清单标题行 +2px）</td></tr>
+      <tr><td><b>边栏宽度</b></td><td>296px</td><td><b>296px</b></td><td class="t-good">一致；清单列宽 948px</td></tr>
+      <tr><td>边栏卡片</td><td>3 张（连接 / 接收 / 传输记录）</td><td><b>3 张（连接 / 接收 / 清单概览）</b></td><td>见下方偏差 1</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-h" style="margin-top:30px"><h3 style="font:700 15px/1 var(--f-display); margin:0">8.2 宽松版（当前实现）· 1280 × 764</h3><span>已实现</span></div>
+  <p class="sec-lead" style="margin-bottom:12px">
+    触发反馈：<b>「我感觉桌面端太紧凑了，桌面端可适当宽松一点的设计，特别是头部和顶部的标题」</b>。
+    放宽遵循「<b>框架放宽、数据行小步</b>」：标题栏与命令条是框架，加高不加内容；
+    清单标题行是内容区的头，只放一档；文件行是「量」的部分，仅微调，避免又回到「头部吃半屏」。
+  </p>
+  <table>
+    <thead><tr><th style="width:30%">项目</th><th style="width:20%">紧凑版</th><th style="width:20%">宽松版（实测）</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>标题栏</td><td>38px</td><td><b>44px</b></td><td>标识 20→26px、标题 12→13px、控件宽 46→48px</td></tr>
+      <tr><td><b>命令条</b></td><td>56px</td><td><b>64px</b></td><td>内边距 16→20px、gap 12→14px；设备名 14→15.5px、状态胶囊 10.5→11.5px、地址框 30→36px、配对码 30→36px、电源 32→38px</td></tr>
+      <tr><td>拖放条</td><td>40px</td><td><b>46px</b></td><td>图标 24→28px、按钮 28→32px、文案 12.5→13.5px</td></tr>
+      <tr><td>清单标题行</td><td>50px</td><td><b>62px</b></td><td>h2 <b>19→22px</b>（用户点名的「顶部的标题」）、副标题 12.5→13px、工具按钮 30→32px</td></tr>
+      <tr><td>表格列头</td><td>34px</td><td><b>39px</b></td><td>12.5px 字、上下 11px</td></tr>
+      <tr><td><b>行高</b></td><td>49px</td><td><b>54px</b></td><td>内边距 7→8px、脚标 30×32→32×34、文件名 13→14px</td></tr>
+      <tr><td><b>首行数据</b></td><td>y=231</td><td><b>y=270（35.3%）</b></td><td>后移 39px，是放宽的直接代价</td></tr>
+      <tr><td><b>首屏可见行数</b></td><td>9 行</td><td><b>8 行</b></td><td>少 1 行；1440×900 下为 <b>10 行</b></td></tr>
+      <tr><td>边栏宽度 / 卡数</td><td>296px / 3</td><td><b>336px / 2</b></td><td>宽度 +40（用户反馈地址下拉与路径框被挤压）；「扫码接入」+「接收设置」，清单概览并入清单标题行（修正 3）</td></tr>
+      <tr><td>侧栏总高</td><td>—</td><td><b>587px</b>（主区可视 588px）</td><td>见下方修正 2</td></tr>
+      <tr><td><b>二维码</b></td><td>命令条 38px 按钮 + <code>&lt;dialog&gt;</code> 浮层</td><td><b>侧栏「扫码接入」卡常驻</b></td><td>见下方修正 3（用户指令）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">手机端接收页 · 390 × 844</h3><span>已实现</span></div>
+  <table>
+    <thead><tr><th style="width:34%">项目</th><th style="width:22%">改造前</th><th style="width:22%">实测</th><th>判定</th></tr></thead>
+    <tbody>
+      <tr><td>顶部内边距</td><td>74px</td><td><b>12px</b></td><td class="t-good">一致</td></tr>
+      <tr><td>AppHeader</td><td>68px</td><td><b>53px</b></td><td>一致</td></tr>
+      <tr><td>hero 区</td><td>约 400px</td><td><b>49px 数据条 + 38px 折叠行</b></td><td class="t-good">省约 310px</td></tr>
+      <tr><td>投递区</td><td>230px（≤720px 断点）</td><td><b>52px</b></td><td>见下方偏差 2</td></tr>
+      <tr><td><b>文件架起点</b></td><td>约 620px（73% 视口）</td><td><b>238px（28% 视口）</b></td><td class="t-good">提前 382px</td></tr>
+      <tr><td>文件架标题行</td><td>88px 深色</td><td><b>41px 浅色</b></td><td class="t-good">一致</td></tr>
+      <tr><td><b>首屏可见行</b></td><td>0–1 行</td><td><b>7 行 @844 / 6 行 @780</b></td><td class="t-good">超过「折线以上可见 4 行」的目标</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">断点与溢出（宽松版实测）</h3><span>已实现</span></div>
+  <table>
+    <thead><tr><th style="width:22%">视口</th><th style="width:26%">边栏行为</th><th style="width:26%">横向溢出</th><th>备注</th></tr></thead>
+    <tbody>
+      <tr><td>1440 × 900</td><td>右侧 296px 常驻</td><td class="t-good">无（scrollWidth = 1440）</td><td>可见 10 行，清单列宽 1102px</td></tr>
+      <tr><td>1280 × 764</td><td>右侧 296px 常驻</td><td class="t-good">无（scrollWidth = 1280）</td><td>3 卡纵向排列，sticky 生效，可见 8 行</td></tr>
+      <tr><td>1080 × 764</td><td>落到清单下方，3 列并排</td><td class="t-good">无（scrollWidth = 1080）</td><td>复用既有 1100px 断点，未新增</td></tr>
+      <tr><td>390 × 844</td><td>—（接收页）</td><td class="t-good">无（scrollWidth = 390）</td><td>手机端，7 行（与紧凑版一致）</td></tr>
+      <tr><td>360 × 780</td><td>—（接收页）</td><td class="t-good">无（scrollWidth = 360）</td><td>手机端最窄档</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout" style="margin-top:24px">
+    <b>sticky 的 <code>top</code> 最终取 0，不是 68px。</b>
+    第 7 节建议的 68px 成立的前提是「滚动容器 = 窗口」。实际落地后滚动容器是
+    <code>main { overflow-y: auto }</code>，它的顶边本来就落在命令条下方（y=94），
+    因此 <code>top: 0</code> 才是「贴在命令条正下方」的正确写法。实测：<code>main.scrollTop</code>
+    从 0 推到 110（到底）时，边栏 <code>top</code> 始终锁在 106，与主区顶边偏移恒为 0。
+  </div>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">放宽过程中的三处修正</h3><span>仅宽松版</span></div>
+  <ul class="notes">
+    <li><b>修正 1：侧栏三卡总高会超过主区可视高度，底部那张卡被静默裁掉。</b>
+      字号整体放大一档后三卡合计 609px，而 <code>main</code> 可视高度只有 588px（<code>sticky</code> 元素超出部分直接看不见）。
+      两步处理：① 收紧非关键的内部间距（卡间距 14→12px、卡内 <code>dl</code> 上下内边距、指标数字 17→15.5px），
+      把总高压回 589px；② 给 <code>.side-panel</code> 加 <code>max-height: 100%; overflow-y: auto; overscroll-behavior: contain</code>，
+      让未来任何内容/字号变化都不会再静默丢卡。<b>教训：sticky 侧栏必须自己保证不超出容器高度，它不会自动参与父级滚动。</b></li>
+    <li><b>修正 2：「修改时间」列在字号放大后被截断成两行 / 省略号。</b>
+      该列原为 <code>minmax(118px, .55fr)</code>，<code>fr</code> 份额会被文件名列抢走，可用宽度不足。
+      日期文案长度固定（<code>2025年8月31日 23:33</code>），13.5px 等宽下约需 130px，
+      故改为<b>定宽 152px</b>，并给 <code>.file-size</code> / <code>.file-date</code> 补 <code>white-space: nowrap</code>。
+      <b>教训：固定格式的内容列不要用 <code>fr</code> 份额分配宽度。</b></li>
+    <li><b>修正 3：二维码由「命令条按钮 + 浮层」改为侧边栏常驻（用户指令）。</b>
+      二维码移入右侧边栏「扫码接入」卡顶部（140px，白底），地址切换下拉与「扫码自动进入」开关并入同一张卡——
+      地址决定二维码编码什么、开关决定带不带配对码，三者本就是「手机怎么连进来」一件事。
+      <b>高度代价与取舍</b>：1280×764 的侧栏可视高度只有 588px，原有三卡已占 583px，物理上放不下第四张卡。
+      因此同步做了两笔腾挪：① <b>「清单概览」卡移除</b>——「N 个文件 · 大小」本就显示在清单标题行、原位/接收分类在每行徽章上，
+      分类汇总数字并入清单标题行副标题（<code>原位共享 8 · 远程接收 4</code>），零高度成本；
+      ② 「接收设置」卡删掉「关闭窗口时最小化到托盘」说明行（标题栏关闭按钮的 title 已含此信息）。
+      腾挪后侧栏两卡合计 587px，恰好装进 588px；首屏行数 8 行未变。命令条右端只剩「停止服务」，比之前更松。</li>
+  </ul>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">与设计稿的偏差（5 处）</h3><span>DEVIATIONS</span></div>
+  <ul class="notes">
+    <li><b>偏差 1：第三张卡由「传输记录」改为「清单概览」。</b>桌面端 App 没有传输记录数据（没有已发送 / 失败计数），硬造两个指标就是假数据。改为四格真实清单指标：<b>原位共享 / 远程接收 / 合计文件 / 占用空间</b>。同时清单标题行里原来重复显示这两项统计的 <code>catalog-stats</code> 一并删除，避免同一屏两处说同一件事。</li>
+    <li><b>偏差 2：投递区（<code>UploadDropzone</code>）不在改动清单里，但必须一并压。</b>它原本在 ≤720px 断点是 <code>min-height: 230px</code>，「文件架进首屏」会因此落空。设计稿的手机 mockup 里本来就是一条单行投递条，属于清单遗漏项。已压成 46px（宽屏）/ 52px（手机），并隐藏其在触屏上无意义的说明与元信息（单件上限已在数据条里出现）。</li>
+    <li><b>偏差 3：二维码浮层 200px（设计建议 220px）。</b>用原生 <code>&lt;dialog&gt;.showModal()</code> 实现，Esc 关闭与焦点陷阱由浏览器直接提供，不需要手写。外框 216px。</li>
+    <li><b>偏差 4：手机端「关于本页」放在数据条正下方</b>（第 7 节给了「页面底部」与「折叠区」两个候选）。放数据条下方是因为它同时承载扫码入口，埋在页尾会失去可达性。</li>
+    <li><b>偏差 5：<code>FileShareApp</code> 补了一个 <code>.visually-hidden</code> 的 <code>h1</code>。</b>原 <code>h1</code> 移进折叠区后，折叠态下页面会没有一级标题；补一个视觉隐藏的 <code>h1</code> 保住文档大纲。</li>
+  </ul>
+
+  <div class="sec-h" style="margin-top:26px"><h3 style="font:700 15px/1 var(--f-display); margin:0">宽松版的适用边界</h3><span>范围约束</span></div>
+  <ul class="notes">
+    <li><b>只放宽桌面端，手机端一个字未动。</b>用户对手机端明确认可（「手机端的可以了」），且其紧凑是「让文件架进首屏」的硬需求所迫。实测复核：手机端 390×844 下文件架起点仍为 238px、首屏 7 行，与紧凑版逐项一致。</li>
+    <li><b>1536px 以上的宽屏无需再放宽。</b>首屏可见行数在 1440×900 已达 10 行，纵向空间不再紧张；继续放大只会让单屏信息变少。</li>
+    <li><b>若要进一步收紧首屏行数，优先动的是文件行高（54px），而不是标题栏与命令条。</b>框架已经放宽到位，再压回去会重新触发这次的反馈。</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

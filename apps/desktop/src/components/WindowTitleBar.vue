@@ -54,19 +54,19 @@ function closeWindow() {
         :aria-pressed="props.alwaysOnTop"
         @click="emit('toggleAlwaysOnTop')"
       >
-        <PinOff v-if="props.alwaysOnTop" :size="14" />
-        <Pin v-else :size="14" />
+        <PinOff v-if="props.alwaysOnTop" :size="15" />
+        <Pin v-else :size="15" />
       </button>
       <div class="window-controls">
         <button type="button" title="最小化" aria-label="最小化" @click="minimizeWindow">
-          <Minus :size="15" />
+          <Minus :size="16" />
         </button>
         <button type="button" :title="maximized ? '还原' : '最大化'" :aria-label="maximized ? '还原' : '最大化'" @click="toggleMaximize">
-          <Copy v-if="maximized" :size="12" />
-          <Square v-else :size="11" />
+          <Copy v-if="maximized" :size="13" />
+          <Square v-else :size="12" />
         </button>
         <button type="button" class="close" title="关闭（最小化到托盘）" aria-label="关闭" @click="closeWindow">
-          <X :size="15" />
+          <X :size="16" />
         </button>
       </div>
     </div>
@@ -74,9 +74,12 @@ function closeWindow() {
 </template>
 
 <style scoped>
+/* 44px：38px 在 1280 宽窗口下框不住右侧三枚 46px 宽的系统按钮，
+   品牌标识也被压到 20px（比正文还小）。放宽后 mark 26px、标题 13px，
+   与命令条的 64px 形成「框架三层、逐层加重」的节奏。 */
 .window-titlebar {
   flex: none;
-  height: 38px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -84,16 +87,16 @@ function closeWindow() {
   color: var(--paper);
   user-select: none;
 }
-.titlebar-brand { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 0 14px; }
-.titlebar-mark { width: 20px; height: 20px; display: grid; place-items: center; flex: none; border: 1px solid var(--acid); color: var(--acid); font: 800 11px/1 var(--font-display); transform: rotate(-3deg); }
-.titlebar-title { overflow: hidden; color: rgb(241 238 228 / 62%); font: 600 12px/1 var(--font-label); letter-spacing: .14em; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 16px; }
+.titlebar-mark { width: 26px; height: 26px; display: grid; place-items: center; flex: none; border: 1px solid var(--acid); color: var(--acid); font: 800 13px/1 var(--font-display); transform: rotate(-3deg); }
+.titlebar-title { overflow: hidden; color: rgb(251 252 247 / 72%); font: 600 13px/1 var(--font-label); letter-spacing: .13em; text-overflow: ellipsis; white-space: nowrap; }
 .titlebar-actions { display: flex; align-items: stretch; height: 100%; }
-.titlebar-pin { width: 40px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(241 238 228 / 72%); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
+.titlebar-pin { width: 44px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(251 252 247 / 72%); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
 .titlebar-pin:hover:not(.active) { background: rgb(255 255 255 / 10%); color: var(--paper); }
 .titlebar-pin.active { background: var(--acid); color: var(--ink); }
 .titlebar-pin.active:hover { background: #e4ff7c; }
 .window-controls { display: flex; align-items: stretch; height: 100%; }
-.window-controls button { width: 46px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(241 238 228 / 72%); cursor: default; transition: background 120ms ease, color 120ms ease; }
+.window-controls button { width: 46px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(251 252 247 / 72%); cursor: default; transition: background 120ms ease, color 120ms ease; }
 .window-controls button:hover { background: rgb(255 255 255 / 10%); color: var(--paper); }
 .window-controls button.close:hover { background: var(--signal); color: #fff; }
 </style>

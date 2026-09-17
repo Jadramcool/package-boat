@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="xXCzkBysWJ97yYBp50ceBt">
+<head data-page-node-id="1zFoxkGML48TipL9hogPuU">
+<meta charset="UTF-8" data-page-node-id="VJLrHiMdAQbFIDDEfRO957">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="H4DT1DYjfM16ZJrDcBxkVL">
+<title>PacketBoat · 晴空码头 界面设计方案 PB-UI-01</title>
+<style>
+/* ==========================================================
+   PacketBoat UI 设计方案展板 —— 晴空码头 Clear Harbor
+   展板样式(.board/.sec)仅用于本提案文档；
+   界面 mockup 样式(.win/.phone 等)即未来落地样式。
+   ========================================================== */
+:root {
+  --dock-0: #f2f4ec;  --dock-1: #fbfcf7;
+  --ink: #1f271c;  --ink-2: #39432f;
+  --muted: #646c57;  --line: #dfe2d2;  --line-strong: #b9bfa6;
+  --acid: #d7f954;  --acid-hi: #e6ff85;  --acid-deep: #5c7a12;  --acid-wash: #eef9c8;
+  --signal: #ef5a32;  --signal-deep: #b23a1c;  --signal-wash: #fde9e0;
+  --info: #2f6fd3;  --info-wash: #e4edfb;  --ok: #35874a;
+  --paper: #fbfcf7;
+  --f-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --f-label: "Bahnschrift SemiCondensed", "Bahnschrift", "Noto Sans SC", sans-serif;
+  --f-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --f-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --r-s: 8px; --r-m: 12px; --r-l: 16px; --r-xl: 20px;
+  --sh-card: 0 1px 2px rgb(31 39 28 / 5%), 0 10px 28px rgb(31 39 28 / 7%);
+  --sh-float: 0 2px 6px rgb(31 39 28 / 8%), 0 18px 44px rgb(31 39 28 / 14%);
+}
+* { box-sizing: border-box; margin: 0; }
+html { background: #e9ebe2; }
+body {
+  font-family: var(--f-sans); color: var(--ink); line-height: 1.6;
+  background:
+    linear-gradient(rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    #e9ebe2;
+  background-size: 28px 28px, 28px 28px, auto;
+  text-rendering: optimizeLegibility; padding-bottom: 90px;
+}
+::selection { background: var(--acid); color: var(--ink); }
+
+/* ---------- 展板头部 ---------- */
+.board-top { max-width: 1280px; margin: 0 auto; padding: 44px 32px 0; }
+.board-meta { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: baseline; font: 600 12px/1 var(--f-mono); letter-spacing: .1em; color: var(--muted); }
+.board-meta b { color: var(--ink); }
+.board-title { margin: 14px 0 6px; font: 720 clamp(30px, 4.4vw, 46px)/1.08 var(--f-display); letter-spacing: -.02em; }
+.board-title em { font-style: normal; background: var(--acid); padding: 0 10px; box-shadow: 3px 3px 0 var(--ink); }
+.board-sub { max-width: 780px; color: var(--muted); font-size: 15px; }
+.board-sub b { color: var(--ink); }
+.board-tabs { display: flex; gap: 8px; margin: 26px 0 0; flex-wrap: wrap; }
+.board-tabs button { padding: 11px 20px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--dock-1); color: var(--ink); cursor: pointer; font: 650 14px/1 var(--f-label); letter-spacing: .04em; transition: all .18s cubic-bezier(.22,1,.36,1); }
+.board-tabs button:hover { border-color: var(--ink); transform: translateY(-1px); }
+.board-tabs button.on { background: var(--ink); border-color: var(--ink); color: var(--acid); }
+.board-tabs button:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+
+/* ---------- 展板分节 ---------- */
+main { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+.sec { display: none; animation: sec-in .3s cubic-bezier(.22,1,.36,1); }
+.sec.on { display: block; }
+@keyframes sec-in { from { opacity: 0; transform: translateY(10px); } }
+.sec-head { display: flex; align-items: baseline; gap: 14px; margin: 46px 0 8px; }
+.sec-head .no { font: 700 13px/1 var(--f-mono); color: var(--acid-deep); background: var(--acid-wash); padding: 5px 8px; border-radius: 6px; }
+.sec-head h2 { font: 720 25px/1.1 var(--f-display); letter-spacing: -.01em; }
+.sec-lead { color: var(--muted); font-size: 14px; max-width: 800px; margin-bottom: 22px; }
+.sec-lead b { color: var(--ink); }
+
+/* 展板面板与布局工具 */
+.panel { border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); box-shadow: var(--sh-card); }
+.panel-pad { padding: 20px 22px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.panel h4 { font: 720 16px/1.2 var(--f-display); margin-bottom: 3px; }
+.panel .cap { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+
+/* ---------- 设计系统：色板 ---------- */
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 14px; }
+.swatch { border: 1px solid var(--line-strong); border-radius: var(--r-m); overflow: hidden; background: var(--dock-1); }
+.swatch .chip { height: 72px; border-bottom: 1px solid var(--line-strong); position: relative; }
+.swatch .chip::after { content: attr(data-contrast); position: absolute; right: 8px; bottom: 8px; font: 600 10px/1 var(--f-mono); padding: 3px 6px; border-radius: 5px; background: rgb(251 252 247 / 88%); color: var(--ink); }
+.swatch dl { padding: 11px 13px 13px; }
+.swatch dt { font: 700 14px/1.2 var(--f-display); }
+.swatch dd { margin: 4px 0 0; font: 550 11px/1.5 var(--f-mono); color: var(--muted); }
+
+/* ---------- 设计系统：字体与标尺 ---------- */
+.sys-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-top: 18px; }
+@media (max-width: 900px) { .sys-grid { grid-template-columns: 1fr; } }
+.type-row { display: flex; align-items: baseline; gap: 18px; padding: 13px 0; border-bottom: 1px dashed var(--line-strong); }
+.type-row:last-child { border-bottom: 0; }
+.type-row .tag { flex: none; width: 128px; font: 600 11px/1.4 var(--f-mono); color: var(--muted); }
+.ruler { display: flex; flex-direction: column; gap: 10px; }
+.ruler .bar { display: flex; align-items: center; gap: 10px; }
+.ruler .bar i { display: block; height: 12px; background: var(--acid); border: 1px solid var(--ink); border-radius: 3px; }
+.ruler .bar b { font: 650 12px/1 var(--f-mono); }
+.ruler .bar span { color: var(--muted); font-size: 12px; }
+.radii { display: flex; gap: 12px; margin-top: 16px; }
+.radii figure { flex: 1; text-align: center; }
+.radii i { display: block; height: 46px; border: 1.5px solid var(--ink); background: var(--acid-wash); }
+.radii figcaption { margin-top: 6px; font: 600 11px/1 var(--f-mono); color: var(--muted); }
+
+/* ---------- 组件样例 ---------- */
+.comp-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
+.comp-cell { border: 1px dashed var(--line-strong); border-radius: var(--r-m); padding: 16px; background: var(--dock-1); display: flex; flex-direction: column; gap: 11px; }
+.comp-cell > small { font: 600 11px/1 var(--f-mono); color: var(--muted); letter-spacing: .06em; }
+
+/* ---------- 界面通用控件（即落地样式） ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; font: 680 14px/1 var(--f-label); cursor: pointer; border: 1px solid transparent; transition: all .16s cubic-bezier(.22,1,.36,1); padding: 0 18px; height: 42px; }
+.btn:focus-visible { outline: 3px solid var(--info); outline-offset: 2px; }
+.btn-primary { background: var(--acid); border-color: var(--ink); color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.btn-primary:hover { background: var(--acid-hi); transform: translateY(-1px); box-shadow: 0 3px 0 var(--ink); }
+.btn-primary:active { transform: translateY(1px); box-shadow: 0 0 0 var(--ink); }
+.btn-dark { background: var(--ink); color: var(--paper); }
+.btn-dark:hover { background: var(--ink-2); }
+.btn-ghost { background: transparent; border-color: var(--line-strong); color: var(--ink); }
+.btn-ghost:hover { border-color: var(--ink); }
+.btn-danger-ghost { background: transparent; border-color: #e3b4a3; color: var(--signal-deep); }
+.btn-danger-ghost:hover { background: var(--signal); border-color: var(--signal); color: #fff; }
+.btn-sm { height: 34px; padding: 0 13px; font-size: 13px; border-radius: 8px; }
+
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font: 650 11.5px/1.5 var(--f-label); }
+.badge-link { background: var(--acid-wash); color: var(--acid-deep); border: 1px solid #cfe08a; }
+.badge-recv { background: var(--info-wash); color: #23559e; border: 1px solid #b9cfee; }
+.badge-off { background: var(--signal-wash); color: var(--signal-deep); border: 1px solid #f2c4b2; }
+.badge i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.switch { position: relative; width: 46px; height: 26px; flex: none; border-radius: 999px; border: 1px solid var(--ink); background: var(--acid); cursor: pointer; transition: background .18s; }
+.switch::after { content: ''; position: absolute; top: 2px; left: 24px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: left .18s cubic-bezier(.22,1,.36,1); }
+.switch.off { background: var(--dock-1); }
+.switch.off::after { left: 2px; background: var(--line-strong); }
+
+/* ---------- 桌面端窗口 mockup ---------- */
+.win-frame { border: 1px solid var(--ink); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgb(31 39 28 / 18%), 0 4px 12px rgb(31 39 28 / 8%); background: var(--dock-0); }
+.win-bar { height: 40px; display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: var(--paper); user-select: none; }
+.win-brand { display: flex; align-items: center; gap: 9px; padding: 0 14px; min-width: 0; }
+.win-mark { width: 21px; height: 21px; display: grid; place-items: center; flex: none; border: 1px solid var(--acid); color: var(--acid); font: 800 11px/1 var(--f-display); transform: rotate(-3deg); }
+.win-title { overflow: hidden; color: rgb(251 252 247 / 60%); font: 600 12px/1 var(--f-label); letter-spacing: .13em; text-overflow: ellipsis; white-space: nowrap; }
+.win-ctl { display: flex; height: 100%; }
+.win-ctl span { width: 44px; display: grid; place-items: center; color: rgb(251 252 247 / 70%); font-size: 12px; }
+.win-ctl span:hover { background: rgb(255 255 255 / 9%); color: var(--paper); }
+.win-ctl .x:hover { background: var(--signal); color: #fff; }
+.win-pin { width: 40px; display: grid; place-items: center; color: var(--acid); }
+.win-body { padding: 22px; }
+@media (max-width: 760px) { .win-body { padding: 14px; } }
+
+/* 驾驶舱 */
+.deck { display: grid; grid-template-columns: minmax(0, 1fr) 178px; overflow: hidden; border-radius: var(--r-l); background: var(--ink); color: var(--paper); box-shadow: var(--sh-card); }
+.deck-main { min-width: 0; padding: 20px 24px; display: grid; gap: 16px; align-content: start; }
+.deck-id { display: flex; align-items: center; gap: 15px; min-width: 0; flex-wrap: wrap; }
+.deck-logo { width: 52px; height: 52px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--acid); color: var(--acid); font: 800 25px/1 var(--f-display); transform: rotate(-3deg); }
+.deck-name { min-width: 0; }
+.deck-name small { display: block; margin-bottom: 5px; color: rgb(251 252 247 / 55%); font: 650 12px/1 var(--f-label); letter-spacing: .1em; }
+.deck-name h3 { overflow: hidden; font: 720 22px/1.05 var(--f-display); letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.deck-status { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(215 249 84 / 16%); }
+.deck-status b { font: 700 15px/1 var(--f-display); color: var(--acid); }
+.deck-rows { display: grid; gap: 9px; }
+.deck-row { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.deck-label { flex: none; width: 64px; color: rgb(251 252 247 / 48%); font: 600 11px/1 var(--f-label); letter-spacing: .1em; }
+.url-chip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 9px; background: rgb(255 255 255 / 5%); }
+.url-chip code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 12.5px/1 var(--f-mono); color: var(--paper); }
+.url-chip button { flex: none; height: 26px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; background: rgb(255 255 255 / 10%); color: var(--paper); cursor: pointer; font: 650 11px/1 var(--f-label); }
+.url-chip button:hover { background: rgb(215 249 84 / 18%); color: var(--acid); }
+.url-chip button.ok { background: var(--acid); color: var(--ink); }
+.pair-chip { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 9px; background: rgb(215 249 84 / 8%); }
+.pair-chip small { color: rgb(251 252 247 / 50%); font: 600 10.5px/1 var(--f-label); letter-spacing: .12em; }
+.pair-chip strong { color: var(--acid); font: 700 17px/1 var(--f-mono); letter-spacing: .18em; }
+.deck-side { border-left: 1px solid rgb(255 255 255 / 10%); padding: 18px; display: grid; align-content: center; justify-items: center; gap: 12px; background: rgb(255 255 255 / 3%); }
+.qr-box { width: 128px; height: 128px; padding: 7px; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.qr-hint { color: rgb(251 252 247 / 55%); font: 600 11px/1.5 var(--f-label); text-align: center; letter-spacing: .05em; }
+.deck-power { display: flex; gap: 10px; }
+@media (max-width: 860px) { .deck { grid-template-columns: 1fr; } .deck-side { border-left: 0; border-top: 1px solid rgb(255 255 255 / 10%); } }
+
+/* 桌面主区 */
+.desk-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; margin-top: 20px; align-items: start; }
+@media (max-width: 1080px) { .desk-grid { grid-template-columns: 1fr; } }
+
+/* 拖放区 */
+.dropzone { position: relative; border: 1.5px dashed var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); padding: 20px 22px; display: flex; align-items: center; gap: 16px; transition: all .18s; }
+.dropzone .dz-ico { width: 52px; height: 52px; flex: none; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 12px; background: var(--acid); font-size: 22px; }
+.dropzone h4 { font: 720 18px/1.1 var(--f-display); letter-spacing: -.01em; }
+.dropzone p { margin: 5px 0 0; color: var(--muted); font-size: 12.5px; }
+.dropzone .btn { margin-left: auto; flex: none; }
+.dz-drag { border-color: var(--acid-deep); background: var(--acid-wash); box-shadow: 0 0 0 4px rgb(215 249 84 / 25%); }
+.dz-drag .dz-ico { transform: scale(1.06) rotate(-3deg); }
+
+/* 清单卡 */
+.shelf { margin-top: 14px; border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); box-shadow: var(--sh-card); overflow: hidden; }
+.shelf-head { display: flex; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.shelf-head h4 { font: 720 18px/1 var(--f-display); }
+.shelf-head .count { color: var(--muted); font-size: 12.5px; }
+.shelf-head .acts { margin-left: auto; display: flex; gap: 8px; }
+.shelf-cols { display: grid; grid-template-columns: minmax(0, 1.6fr) 84px 120px 92px 128px; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font: 600 11px/1 var(--f-label); letter-spacing: .08em; }
+.shelf-cols :last-child { text-align: right; }
+.file-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 84px 120px 92px 128px; gap: 14px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--line); transition: background .14s; }
+.file-row:last-child { border-bottom: 0; }
+.file-row:hover { background: rgb(215 249 84 / 12%); }
+.f-name { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.f-glyph { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 9px; font: 700 10px/1 var(--f-mono); }
+.g-zip { background: var(--acid-wash); color: var(--acid-deep); border: 1px solid #cfe08a; }
+.g-img { background: var(--info-wash); color: #23559e; border: 1px solid #b9cfee; }
+.g-doc { background: #f1eee4; color: #6d6a54; border: 1px solid var(--line-strong); }
+.g-vid { background: var(--signal-wash); color: var(--signal-deep); border: 1px solid #f2c4b2; }
+.f-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+.f-name small { display: block; color: var(--muted); font-size: 11px; }
+.f-size, .f-date { font: 550 12px/1 var(--f-mono); color: var(--ink-2); }
+.f-acts { display: flex; gap: 6px; justify-content: flex-end; }
+.icon-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 8px; background: transparent; cursor: pointer; color: var(--ink-2); font-size: 13px; transition: all .14s; }
+.icon-btn:hover { border-color: var(--ink); background: var(--ink); color: var(--acid); }
+.icon-btn.del:hover { background: var(--signal); border-color: var(--signal); color: #fff; }
+@media (max-width: 860px) { .shelf-cols, .file-row { grid-template-columns: minmax(0, 1.6fr) 84px 128px; } .f-date, .c-date { display: none; } }
+
+/* 侧栏 */
+.side { display: grid; gap: 14px; }
+.side-card { border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); box-shadow: var(--sh-card); padding: 17px 18px; }
+.side-card h5 { display: flex; align-items: center; gap: 8px; font: 720 15px/1 var(--f-display); margin-bottom: 4px; }
+.side-card .hint { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+.path-box { padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: #fff; font: 550 12px/1.4 var(--f-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-dl { margin-top: 12px; border-top: 1px dashed var(--line-strong); }
+.side-dl div { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.side-dl dt { color: var(--muted); }
+.side-dl dd { font: 650 12px/1.4 var(--f-mono); }
+.safe-note { display: flex; gap: 9px; padding: 11px 12px; border-radius: 9px; background: var(--acid-wash); color: #3c4d10; font-size: 12px; line-height: 1.55; }
+
+/* 状态栏与通知条 */
+.win-foot { display: flex; align-items: center; gap: 18px; margin-top: 20px; padding: 12px 4px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font: 600 11.5px/1 var(--f-label); letter-spacing: .08em; flex-wrap: wrap; }
+.win-foot .sp { margin-left: auto; }
+.update-strip { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 10px 14px; border: 1px solid #cfe08a; border-radius: 10px; background: var(--acid-wash); font-size: 13px; }
+.update-strip b { margin-right: auto; }
+.update-strip .btn { height: 30px; font-size: 12px; }
+
+/* ---------- 手机 mockup ---------- */
+.phone-wrap { display: flex; gap: 34px; flex-wrap: wrap; justify-content: center; }
+.phone { width: 330px; flex: none; border: 1px solid var(--ink); border-radius: 34px; padding: 12px; background: var(--ink); box-shadow: 0 24px 60px rgb(31 39 28 / 22%); }
+.screen { border-radius: 24px; overflow: hidden; background: var(--dock-0); min-height: 640px; display: flex; flex-direction: column; }
+.phone-cap { margin-top: 14px; text-align: center; color: var(--muted); font: 600 12px/1.5 var(--f-label); letter-spacing: .06em; }
+.gate { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 34px 26px; text-align: center; }
+.gate-logo { width: 74px; height: 74px; display: grid; place-items: center; border: 2px solid var(--acid); color: var(--acid); font: 800 34px/1 var(--f-display); border-radius: 50% 50% 12px; transform: rotate(45deg); background: var(--ink); }
+.gate-logo span { transform: rotate(-45deg); }
+.gate h3 { font: 720 22px/1.2 var(--f-display); }
+.gate h3 em { font-style: normal; white-space: nowrap; color: var(--acid-deep); background: var(--acid-wash); padding: 0 6px; }
+.gate p { color: var(--muted); font-size: 13px; }
+.otp { display: flex; gap: 9px; }
+.otp i { width: 44px; height: 56px; display: grid; place-items: center; border: 1.5px solid var(--line-strong); border-radius: 12px; background: #fff; font: 700 25px/1 var(--f-mono); font-style: normal; }
+.otp i.fill { border-color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.otp i.cursor { border-color: var(--info); box-shadow: 0 0 0 3px rgb(47 111 211 / 18%); }
+.otp i.cursor::after { content: ''; width: 2px; height: 26px; background: var(--info); animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.gate .btn { width: 100%; height: 48px; font-size: 15px; }
+.gate .alt { color: var(--muted); font-size: 12px; }
+.gate .alt a { color: var(--info); font-weight: 600; white-space: nowrap; }
+
+.wtop { display: flex; align-items: center; gap: 10px; padding: 15px 17px 13px; border-bottom: 1px solid var(--line); background: var(--dock-1); }
+.wtop .m { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--ink); color: var(--ink); font: 800 12px/1 var(--f-display); transform: rotate(-3deg); background: var(--acid); }
+.wtop b { font: 720 15px/1 var(--f-display); }
+.wtop .on { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 650 11px/1 var(--f-label); color: var(--ok); }
+.wtop .on i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.wmain { flex: 1; padding: 15px 15px 20px; display: flex; flex-direction: column; gap: 13px; overflow: hidden; }
+.stat-line { display: flex; gap: 8px; }
+.stat-line span { flex: 1; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--dock-1); }
+.stat-line small { display: block; color: var(--muted); font-size: 10.5px; }
+.stat-line b { font: 700 14px/1.3 var(--f-display); }
+.m-drop { border: 1.5px dashed var(--line-strong); border-radius: 14px; background: var(--dock-1); padding: 17px 14px; text-align: center; }
+.m-drop b { display: block; font: 720 15px/1.2 var(--f-display); }
+.m-drop small { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
+.m-drop .btn { margin-top: 11px; }
+.up-card { border: 1px solid var(--line-strong); border-radius: 13px; background: var(--dock-1); padding: 13px 14px; }
+.up-head { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.up-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.up-head small { color: var(--muted); font: 550 11px/1 var(--f-mono); }
+.up-bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.up-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--acid), var(--acid-hi)); }
+.up-meta { display: flex; justify-content: space-between; margin-top: 7px; font: 550 11px/1 var(--f-mono); color: var(--muted); }
+.up-meta .spd { color: var(--acid-deep); font-weight: 650; }
+.up-done { display: flex; align-items: center; gap: 7px; color: var(--ok); font: 650 12px/1 var(--f-label); }
+.pod-head { display: flex; align-items: center; gap: 9px; margin: 4px 0 -3px; }
+.pod-head h4 { font: 720 15px/1 var(--f-display); }
+.pod-head small { margin-left: auto; color: var(--muted); font-size: 11px; }
+.pod-row { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--dock-1); }
+.pod-row .f-glyph { width: 32px; height: 32px; }
+.pod-row .t { flex: 1; min-width: 0; }
+.pod-row .t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; }
+.pod-row .t small { color: var(--muted); font-size: 10.5px; }
+.pod-row .icon-btn { flex: none; }
+</style>
+</head>
+<body data-page-node-id="x9t7cDFo1zcVb5RdOvQ0ib">
+
+<!-- ═══════════ 展板头部 ═══════════ -->
+<header class="board-top" data-page-node-id="pWgF1IvT2Uf82zeDz9h3SY">
+  <p class="board-meta" data-page-node-id="Sh5eIO4pQMgGURUpYOFBz7">
+    <span data-page-node-id="88ABrpFLqmZNh4nWjcS1ac">方案编号 <b data-page-node-id="YWfKqu2LzesMViDkCNzHUV">PB-UI-01</b></span>
+    <span data-page-node-id="gh1icLFfzqcol0GOMLKEMy">适用 <b data-page-node-id="WdGW6ilaYPjLZgIbXNZ1LV">桌面端 (Tauri 2) + 浏览器发送页</b></span>
+    <span data-page-node-id="LkAE4TrGAYKZXm6QzOb7Gt">日期 <b data-page-node-id="vRGghfQvBGPgJTPWvg8XrH">2026-09-11</b></span>
+    <span data-page-node-id="lqOOxEnG1jDYYpWFowwXi4">状态 <b data-page-node-id="YEIBzdz71GRKESiid4xIxx">提案 · 待评审</b></span>
+  </p>
+  <h1 class="board-title" data-page-node-id="YEr4Xr9ICGfirt2ih5cdUn">PacketBoat <em data-page-node-id="qH0WGmCgv8cHylbOgiWhFf">晴空码头</em> 界面设计方案</h1>
+  <p class="board-sub" data-page-node-id="bXJgJXBBdYVcV53hsm7Yaf">
+    设计上下文：主机端使用者是 <b data-page-node-id="Ts3MlzUriPNzPK6ZCpg3GN">Windows 桌面用户</b>，核心任务是「启动服务 → 让手机连上 → 管理共享」；
+    发送端是<b data-page-node-id="peX2JLrW7JdFxD3FzjDXwJ">局域网内任何浏览器用户</b>（多为手机），核心任务是「输码 → 传文件 → 取文件」。
+    品牌人格延续现有的「局域网投递站」：直给、可靠、不经云端。方案在保留品牌基因（深海墨 × 航速绿 × Bahnschrift）
+    的前提下重组信息架构——<b data-page-node-id="Vusi3GQRh9omO2drNrK5EX">把连接所需的一切收进一张「驾驶舱」卡片</b>，其余界面做减法。
+  </p>
+  <nav class="board-tabs" role="tablist" aria-label="方案视图切换" data-page-node-id="3Pw0DzAkWtTKHFaEcvLBlI">
+    <button class="on" data-view="tokens" role="tab" aria-selected="true" data-page-node-id="4ixB9eURCPstFEHZEHxiRz">① 设计系统</button>
+    <button data-view="desktop" role="tab" aria-selected="false" data-page-node-id="DUK3VDsVakymZLEfezE0Uc">② 桌面端界面</button>
+    <button data-view="web" role="tab" aria-selected="false" data-page-node-id="jn8eonwCEYLqhHghaNa3SG">③ 浏览器发送页</button>
+    <button data-view="why" role="tab" aria-selected="false" data-page-node-id="38qD6gzIGlxwjPoTeIfhcB">④ 变更说明</button>
+  </nav>
+</header>
+
+<main data-page-node-id="Xbr2bQSGE82wr53lyRWgGy">
+<!-- ═══════════ ① 设计系统 ═══════════ -->
+<section class="sec on" id="sec-tokens" data-page-node-id="xvqyYFz0g80ACJHWGLVT80">
+  <div class="sec-head" data-page-node-id="kulQjsFf1xYe3WKzuk8Cr7"><span class="no" data-page-node-id="7jjDF0hIGCDU1mdIPEn52x">01</span><h2 data-page-node-id="sBhQWPtAiGqBXOtT4ByulI">设计系统 ·晴空码头 Clear Harbor</h2></div>
+  <p class="sec-lead" data-page-node-id="ccE5x2aKr723YixikAXgIO">
+    延续现有品牌资产（深海墨、航速绿、Bahnschrift），做三件事：<b data-page-node-id="WHLojBCX6FC5xN2FchGT71">提亮底色</b>（米黄 → 清爽船坞白）、
+    <b data-page-node-id="uZqE0MsuuDvRBgKWQ1ffRe">收窄强调色的使用范围</b>（航速绿只给「行动与状态」，不再大面积铺底）、<b data-page-node-id="suq8aN9QIWMhHaGV2ucWGB">补全语义色</b>（信息蓝 / 成功绿 / 危险橙各就各位）。
+    所有正文对比度 ≥ 4.5:1（WCAG AA），所有交互元素焦点环 3px。
+  </p>
+
+  <div class="sec-head" style="margin-top:26px" data-page-node-id="z9vRfRLrRjZyeDEI5TTsHg"><span class="no" data-page-node-id="wuXmZRgBKAKAHedQVqdI1p">01.1</span><h2 data-page-node-id="I0DzvSZs3T8ZnDShDR7X0R">色彩</h2></div>
+  <div class="swatch-grid" data-page-node-id="uCRqduX6OSd0czQWiH6prh">
+    <div class="swatch" data-page-node-id="YBx4R9de69ZkLQep0CUZYE"><div class="chip" style="background:#1f271c" data-contrast="on paper 13.9:1" data-page-node-id="R2nE7Y0GYQ0HCdmrB0agQ5"></div><dl data-page-node-id="OTIwC47i6oqD7MM4TYFAvh"><dt data-page-node-id="ftVGp7xVf8Wo9RvALFsr5H">深海墨 Ink</dt><dd data-page-node-id="xXxewxHnxHT5qf2wLFwvA1">#1F271C · 主文字 / 深色块</dd></dl></div>
+    <div class="swatch" data-page-node-id="nKtpQFPFfvg2z9QcHhR12W"><div class="chip" style="background:#d7f954" data-contrast="ink on top 12.1:1" data-page-node-id="O40rCbQ7vblsX7VBuTuB8A"></div><dl data-page-node-id="IQjCTT2zDINsqzYxObI56s"><dt data-page-node-id="hxC3ThP5iV8JChARw2Hc3I">航速绿 Acid</dt><dd data-page-node-id="FgjQ5FFLFTWhQR42Yosn5a">#D7F954 · 主行动 / 在线状态</dd></dl></div>
+    <div class="swatch" data-page-node-id="s0CH6VMDQyCEGBcPVA9FeF"><div class="chip" style="background:#5c7a12" data-contrast="on wash 5.4:1" data-page-node-id="FNDytCeaaOKCcswRQBJutP"></div><dl data-page-node-id="aVmI6TBkljBhKITFyFioqH"><dt data-page-node-id="whSGTzi4MAutwf7C3LxoaF">航速绿·深</dt><dd data-page-node-id="bO1nRUGojBdo0UvH8dlrtA">#5C7A12 · 浅底上的绿字</dd></dl></div>
+    <div class="swatch" data-page-node-id="rzY7zJd89R7ZnMrxJA8QJo"><div class="chip" style="background:#eef9c8" data-page-node-id="DBYW1FUAhb5Vwt9lgK569N"></div><dl data-page-node-id="VBBdx6VN5Cn1kzE5EGXfAy"><dt data-page-node-id="xe8fDSI5e3X0ShqPiMMJNF">航速绿·洗</dt><dd data-page-node-id="m8ICzUM8ytLqdhAvM6LdjF">#EEF9C8 · 选中 / 提示底</dd></dl></div>
+    <div class="swatch" data-page-node-id="3f3eZHKtIEPhbsCffb5g8K"><div class="chip" style="background:#ef5a32" data-contrast="white text 3.4:1*" data-page-node-id="F9A2TWJxrcaScZgGL2MEov"></div><dl data-page-node-id="DIbVVKn9INIfFm0WxCjm3G"><dt data-page-node-id="s95I2HarP03oKagapOZakV">信号橙 Signal</dt><dd data-page-node-id="afZvpVNRxy1jxclIMum6tD">#EF5A32 · 危险 / 删除（图标级）</dd></dl></div>
+    <div class="swatch" data-page-node-id="MwKAHKJcY4UcOG1kJgCHQa"><div class="chip" style="background:#b23a1c" data-contrast="on wash 5.1:1" data-page-node-id="qvAWEkO19DZhvQsvb6oHfg"></div><dl data-page-node-id="uFmtwk5BnHLMeGymvFS3Al"><dt data-page-node-id="GlZFCecpqIzDkipd1I7Ptc">信号橙·深</dt><dd data-page-node-id="eZHHGMKwBucmUl3LFdbTCq">#B23A1C · 危险文字级</dd></dl></div>
+    <div class="swatch" data-page-node-id="j5dHyfVvWaBTUE4Gu88abc"><div class="chip" style="background:#2f6fd3" data-contrast="on white 4.9:1" data-page-node-id="lOMCWbx5MrCD4bUCJjo2Ut"></div><dl data-page-node-id="hUXbsOvX6iBKM2Xm5IDIFN"><dt data-page-node-id="CghZDNaEzWsZCIzBrvq3PO">信息蓝 Info</dt><dd data-page-node-id="2ne0rLqqsAuVUAcO2ezQQZ">#2F6FD3 · 链接 / 远程接收</dd></dl></div>
+    <div class="swatch" data-page-node-id="3peyHD6bIq9uwdt7X5bhuE"><div class="chip" style="background:#35874a" data-contrast="on white 4.6:1" data-page-node-id="IGjkzsYXFFyzIARFaKTY3i"></div><dl data-page-node-id="PVRGRPDxPGnw90Vy8oYdro"><dt data-page-node-id="jCHZjvp3XGhoGFHDdQcDrB">成功绿 OK</dt><dd data-page-node-id="V1bKdbqpGhnyODNPLKzFUD">#35874A · 完成 / 在线文字</dd></dl></div>
+    <div class="swatch" data-page-node-id="IxE8yzqyA2CEBt5SzXUmkY"><div class="chip" style="background:#f2f4ec; border-bottom:1px solid #dfe2d2" data-page-node-id="8p74YZuJu2hwBryAwuIZRq"></div><dl data-page-node-id="MhF1R8Bpao1jgODiWouI9J"><dt data-page-node-id="b1v4MO7kLo2rn1w9YoY6Ph">船坞白 Dock</dt><dd data-page-node-id="tg6y6t4T1Ickr0IfkEqvSr">#F2F4EC · 页面底色</dd></dl></div>
+    <div class="swatch" data-page-node-id="oSklyatzDB3X1N3vsaeFJm"><div class="chip" style="background:#fbfcf7; border-bottom:1px solid #dfe2d2" data-page-node-id="b66nGjYMZOk046JU0h3qeT"></div><dl data-page-node-id="FUOICAkIIYfydKkPijt5KG"><dt data-page-node-id="pKD0Cc3K3LZPlyZrhZVYCE">舱面白 Deck</dt><dd data-page-node-id="XYZFukM7WsOnrSmgJfmw3M">#FBFCF7 · 卡片 / 面板</dd></dl></div>
+    <div class="swatch" data-page-node-id="JqplyM91ddh0NIbUdJu5An"><div class="chip" style="background:#646c57" data-contrast="on deck 4.9:1" data-page-node-id="OXv3WVw3ed4s5FiR0EQvjF"></div><dl data-page-node-id="s0gwnNUpD134eS9yuLoRl7"><dt data-page-node-id="k7M8nDL9vxmaYuHoZtEOSu">雾灰 Muted</dt><dd data-page-node-id="uHPe4q704tnDrqz5XGB1vi">#646C57 · 次级文字</dd></dl></div>
+    <div class="swatch" data-page-node-id="wASjkokWWdA3xuVGVwhkBn"><div class="chip" style="background:#b9bfa6" data-page-node-id="xHnfFDWR11oL5Z2Nhc0xIG"></div><dl data-page-node-id="0kQQJGIOv9ca1g6liY3oko"><dt data-page-node-id="CeblrRYUEU95VnRA3CDYba">缆绳灰 Line</dt><dd data-page-node-id="AxLA94iDVs4DvwpL7VBkHH">#B9BFA6 · 描边 / 分隔</dd></dl></div>
+  </div>
+
+  <div class="sys-grid" data-page-node-id="R6TU72E4kYeRzkR70AUG4o">
+    <div class="panel panel-pad" data-page-node-id="YJweBNCusdwB7KKbUJSX7b">
+      <h4 data-page-node-id="tqIjeCZLGjuSZgOlMpVi5S">字体系统</h4>
+      <p class="cap" data-page-node-id="CVlFYJAlc6cg3FP1t0IQqO">全部使用 Windows 自带字体，零加载成本：Bahnschrift（工业展示）、Microsoft YaHei UI（中文正文）、Cascadia Mono（数字 / 地址 / 配对码）。</p>
+      <div class="type-row" data-page-node-id="eUpoqtwgUn7jCX3y2FQnVk"><span class="tag" data-page-node-id="PgYmEbWh5p58IWjC5REj6K">display / 34px 720</span><span style="font:720 34px/1 var(--f-display); letter-spacing:-.01em" data-page-node-id="35LLzw54N6eSUTDolZYANG">局域网投递站</span></div>
+      <div class="type-row" data-page-node-id="VbzCYrGWUKmXSFSSGEm1H9"><span class="tag" data-page-node-id="6dgCFSFSXAhmwIDzPEoLTm">title / 22px 720</span><span style="font:720 22px/1 var(--f-display)" data-page-node-id="XDgp7KTaT6pPADmt5yejWR">共享文件 · 12 项</span></div>
+      <div class="type-row" data-page-node-id="Fvvzo07KGDKTV2Fj31MB9P"><span class="tag" data-page-node-id="JFBdijyjSgVmFzaz0vCNl5">body / 15px 400</span><span style="font-size:15px" data-page-node-id="CpLh5hDq05n2R0ekvLfJ9t">仅保存原始路径，不复制也不移动源文件。</span></div>
+      <div class="type-row" data-page-node-id="yBXyHyOQ9y7OfP7P4CGFnB"><span class="tag" data-page-node-id="tMaIUv4x32Ah1KCGM3NLGA">label / 13px 650</span><span style="font:650 13px/1 var(--f-label); letter-spacing:.08em" data-page-node-id="J0IPHWRJ3wZxUpMaFrY9hT">一 键 清 空 · 启 动 服 务</span></div>
+      <div class="type-row" data-page-node-id="BiE3HpTQ0CrWT9FGtzQTno"><span class="tag" data-page-node-id="VrXIEUJBDSJ5Q2rGEJQQGL">mono / 14px 700</span><span style="font:700 14px/1 var(--f-mono); letter-spacing:.18em; color:var(--acid-deep)" data-page-node-id="08XjZVM5t8YXjBujEkAYIR">4 8 2 6 1 7</span></div>
+      <div class="type-row" data-page-node-id="xZnyYJFgXR5c0INb9wIRgY"><span class="tag" data-page-node-id="db3E5jueF29ld0Dgebp15P">mono / 13px 550</span><span style="font:550 13px/1 var(--f-mono)" data-page-node-id="YYTBe2hsOTcHHrCN97FfOh">http://192.168.1.24:9876</span></div>
+    </div>
+    <div class="panel panel-pad" data-page-node-id="TB7DmFQ9RgUOa1w1k51BPf">
+      <h4 data-page-node-id="TkT87dUD7g5wB9up43kZ5r">间距与圆角</h4>
+      <p class="cap" data-page-node-id="iOcFgy1rgB6W1LpezZG7Vb">4px 基数网格；卡片圆角 16px 是整套界面的性格线。</p>
+      <div class="ruler" data-page-node-id="oSET4IZchCIFqVj7PNrsln">
+        <div class="bar" data-page-node-id="lBuWYnZFxgL9JPTMUAySUL"><i style="width:4px" data-page-node-id="HeerbgMxTfcdEqXnNerTNB"></i><b data-page-node-id="5SCqXu5cBsmhzwEEWD2EbO">4</b><span data-page-node-id="wziaTLHEHWuHapfg5rOCiB">图标与文字缝隙</span></div>
+        <div class="bar" data-page-node-id="PYgHrwDizo4U8zif645a3U"><i style="width:12px" data-page-node-id="U5dzZQvqy9e7u0ennN0vQz"></i><b data-page-node-id="xKFTpn5Szu6CUOefVEspAE">12</b><span data-page-node-id="bVWK93PP4DlOqWy3WPKvV3">列表行内距</span></div>
+        <div class="bar" data-page-node-id="MP7dp82w57MpBAuCMpbLmt"><i style="width:20px" data-page-node-id="8gWoJrCq3ZZ6wLXW0c1dS8"></i><b data-page-node-id="WCuTiBwx5OrhA0R9ZNYcQz">20</b><span data-page-node-id="Yb5TDzxb7BdHcEf5USPoBm">卡片内距（紧凑）</span></div>
+        <div class="bar" data-page-node-id="cbCzPAT5yAWxEsD4kjt9e0"><i style="width:28px" data-page-node-id="FUP1xPNJwAHjlKZDjh4hQT"></i><b data-page-node-id="iMBLaAesQTmJHVSoWHpF3t">28</b><span data-page-node-id="stUv1hEpZVCCG4QDT8iEsn">卡片内距（标准）</span></div>
+        <div class="bar" data-page-node-id="VSz82YfXwx3HR6EPhc9Uoo"><i style="width:44px" data-page-node-id="QwOWfHTh7Zas7EMU8AgDCZ"></i><b data-page-node-id="4VRRl0ioX9D5Oez3c6WuoB">44</b><span data-page-node-id="EXykv09KEk4fTHhuVPUwia">区块间距</span></div>
+      </div>
+      <div class="radii" data-page-node-id="FtlB7hnbx4L1LMMF5bWJFz">
+        <figure data-page-node-id="IpiN8xvdeSm9wwfPUFqREi"><i style="border-radius:8px" data-page-node-id="FFkUZaxRBFwQaUXuMFrGsr"></i><figcaption data-page-node-id="V0i5JldouHyUP5txQTHFRG">8 控件</figcaption></figure>
+        <figure data-page-node-id="dn2ORJMuBKXwQmxVTZEAKZ"><i style="border-radius:12px" data-page-node-id="tFBt6VucT1BNzq6Vi4Fhm1"></i><figcaption data-page-node-id="7HGz0c8x4nPxvQM9HYveOZ">12 浮层</figcaption></figure>
+        <figure data-page-node-id="cCvAbt81IBzubuf1gu0lDA"><i style="border-radius:16px" data-page-node-id="fDptJzYJiFzFvdbGC89Rhp"></i><figcaption data-page-node-id="vsyEDmA4yNzNb7g67NSKb2">16 卡片</figcaption></figure>
+        <figure data-page-node-id="JvAyjWIbdM76FPBcsOgEw5"><i style="border-radius:20px" data-page-node-id="gWgOGRMYgrryxyHYA1AP4Y"></i><figcaption data-page-node-id="Nn5lm2cG8XQerowCFHWsQt">20 驾驶舱</figcaption></figure>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-head" style="margin-top:26px" data-page-node-id="PEBV9q2LmfnYVC32B2HghW"><span class="no" data-page-node-id="W42PYA8dBX7eSVFjGsIWHg">01.2</span><h2 data-page-node-id="PNy7WEimBg0pBx6kLea6ef">核心组件</h2></div>
+  <div class="comp-row" data-page-node-id="MyXnpqVIg9DvX9GV6E0LdL">
+    <div class="comp-cell" data-page-node-id="MIeOyMvvNRpeoXjYSGRAqR">
+      <small data-page-node-id="8jabUHGWkTE2xKEYUcrXae">BUTTON / 主行动</small>
+      <button class="btn btn-primary" data-page-node-id="eQAjs3F5Uac9DbZ8Hh1TLr">▶ 启动服务</button>
+      <button class="btn btn-primary" style="opacity:.55; cursor:wait" data-page-node-id="8TDtOUhMvH9fSYH34FD45V">⟳ 正在切换…</button>
+    </div>
+    <div class="comp-cell" data-page-node-id="na5GqQ0yavcN9H1VDsAgZ3">
+      <small data-page-node-id="Mi75FPTTDnElIz6WG4K2va">BUTTON / 次级与危险</small>
+      <div style="display:flex; gap:8px; flex-wrap:wrap" data-page-node-id="9LvQWggoXuq69K4lEpozZ9">
+        <button class="btn btn-ghost btn-sm" data-page-node-id="OSgDWcx6ABEgOxK1Cza2Ui">更改目录</button>
+        <button class="btn btn-dark btn-sm" data-page-node-id="PWAyT5Grrppgw3T4itcrN4">选择文件</button>
+        <button class="btn btn-danger-ghost btn-sm" data-page-node-id="2aQpE08G3eCVQFtuaFvJ70">清空清单</button>
+      </div>
+    </div>
+    <div class="comp-cell" data-page-node-id="bPoZ0AymQ5aY6I9SKs3Wz8">
+      <small data-page-node-id="LnBQZR6o17WMl5hqIgeAGA">BADGE / 来源标记</small>
+      <div style="display:flex; gap:8px; flex-wrap:wrap" data-page-node-id="Z3yLHHFtDP5qQMxFJs9TAQ">
+        <span class="badge badge-link" data-page-node-id="rfxZYSSYFl2SOrSYv8sGZ4"><i data-page-node-id="5QDR3yzG8Bqhj1lTuwwMYL"></i>原位共享</span>
+        <span class="badge badge-recv" data-page-node-id="NMgy6DBmoNR6StIWxDmG97"><i data-page-node-id="GXGe0An0rmc9JJQDDmHi2Q"></i>远程接收</span>
+        <span class="badge badge-off" data-page-node-id="Y3YyPV6I7fVLVVylWk11VA"><i data-page-node-id="fGglwwRdSy9ZVZh6QPRnTD"></i>文件缺失</span>
+      </div>
+    </div>
+    <div class="comp-cell" data-page-node-id="Mrha2aHvy0nxEAvhA99NF8">
+      <small data-page-node-id="byo2rOh8SVjNcGmW8PR9rZ">SWITCH / 开关</small>
+      <div style="display:flex; gap:14px; align-items:center" data-page-node-id="ezAoSSvd501LvJC8GsBWeR">
+        <span class="switch" role="switch" aria-checked="true" tabindex="0" data-page-node-id="xYm69gisqqhGI7AZTrQA1m"></span>
+        <span class="switch off" role="switch" aria-checked="false" tabindex="0" data-page-node-id="wzEvzYRZ9qsFDhkLo1yZof"></span>
+        <span style="color:var(--muted); font-size:12px" data-page-node-id="9J6BLdd82x4r8hmU7z2wXZ">点击可切换</span>
+      </div>
+    </div>
+    <div class="comp-cell" style="flex:1; min-width:220px" data-page-node-id="KONIjziS46vtezAtKDr6sL">
+      <small data-page-node-id="fRDFJCIfwTGHXCs28OLDGG">FOCUS / 焦点环</small>
+      <button class="btn btn-ghost" style="outline:3px solid var(--info); outline-offset:2px" data-page-node-id="BkW6pkBSYoudNwIw1SVR2x">键盘导航中</button>
+      <p style="color:var(--muted); font-size:12px" data-page-node-id="SWOzhXI0O7vKbNd7ym7yMy">所有可交互元素 Tab 可达，焦点环统一信息蓝。</p>
+    </div>
+  </div>
+</section>
+<!-- ═══════════ ② 桌面端界面 ═══════════ -->
+<section class="sec" id="sec-desktop">
+  <div class="sec-head"><span class="no">02</span><h2>桌面端 · 主界面（服务运行中）</h2></div>
+  <p class="sec-lead">
+    最大变化：<b>连接信息整合</b>。旧版的服务开关、访问地址、配对码、二维码分散在三处（顶部黑条 / 右侧栏 / 设置卡），
+    新版全部收进一张「驾驶舱」——开机、复制地址、看码、扫码，视线不需要离开这一张卡。
+    下方主体只有两件事：<b>拖文件进来共享</b> 与 <b>接收设置</b>。拖动下方虚线区可预览拖入反馈。
+  </p>
+
+  <div class="win-frame" aria-label="桌面端界面设计稿">
+    <div class="win-bar">
+      <div class="win-brand"><span class="win-mark">L</span><span class="win-title">PacketBoat · 局域网投递站</span></div>
+      <div class="win-ctl"><span class="win-pin" title="窗口置顶（激活）">▮</span><span>—</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+    <div class="win-body">
+
+      <!-- 驾驶舱 -->
+      <div class="deck" style="border-radius:20px">
+        <div class="deck-main">
+          <div class="deck-id">
+            <div class="deck-logo">L</div>
+            <div class="deck-name">
+              <small>PACKETBOAT DESKTOP · v0.1.0</small>
+              <h3>DESKTOP-7F2K · 严过关的工作站</h3>
+            </div>
+            <div class="deck-status"><span class="dot"></span><b>服务运行中</b></div>
+          </div>
+          <div class="deck-rows">
+            <div class="deck-row">
+              <span class="deck-label">访问地址</span>
+              <div class="url-chip">
+                <code>http://192.168.1.24:9876</code>
+                <button id="copy-demo" type="button">复制</button>
+                <button type="button" title="用默认浏览器打开">↗</button>
+              </div>
+            </div>
+            <div class="deck-row">
+              <span class="deck-label">备用地址</span>
+              <div class="url-chip" style="opacity:.82">
+                <code>http://10.0.0.5:9876 · 虚拟网卡</code>
+                <button type="button" title="切换地址">切换 ▾</button>
+              </div>
+            </div>
+            <div class="deck-row">
+              <span class="deck-label">配对码</span>
+              <div class="pair-chip"><small>六位码</small><strong>482 617</strong></div>
+              <span style="color:rgb(251 252 247/45%); font-size:11.5px">10 分钟内有效 · 输错 5 次锁定</span>
+            </div>
+          </div>
+          <div class="deck-power">
+            <button class="btn" style="background:var(--signal); color:#fff; height:40px">■ 停止服务</button>
+            <span style="align-self:center; color:rgb(251 252 247/45%); font-size:12px">关闭窗口会最小化到托盘，服务保持运行</span>
+          </div>
+        </div>
+        <div class="deck-side">
+          <!-- 伪二维码示意 -->
+          <div class="qr-box">
+            <svg viewBox="0 0 25 25" width="114" height="114" role="img" aria-label="访问地址二维码示意">
+              <rect width="25" height="25" fill="#fff"/>
+              <g fill="#1f271c">
+                <rect x="1" y="1" width="7" height="7"/><rect x="17" y="1" width="7" height="7"/><rect x="1" y="17" width="7" height="7"/>
+                <rect x="2.5" y="2.5" width="4" height="4" fill="#fff"/><rect x="18.5" y="2.5" width="4" height="4" fill="#fff"/><rect x="2.5" y="18.5" width="4" height="4" fill="#fff"/>
+                <rect x="3.5" y="3.5" width="2" height="2"/><rect x="19.5" y="3.5" width="2" height="2"/><rect x="3.5" y="19.5" width="2" height="2"/>
+                <rect x="10" y="1" width="2" height="2"/><rect x="13" y="2" width="2" height="2"/><rect x="10" y="4" width="2" height="2"/>
+                <rect x="1" y="10" width="2" height="2"/><rect x="4" y="11" width="2" height="2"/><rect x="7" y="10" width="2" height="2"/>
+                <rect x="10" y="9" width="3" height="3"/><rect x="14" y="10" width="2" height="2"/><rect x="17" y="9" width="2" height="2"/>
+                <rect x="20" y="11" width="2" height="2"/><rect x="22" y="9" width="2" height="2"/><rect x="2" y="14" width="2" height="2"/>
+                <rect x="5" y="14" width="3" height="2"/><rect x="10" y="13" width="2" height="2"/><rect x="13" y="14" width="3" height="2"/>
+                <rect x="17" y="13" width="2" height="2"/><rect x="20" y="14" width="2" height="2"/><rect x="23" y="13" width="1" height="2"/>
+                <rect x="10" y="17" width="2" height="2"/><rect x="13" y="18" width="2" height="2"/><rect x="16" y="17" width="2" height="3"/>
+                <rect x="19" y="17" width="2" height="2"/><rect x="22" y="18" width="2" height="2"/><rect x="10" y="21" width="2" height="2"/>
+                <rect x="13" y="21" width="3" height="2"/><rect x="17" y="21" width="2" height="2"/><rect x="20" y="21" width="3" height="2"/>
+              </g>
+            </svg>
+          </div>
+          <p class="qr-hint">手机扫码直连<br>已自动携带配对码</p>
+        </div>
+      </div>
+
+      <!-- 主区 -->
+      <div class="desk-grid">
+        <div>
+          <div class="dropzone dz-drag" id="dz-demo">
+            <div class="dz-ico">⇪</div>
+            <div>
+              <h4>把文件拖到这里，原位共享</h4>
+              <p>（上方为拖入态示意）仅记录原始路径，不复制不移动，文件始终留在磁盘原处。</p>
+            </div>
+            <button class="btn btn-dark btn-sm" type="button">＋ 选择文件</button>
+          </div>
+
+          <div class="shelf">
+            <div class="shelf-head">
+              <h4>共享清单</h4>
+              <span class="count">12 个文件 · 8.4 GB</span>
+              <div class="acts">
+                <button class="btn btn-ghost btn-sm" type="button">⟳ 刷新</button>
+                <button class="btn btn-danger-ghost btn-sm" type="button">🗑 一键清空</button>
+              </div>
+            </div>
+            <div class="shelf-cols" aria-hidden="true">
+              <span>文件名</span><span>大小</span><span class="c-date">修改时间</span><span>来源</span><span>操作</span>
+            </div>
+            <div class="file-row">
+              <div class="f-name"><span class="f-glyph g-zip">ZIP</span><div style="min-width:0"><b>交付物-打包-0911.zip</b><small>D:\Work\交付\0911</small></div></div>
+              <span class="f-size">2.1 GB</span><span class="f-date">09-11 14:32</span>
+              <span class="badge badge-link"><i></i>原位共享</span>
+              <div class="f-acts"><button class="icon-btn" title="在资源管理器中显示" aria-label="在资源管理器中显示">▦</button><button class="icon-btn del" title="取消共享（不删除文件）" aria-label="取消共享">✕</button></div>
+            </div>
+            <div class="file-row">
+              <div class="f-name"><span class="f-glyph g-img">PNG</span><div style="min-width:0"><b>界面评审截图-终版.png</b><small>D:\ScreenShots</small></div></div>
+              <span class="f-size">8.2 MB</span><span class="f-date">09-10 21:05</span>
+              <span class="badge badge-link"><i></i>原位共享</span>
+              <div class="f-acts"><button class="icon-btn" aria-label="在资源管理器中显示">▦</button><button class="icon-btn del" aria-label="取消共享">✕</button></div>
+            </div>
+            <div class="file-row">
+              <div class="f-name"><span class="f-glyph g-vid">MP4</span><div style="min-width:0"><b>发布会回放-剪辑版.mp4</b><small>D:\Video</small></div></div>
+              <span class="f-size">4.6 GB</span><span class="f-date">09-09 10:47</span>
+              <span class="badge badge-link"><i></i>原位共享</span>
+              <div class="f-acts"><button class="icon-btn" aria-label="在资源管理器中显示">▦</button><button class="icon-btn del" aria-label="取消共享">✕</button></div>
+            </div>
+            <div class="file-row">
+              <div class="f-name"><span class="f-glyph g-doc">DOC</span><div style="min-width:0"><b>测试报告-week37.docx</b><small>来自 小米 14 · 昨天 18:22 接收</small></div></div>
+              <span class="f-size">1.3 MB</span><span class="f-date">09-10 18:22</span>
+              <span class="badge badge-recv"><i></i>远程接收</span>
+              <div class="f-acts"><button class="icon-btn" aria-label="在资源管理器中显示">▦</button><button class="icon-btn del" aria-label="取消共享">✕</button></div>
+            </div>
+            <div class="file-row" style="opacity:.72">
+              <div class="f-name"><span class="f-glyph g-doc">XLS</span><div style="min-width:0"><b>6.13明细表.xlsx</b><small>移动硬盘未连接 · 文件缺失</small></div></div>
+              <span class="f-size">486 KB</span><span class="f-date">08-13 09:14</span>
+              <span class="badge badge-off"><i></i>文件缺失</span>
+              <div class="f-acts"><button class="icon-btn" aria-label="在资源管理器中显示">▦</button><button class="icon-btn del" aria-label="取消共享">✕</button></div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="side">
+          <div class="side-card">
+            <h5>⚙ 接收设置</h5>
+            <p class="hint">其他设备上传的文件保存位置</p>
+            <div class="path-box">D:\PacketBoat\Received</div>
+            <div style="display:flex; gap:8px; margin-top:10px">
+              <button class="btn btn-ghost btn-sm" style="flex:1">更改目录</button>
+              <button class="btn btn-ghost btn-sm" title="在资源管理器中打开">▦</button>
+            </div>
+            <dl class="side-dl">
+              <div><dt>单文件上限</dt><dd>10 GB</dd></div>
+              <div><dt>服务端口</dt><dd>9876</dd></div>
+              <div><dt>上传并发</dt><dd>2</dd></div>
+            </dl>
+          </div>
+          <div class="side-card">
+            <h5>🔒 行为约定</h5>
+            <div class="safe-note">✔ 取消共享、清空清单都<b>不会删除磁盘文件</b>，只移除共享记录。数据全程局域网直达，不经任何云端。</div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 更新条（有新版本时） -->
+      <div class="update-strip">
+        <b>↓ 发现新版本 v0.2.0</b>
+        <button class="btn btn-dark btn-sm" type="button">安装并重启</button>
+        <button class="btn btn-ghost btn-sm" type="button">忽略</button>
+      </div>
+
+      <footer class="win-foot">
+        <span>PACKETBOAT DESKTOP / v0.1.0</span>
+        <span>文件通过本机局域网直达 · 无云端中转</span>
+        <span class="sp"></span>
+        <button class="btn btn-ghost btn-sm" style="height:28px; font-size:11.5px" type="button">检查更新</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="sec-head" style="margin-top:30px"><span class="no">02.1</span><h2>空状态与离线态</h2></div>
+  <div class="two-col">
+    <div class="panel panel-pad" style="text-align:center; padding:44px 20px">
+      <div style="width:64px; height:64px; margin:0 auto 14px; display:grid; place-items:center; border:1.5px dashed var(--line-strong); border-radius:16px; font-size:26px; color:var(--muted)">⛵</div>
+      <h4 style="font-size:19px">货架上还没有文件</h4>
+      <p style="color:var(--muted); font-size:13px; margin:8px auto 16px; max-width:340px">把文件拖进上方区域，同一局域网的设备立刻就能看到并下载。也可以点击「选择文件」。</p>
+      <button class="btn btn-primary" type="button">＋ 选择要共享的文件</button>
+    </div>
+    <div class="panel panel-pad">
+      <div class="deck" style="border-radius:14px">
+        <div class="deck-main">
+          <div class="deck-id">
+            <div class="deck-logo" style="border-color:rgb(251 252 247/40%); color:rgb(251 252 247/40%)">L</div>
+            <div class="deck-name">
+              <small>PACKETBOAT DESKTOP · v0.1.0</small>
+              <h3>DESKTOP-7F2K · 严过关的工作站</h3>
+            </div>
+            <div class="deck-status">
+              <span class="dot" style="background:#79826f; box-shadow:0 0 0 4px rgb(255 255 255/8%)"></span>
+              <b style="color:rgb(251 252 247/55%)">服务已停止</b>
+            </div>
+          </div>
+          <p style="color:rgb(251 252 247/45%); font-size:13px">启动服务后，这里会显示访问地址、配对码和二维码。</p>
+          <div class="deck-power">
+            <button class="btn btn-primary" style="height:40px">▶ 启动服务</button>
+          </div>
+        </div>
+      </div>
+      <p style="color:var(--muted); font-size:12.5px; margin-top:12px">停止态：驾驶舱内只保留「启动」一个行动入口，地址 / 配对码 / 二维码全部让位，避免展示无效信息。</p>
+    </div>
+  </div>
+</section>
+<!-- ═══════════ ③ 浏览器发送页 ═══════════ -->
+<section class="sec" id="sec-web">
+  <div class="sec-head"><span class="no">03</span><h2>浏览器发送页 · 三屏流</h2></div>
+  <p class="sec-lead">
+    发送端无安装、纯浏览器。设计原则：<b>每屏只有一个主角</b>——配对屏只有配对码输入；
+    传输屏的进度条是最醒目的元素；文件货架保持单列易点。手机端触控目标全部 ≥ 44px。
+  </p>
+
+  <div class="phone-wrap">
+    <!-- 屏 1：配对门 -->
+    <div>
+      <div class="phone">
+        <div class="screen">
+          <div class="gate">
+            <div class="gate-logo"><span>L</span></div>
+            <h3>连接到 <em>DESKTOP-7F2K</em></h3>
+            <p>输入电脑上显示的六位配对码<br>文件只在当前 Wi-Fi 内流动，不经云端</p>
+            <div class="otp" aria-label="配对码输入">
+              <i class="fill">4</i><i class="fill">8</i><i class="fill">2</i><i class="fill">6</i><i class="cursor"></i><i></i>
+            </div>
+            <button class="btn btn-primary" type="button">进入投递站</button>
+            <p class="alt">连不上？确认手机与电脑在<b style="color:var(--ink)">同一 Wi-Fi</b> · <a href="javascript:void(0)">重新扫描</a></p>
+          </div>
+        </div>
+      </div>
+      <p class="phone-cap">① 配对门 · 大格输入，自动跳格</p>
+    </div>
+
+    <!-- 屏 2：传输中 -->
+    <div>
+      <div class="phone">
+        <div class="screen">
+          <div class="wtop">
+            <span class="m">L</span><b>DESKTOP-7F2K</b>
+            <span class="on"><i></i>已连接</span>
+          </div>
+          <div class="wmain">
+            <div class="stat-line">
+              <span><small>货架上</small><b>12 份文件</b></span>
+              <span><small>占用</small><b>8.4 GB</b></span>
+              <span><small>单件上限</small><b>10 GB</b></span>
+            </div>
+            <div class="m-drop">
+              <b>把文件放上网路</b>
+              <small>点按选择或从其他应用拖入 · 单件 ≤ 10 GB</small>
+              <button class="btn btn-primary btn-sm" type="button">＋ 选择文件</button>
+            </div>
+            <div class="up-card">
+              <div class="up-head"><b>发布会回放-剪辑版.mp4</b><small>4.6 GB</small></div>
+              <div class="up-bar"><i style="width:64%"></i></div>
+              <div class="up-meta"><span class="spd">↑ 42.6 MB/s</span><span>剩余 24 秒</span><span>64%</span></div>
+              <div style="display:flex; gap:8px; margin-top:10px">
+                <button class="btn btn-ghost btn-sm" style="flex:1" type="button">取消</button>
+              </div>
+            </div>
+            <div class="up-card">
+              <div class="up-head"><b>IMG_2043.HEIC</b><small>3.8 MB</small></div>
+              <div class="up-bar"><i style="width:23%"></i></div>
+              <div class="up-meta"><span class="spd">↑ 38.1 MB/s</span><span>剩余 0.1 秒</span><span>23%</span></div>
+              <div style="display:flex; gap:8px; margin-top:10px">
+                <button class="btn btn-ghost btn-sm" style="flex:1" type="button">取消</button>
+              </div>
+            </div>
+            <div class="up-done">✓ IMG_2042.HEIC 已送达</div>
+          </div>
+        </div>
+      </div>
+      <p class="phone-cap">② 传输屏 · 实时速度 + 剩余时间，可取消</p>
+    </div>
+
+    <!-- 屏 3：文件货架 -->
+    <div>
+      <div class="phone">
+        <div class="screen">
+          <div class="wtop">
+            <span class="m">L</span><b>DESKTOP-7F2K</b>
+            <span class="on"><i></i>已连接</span>
+          </div>
+          <div class="wmain">
+            <div class="pod-head"><h4>电脑上的文件</h4><small>12 份 · 8.4 GB</small></div>
+            <div class="pod-row">
+              <span class="f-glyph g-zip">ZIP</span>
+              <div class="t"><b>交付物-打包-0911.zip</b><small>2.1 GB · 今天 14:32</small></div>
+              <button class="icon-btn" style="width:36px; height:36px" title="下载" aria-label="下载">↓</button>
+            </div>
+            <div class="pod-row">
+              <span class="f-glyph g-img">PNG</span>
+              <div class="t"><b>界面评审截图-终版.png</b><small>8.2 MB · 昨天 21:05</small></div>
+              <button class="icon-btn" style="width:36px; height:36px" aria-label="下载">↓</button>
+            </div>
+            <div class="pod-row">
+              <span class="f-glyph g-vid">MP4</span>
+              <div class="t"><b>发布会回放-剪辑版.mp4</b><small>4.6 GB · 09-09</small></div>
+              <button class="icon-btn" style="width:36px; height:36px" aria-label="下载">↓</button>
+            </div>
+            <div class="pod-row">
+              <span class="f-glyph g-doc">DOC</span>
+              <div class="t"><b>测试报告-week37.docx</b><small>1.3 MB · 09-08</small></div>
+              <button class="icon-btn" style="width:36px; height:36px" aria-label="下载">↓</button>
+            </div>
+            <div class="up-done" style="margin-top:2px">✓ 下载完成的通知会出现在这里</div>
+            <button class="btn btn-ghost" style="margin-top:auto" type="button">断开连接</button>
+          </div>
+        </div>
+      </div>
+      <p class="phone-cap">③ 文件货架 · 单列大点击区，SSE 实时刷新</p>
+    </div>
+  </div>
+</section>
+<!-- ═══════════ ④ 变更说明 ═══════════ -->
+<section class="sec" id="sec-why">
+  <div class="sec-head"><span class="no">04</span><h2>关键变更与设计依据</h2></div>
+  <p class="sec-lead">方案不是推倒重来，而是<b>保留品牌、重组信息、补齐短板</b>。以下是相对当前版本的逐项说明。</p>
+
+  <div class="two-col">
+    <div class="panel panel-pad">
+      <h4>① 连接信息整合为「驾驶舱」</h4>
+      <p class="cap">现状：服务开关在页头、二维码在右侧栏、备用地址藏在下拉框，首次连接要来回找。
+      方案：开机 → 复制地址 → 看码 → 扫码在<b>同一张深色卡片</b>内完成；二维码升级为驾驶舱的固定席位。
+      依据：连接是这款产品的「第一次心跳」，值得独占视觉焦点。</p>
+    </div>
+    <div class="panel panel-pad">
+      <h4>② 色彩提亮、强调色收窄</h4>
+      <p class="cap">现状：米黄底偏旧，航速绿既当按钮底又当状态色，语义不清。
+      方案：底色提亮为船坞白；航速绿只用于<b>主行动与在线状态</b>；危险（信号橙）、信息（蓝）、成功（绿）各归其位，
+      并为每色配「文字级深色变体」保证浅底可读（全部 ≥ 4.5:1）。</p>
+    </div>
+    <div class="panel panel-pad">
+      <h4>③ 文件清单信息密度优化</h4>
+      <p class="cap">现状：表格五列等权，路径与状态混排。
+      方案：文件名<b>自带两行</b>（名称 + 路径/接收来源），大小 / 时间用等宽字体右对齐易扫读；
+      来源从纯文字升级为三态徽章（原位共享 / 远程接收 / 文件缺失），一眼可辨。
+      行 hover 使用航速绿 12% 洗色，与品牌一致且不抢内容。</p>
+    </div>
+    <div class="panel panel-pad">
+      <h4>④ 危险操作降噪但不降权</h4>
+      <p class="cap">现状：「一键清空」为描边橙钮常驻，视觉权重偏高。
+      方案：降为「危险描边」小按钮，hover 才填充实色；保留二次确认文案
+      「只移除记录、不删除磁盘文件」并固化为侧栏「行为约定」卡，<b>让用户每次都安心</b>。</p>
+    </div>
+    <div class="panel panel-pad">
+      <h4>⑤ 发送页改为「三屏流」</h4>
+      <p class="cap">现状：配对门、Hero 文案、货架同屏，手机上信息偏多。
+      方案：配对屏去 Hero、只留输入；传输屏以进度为主角（速度 / 剩余时间 / 取消）；
+      货架单列、触控目标 ≥ 44px。文案同步去装饰化（如「当前货架」仅在桌面端保留品牌感）。</p>
+    </div>
+    <div class="panel panel-pad">
+      <h4>⑥ 无障碍与动效基线</h4>
+      <p class="cap">对比度全部达标（正文 ≥ 4.5:1，大字 ≥ 3:1）；焦点环统一 3px 信息蓝；
+      动效统一 <b>ease-out-quart / 150–300ms</b>，并响应 prefers-reduced-motion；
+      状态变化（复制成功、传输完成）同时提供颜色 + 文案 + 图标三重反馈，不单靠颜色传达。</p>
+    </div>
+  </div>
+
+  <div class="sec-head" style="margin-top:26px"><span class="no">04.1</span><h2>落地建议</h2></div>
+  <div class="panel panel-pad">
+    <ol style="margin-left:18px; display:grid; gap:10px; font-size:14px">
+      <li><b>第一步（纯 CSS / 1 个迭代）</b>：把本方案 token 写入 <code style="font:600 12.5px/1.4 var(--f-mono); background:var(--acid-wash); padding:2px 6px; border-radius:5px">main.css</code> 的 <code style="font:600 12.5px/1.4 var(--f-mono); background:var(--acid-wash); padding:2px 6px; border-radius:5px">:root</code>（替换现有变量即可，组件层基本兼容）。</li>
+      <li><b>第二步（组件级）</b>：合并 AccessQrCard 到 DesktopHeader 形成「驾驶舱」；DesktopFileRow 增加徽章与双行文件名。</li>
+      <li><b>第三步（发送页）</b>：PairingGate 改单屏大输入；UploadQueue 增加速度/剩余时间已是现有能力，仅样式迁移。</li>
+      <li><b>风险提示</b>：Bahnschrift 的 SemiCondensed 字重在部分 Windows 版本需回退（方案已含回退链）；深浅两套主题建议后续用 <code style="font:600 12.5px/1.4 var(--f-mono); background:var(--acid-wash); padding:2px 6px; border-radius:5px">light-dark()</code> 扩展，本期先交付浅色。</li>
+    </ol>
+  </div>
+</section>
+</main>
+
+<script>
+// 视图切换
+document.querySelectorAll('.board-tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.board-tabs button').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-selected', 'false'); });
+    btn.classList.add('on'); btn.setAttribute('aria-selected', 'true');
+    document.querySelectorAll('.sec').forEach(s => s.classList.remove('on'));
+    document.getElementById('sec-' + btn.dataset.view).classList.add('on');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+});
+// 驾驶舱复制按钮演示
+const copyBtn = document.getElementById('copy-demo');
+if (copyBtn) copyBtn.addEventListener('click', () => {
+  copyBtn.classList.add('ok'); copyBtn.textContent = '已复制 ✓';
+  setTimeout(() => { copyBtn.classList.remove('ok'); copyBtn.textContent = '复制'; }, 1600);
+});
+// 拖放区演示
+const dz = document.getElementById('dz-demo');
+if (dz) ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('dz-drag'); }));
+['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('dz-drag'); }));
+// 开关演示
+document.querySelectorAll('.switch').forEach(sw => sw.addEventListener('click', () => sw.classList.toggle('off')));
+</script>
+</body>
+</html>

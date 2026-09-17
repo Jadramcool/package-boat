@@ -2,7 +2,7 @@
 // 命令签名与 Rust `commands.rs` 由 bindings.ts 同步，新增命令需在 Rust 侧
 // `collect_commands!` 注册后重跑 `cargo test -p packetboat-desktop` 重新导出。
 import { commands, events, type AppError, type Item, type TransferProgress } from './bindings'
-import type { DesktopState } from './types'
+import type { DesktopSettings, DesktopState } from './types'
 
 /** 旧命名别名（组件层仍使用 DesktopItem）。 */
 export type { DesktopState } from './types'
@@ -43,6 +43,11 @@ export async function chooseReceiveDirectory(): Promise<string> {
 
 export async function toggleServer(): Promise<void> {
   await unwrap(commands.toggleServer())
+}
+
+/** 更新「是否需要配对码访问」；后端写设置并在服务运行中时重启。 */
+export async function setRequirePairing(enabled: boolean): Promise<DesktopSettings> {
+  return unwrap(commands.setRequirePairing(enabled))
 }
 
 export async function revealItem(id: string): Promise<void> {

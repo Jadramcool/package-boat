@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, RadioTower, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { RefreshCw, ShieldCheck } from '@lucide/vue'
 import { computed, onUnmounted, shallowRef, watch } from 'vue'
 
 const props = defineProps<{
@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const code = shallowRef('')
+const focused = shallowRef(false)
 const cooldown = shallowRef(0)
 let cooldownTimer: ReturnType<typeof setInterval> | undefined
 
@@ -50,120 +51,158 @@ onUnmounted(() => clearInterval(cooldownTimer))
 </script>
 
 <template>
+  <!-- 配对门：单屏只做一件事——输入配对码 -->
   <main class="pairing-page">
-    <div class="grid-noise" aria-hidden="true" />
-    <section class="pairing-card" aria-labelledby="pairing-title">
-      <div class="pairing-intro">
-        <div class="route-mark" aria-hidden="true">
-          <span class="route-dot" />
-          <span class="route-line" />
-          <span class="route-dot destination" />
-        </div>
-        <p class="station-label">PacketBoat / LOCAL DELIVERY</p>
-        <h1 id="pairing-title">近在同一张<br><em>网络里。</em></h1>
-        <p class="intro-copy">
-          无需上传云端，也不用安装客户端。输入主机屏幕上的配对码，接入这条局域网传输通道。
-        </p>
-        <div class="privacy-note">
-          <ShieldCheck :size="18" aria-hidden="true" />
-          <span>数据留在本地网络<br><small>关闭主机程序即断开</small></span>
-        </div>
+    <section class="gate" aria-labelledby="pairing-title">
+      <div class="gate-logo" aria-hidden="true"><span>L</span></div>
+      <h1 id="pairing-title">连接到 <em :title="props.serverName">{{ props.serverName }}</em></h1>
+      <p class="gate-sub">
+        <ShieldCheck :size="15" aria-hidden="true" />
+        输入主机屏幕上的六位配对码 · 文件只在当前局域网流动，不经云端
+      </p>
+
+      <div v-if="props.offline" class="offline-panel" role="alert">
+        <p>暂时无法连接主机，请确认服务仍在运行。</p>
+        <button type="button" @click="emit('retry')">
+          <RefreshCw :size="15" /> 重新连接
+        </button>
       </div>
 
-      <div class="ticket-panel">
-        <div class="ticket-topline"><span>ACCESS TICKET</span><span>NO. 01—LAN</span></div>
-        <div class="station-name">
-          <RadioTower :size="18" aria-hidden="true" />
-          <span>正在连接</span>
-          <strong>{{ serverName }}</strong>
-        </div>
-
-        <div v-if="offline" class="offline-panel" role="alert">
-          <p>暂时无法连接主机，请确认服务仍在运行。</p>
-          <button type="button" @click="emit('retry')">
-            <RefreshCw :size="15" /> 重新连接
-          </button>
-        </div>
-
-        <form v-else class="pairing-form" @submit.prevent="submit">
-          <label for="pair-code">六位配对码</label>
+      <form v-else class="pairing-form" @submit.prevent="submit">
+        <label for="pair-code" class="visually-hidden">六位配对码</label>
+        <div class="otp" :class="{ 'has-error': Boolean(props.error) }" aria-hidden="false">
+          <i
+            v-for="n in 6"
+            :key="n"
+            :class="{
+              fill: code.length >= n,
+              cursor: code.length < 6 && (code.length === n - 1) && (focused || code.length > 0),
+            }"
+          ><span v-if="code.length >= n">{{ code[n - 1] }}</span></i>
           <input
             id="pair-code"
+            class="otp-input"
             :value="code"
-            class="code-input"
             type="text"
             inputmode="numeric"
             autocomplete="one-time-code"
             maxlength="6"
-            placeholder="000000"
+            placeholder=""
             autofocus
             aria-describedby="pair-code-hint"
             @input="handleInput"
+            @focus="focused = true"
+            @blur="focused = false"
           >
-          <p id="pair-code-hint" class="form-hint">配对码显示在运行 PacketBoat 的主机界面或终端中</p>
-          <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-          <button class="connect-button" type="submit" :disabled="!canSubmit">
-            <span>{{ loading ? '正在验票' : cooldown > 0 ? `${cooldown}s 后可重试` : '进入文件站' }}</span>
-            <ArrowRight :size="19" aria-hidden="true" />
-          </button>
-        </form>
-
-        <div class="ticket-footer" aria-hidden="true">
-          <span v-for="index in 28" :key="index" />
         </div>
-      </div>
+        <p id="pair-code-hint" class="form-hint">配对码显示在运行 PacketBoat 的主机界面或终端中</p>
+        <p v-if="props.error" class="form-error" role="alert">{{ props.error }}</p>
+        <button class="connect-button" type="submit" :disabled="!canSubmit">
+          <span>{{ props.loading ? '正在验票…' : cooldown > 0 ? `${cooldown}s 后可重试` : '进入投递站' }}</span>
+          <span class="arrow" aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <p class="gate-alt">
+        连不上？确认手机与电脑在<b>同一 Wi-Fi</b>
+        <span v-if="!props.offline" class="dot-sep" aria-hidden="true">·</span>
+        <button v-if="!props.offline" type="button" class="retry-link" @click="emit('retry')">重新连接</button>
+      </p>
     </section>
   </main>
 </template>
 
 <style scoped>
-.pairing-page { min-height: 100dvh; padding: 40px 20px; display: grid; place-items: center; position: relative; overflow: hidden; background: var(--ink); }
-.grid-noise { position: absolute; inset: 0; opacity: .16; background-image: linear-gradient(rgb(255 255 255 / 20%) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 20%) 1px, transparent 1px); background-size: 48px 48px; mask-image: linear-gradient(to bottom right, #000, transparent 70%); }
-.pairing-card { z-index: 1; position: relative; display: grid; grid-template-columns: 1.08fr .92fr; width: min(1040px, 100%); border: 1px solid rgb(255 255 255 / 20%); box-shadow: 0 30px 90px rgb(0 0 0 / 34%); }
-.pairing-intro { min-height: 590px; padding: clamp(40px, 7vw, 78px); color: var(--paper); background: var(--ink); }
-.route-mark { width: 128px; margin-bottom: 60px; display: flex; align-items: center; }
-.route-dot { width: 13px; height: 13px; border: 2px solid var(--acid); border-radius: 50%; }
-.route-dot.destination { background: var(--acid); }
-.route-line { flex: 1; height: 1px; background: var(--acid); }
-.station-label { margin: 0 0 20px; color: var(--acid); font: 650 11px/1 var(--font-label); letter-spacing: .2em; }
-.pairing-intro h1 { margin: 0; font: 720 clamp(50px, 6vw, 76px)/.92 var(--font-display); letter-spacing: -.055em; }
-.pairing-intro h1 em { color: var(--acid); font-style: normal; }
-.intro-copy { max-width: 430px; margin: 28px 0 0; color: rgb(244 241 232 / 64%); font-size: 15px; line-height: 1.8; }
-.privacy-note { margin-top: 74px; display: flex; align-items: flex-start; gap: 12px; color: var(--paper); font-size: 12px; line-height: 1.5; }
-.privacy-note small { color: rgb(244 241 232 / 45%); }
-.ticket-panel { min-width: 0; padding: 32px clamp(28px, 5vw, 54px) 48px; display: flex; flex-direction: column; position: relative; color: var(--ink); background: var(--paper); }
-.ticket-topline { padding-bottom: 22px; display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line-strong); color: var(--muted); font: 650 9px/1 var(--font-label); letter-spacing: .17em; }
-.station-name { margin-top: 48px; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
-.station-name svg { grid-row: 1 / 3; margin-top: 3px; color: var(--signal); }
-.station-name span { color: var(--muted); font-size: 11px; }
-.station-name strong { overflow: hidden; font: 680 18px/1.2 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
-.pairing-form { margin-top: 50px; }
-.pairing-form label { display: block; margin-bottom: 11px; font: 650 11px/1 var(--font-label); letter-spacing: .1em; }
-.code-input { width: 100%; padding: 15px 4px 12px; border: 0; border-bottom: 3px solid var(--ink); outline: none; color: var(--ink); background: transparent; caret-color: var(--signal); font: 700 clamp(38px, 5vw, 56px)/1 var(--font-mono); letter-spacing: .22em; }
-.code-input:focus { border-color: var(--signal); }
-.code-input::placeholder { color: color-mix(in srgb, var(--ink) 12%, transparent); }
-.form-hint, .form-error { margin: 10px 0 0; font-size: 11px; line-height: 1.5; }
-.form-hint { color: var(--muted); }
-.form-error { color: #a32d13; }
-.connect-button { width: 100%; margin-top: 30px; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--ink); color: var(--paper); background: var(--ink); cursor: pointer; font: 650 14px/1 var(--font-display); transition: transform .15s, box-shadow .15s, background .15s; }
-.connect-button:not(:disabled):hover { transform: translate(-3px, -3px); box-shadow: 5px 5px 0 var(--signal); }
-.connect-button:disabled { opacity: .35; cursor: not-allowed; }
-.offline-panel { margin-top: 72px; padding: 18px; border: 1px solid var(--signal); background: var(--signal-soft); }
-.offline-panel p { margin: 0 0 14px; font-size: 13px; line-height: 1.6; }
-.offline-panel button { padding: 0; display: inline-flex; align-items: center; gap: 7px; border: 0; color: var(--ink); background: transparent; cursor: pointer; font-weight: 700; }
-.ticket-footer { margin-top: auto; padding-top: 36px; display: flex; justify-content: space-between; gap: 3px; }
-.ticket-footer span { width: 3px; height: 28px; background: var(--ink); }
-.ticket-footer span:nth-child(3n) { width: 1px; }
-.ticket-footer span:nth-child(5n) { height: 20px; }
-@media (max-width: 760px) {
-  .pairing-page { padding: 0; place-items: start; }
-  .pairing-card { min-height: 100dvh; grid-template-columns: 1fr; border: 0; }
-  .pairing-intro { min-height: auto; padding: 42px 26px 36px; }
-  .route-mark { margin-bottom: 38px; }
-  .pairing-intro h1 { font-size: 52px; }
-  .privacy-note { display: none; }
-  .ticket-panel { min-height: 430px; padding: 28px 26px 38px; }
-  .station-name { margin-top: 30px; }
-  .pairing-form { margin-top: 34px; }
+.pairing-page {
+  min-height: 100dvh;
+  padding: 24px 20px;
+  display: grid;
+  /* 轨道锁死为 minmax(0,1fr)：否则长设备名（nowrap）的 min-content 会沿
+     em → h1 → .gate 逐级撑大 auto 轨道，整页横向溢出，em 的省略号永远不生效 */
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  background:
+    radial-gradient(circle at 74% 7%, rgb(215 249 84 / 16%), transparent 24rem),
+    var(--dock-0);
+}
+
+.gate { width: min(430px, 100%); display: flex; flex-direction: column; align-items: center; text-align: center; }
+.gate-logo {
+  width: 76px; height: 76px; margin-bottom: 22px;
+  display: grid; place-items: center;
+  border: 2px solid var(--acid); border-radius: 50% 50% 14px;
+  background: var(--ink); color: var(--acid);
+  font: 800 36px/1 var(--font-display);
+  transform: rotate(45deg);
+  box-shadow: 0 12px 28px rgb(31 39 28 / 22%);
+}
+.gate-logo span { transform: rotate(-45deg); }
+.gate h1 { margin: 0; max-width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 8px; font: 720 27px/1.2 var(--font-display); letter-spacing: -.01em; }
+.gate h1 em { min-width: 0; max-width: 100%; overflow: hidden; font-style: normal; white-space: nowrap; text-overflow: ellipsis; color: var(--acid-deep); background: var(--acid-wash); padding: 1px 9px; border-radius: 7px; }
+.gate-sub { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 13px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.gate-sub svg { flex: none; color: var(--ok); }
+
+.pairing-form { width: 100%; margin-top: 30px; display: flex; flex-direction: column; }
+.otp { position: relative; display: flex; justify-content: center; gap: 9px; }
+.otp i {
+  position: relative; width: 46px; height: 58px;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--line-strong); border-radius: 12px;
+  background: #fff; font-style: normal;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.otp i span { font: 700 26px/1 var(--font-mono); }
+.otp i.fill { border-color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.otp i.cursor { border-color: var(--info); box-shadow: 0 0 0 3px rgb(47 111 211 / 16%); }
+.otp i.cursor::after { content: ''; position: absolute; width: 2px; height: 26px; background: var(--info); animation: blink 1.1s steps(1) infinite; }
+.otp.has-error i { border-color: var(--signal); }
+@keyframes blink { 50% { opacity: 0; } }
+.otp-input {
+  position: absolute; inset: 0; width: 100%;
+  border: 0; outline: none; background: transparent;
+  color: transparent; caret-color: transparent;
+  font: 700 26px/1 var(--font-mono); letter-spacing: 1.9rem; text-align: center;
+}
+
+.form-hint { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.form-error { margin: 9px 0 0; color: var(--signal-deep); font-size: 12.5px; line-height: 1.5; }
+
+.connect-button {
+  width: 100%; height: 52px; margin-top: 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  border: 1px solid var(--ink); border-radius: 12px;
+  background: var(--acid); color: var(--ink);
+  cursor: pointer; font: 720 15px/1 var(--font-label); letter-spacing: .02em;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.connect-button:not(:disabled):hover { background: var(--acid-hi); transform: translateY(-1px); box-shadow: 0 4px 0 var(--ink); }
+.connect-button:not(:disabled):active { transform: translateY(2px); box-shadow: 0 0 0 var(--ink); }
+.connect-button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+.arrow { font-family: var(--font-display); font-size: 17px; }
+
+.offline-panel {
+  width: 100%; margin-top: 30px; padding: 18px 20px;
+  border: 1px solid var(--signal); border-radius: 12px;
+  background: var(--signal-soft); color: var(--signal-deep); text-align: left;
+}
+.offline-panel p { margin: 0 0 12px; font-size: 13px; line-height: 1.6; }
+.offline-panel button { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--signal-deep); cursor: pointer; font: 700 13px/1 var(--font-label); }
+.offline-panel button:hover { text-decoration: underline; }
+
+.gate-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: 26px 0 0; color: var(--muted); font-size: 12px; }
+.gate-alt b { color: var(--ink); }
+.dot-sep { color: var(--line-strong); }
+.retry-link { padding: 0; border: 0; background: transparent; color: var(--info); cursor: pointer; font: 600 12px/1 var(--font-sans); }
+.retry-link:hover { text-decoration: underline; }
+
+@media (max-width: 400px) {
+  .otp { gap: 6px; }
+  .otp i { width: 42px; height: 54px; }
+  .gate h1 { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .otp i.cursor::after { animation: none; }
 }
 </style>

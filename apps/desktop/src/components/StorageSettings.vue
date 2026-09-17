@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { FolderCog, HardDrive, LoaderCircle, ShieldCheck } from '@lucide/vue'
+import { FolderCog, FolderOpen, LoaderCircle } from '@lucide/vue'
+import SideCard from '@/components/SideCard.vue'
 import type { DesktopSettings } from '@/types'
 import { formatBytes } from '@/utils/format'
 
@@ -8,26 +9,22 @@ const emit = defineEmits<{ chooseDirectory: [] }>()
 </script>
 
 <template>
-  <aside class="storage-settings" aria-labelledby="storage-title">
-    <div class="settings-heading">
-      <HardDrive :size="25" :stroke-width="1.5" />
-      <div>
-        <h2 id="storage-title">接收设置</h2>
-        <p>其他设备上传的文件保存位置</p>
+  <SideCard title="接收设置">
+    <div class="field">
+      <span class="field-label">接收目录</span>
+      <div class="path" :title="props.settings.receive_dir">
+        <FolderOpen :size="13" aria-hidden="true" />
+        <span>{{ props.settings.receive_dir }}</span>
       </div>
     </div>
 
-    <div class="path-section">
-      <span class="path-label">保存位置</span>
-      <div class="path-box" :title="props.settings.receive_dir">
-        {{ props.settings.receive_dir }}
-      </div>
-    </div>
-    <button type="button" :disabled="props.busy" @click="emit('chooseDirectory')">
-      <LoaderCircle v-if="props.busy" class="spin" :size="18" />
-      <FolderCog v-else :size="18" />
+    <button type="button" class="choose" :disabled="props.busy" @click="emit('chooseDirectory')">
+      <LoaderCircle v-if="props.busy" class="spin" :size="15" />
+      <FolderCog v-else :size="15" />
       更改目录
     </button>
+
+    <!-- 关闭窗口最小化到托盘的行为已在标题栏关闭按钮的 title 里说明，此处不再重复 -->
 
     <dl>
       <div>
@@ -39,50 +36,22 @@ const emit = defineEmits<{ chooseDirectory: [] }>()
         <dd>{{ props.settings.port }}</dd>
       </div>
     </dl>
-
-    <div class="safety-note">
-      <ShieldCheck :size="19" />
-      <span>移除共享不会删除原文件</span>
-    </div>
-  </aside>
+  </SideCard>
 </template>
 
 <style scoped>
-.storage-settings { min-width: 0; padding: 22px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); box-shadow: 0 8px 24px rgb(32 38 29 / 4%); }
-.settings-heading { display: flex; align-items: flex-start; gap: 14px; }
-.settings-heading svg { flex: none; margin-top: 2px; }
-.settings-heading h2 { margin: 0; font: 720 25px/1.1 var(--font-display); letter-spacing: -.02em; }
-.settings-heading p { margin: 7px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
-.path-section { margin-top: 16px; }
-.path-label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 14px; }
-.path-box { overflow: hidden; padding: 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; font: 550 13px/1.5 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-button { width: 100%; height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; border: 1px solid var(--ink); border-radius: 6px; background: transparent; color: var(--ink); cursor: pointer; font: 680 15px/1 var(--font-label); }
-button:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
-button:disabled { cursor: wait; opacity: .5; }
-dl { margin: 14px 0 0; border-top: 1px solid var(--line); }
-dl div { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); }
-dt { color: var(--muted); font-size: 14px; }
-dd { margin: 0; font: 680 14px/1 var(--font-mono); }
-.safety-note { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 12px; border-radius: 6px; background: #e7f7aa; color: #39440f; font-size: 14px; line-height: 1.5; }
-.safety-note svg { flex: none; }
+.field { min-width: 0; }
+.field-label { display: block; margin-bottom: 6px; color: var(--muted); font: 600 11.5px/1 var(--font-label); }
+.path { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--dock-0); }
+.path svg { flex: none; color: var(--muted); }
+.path span { min-width: 0; overflow: hidden; color: var(--ink); font: 550 11.5px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.choose { height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: 650 12.5px/1 var(--font-label); transition: background 140ms ease, border-color 140ms ease, color 140ms ease; }
+.choose:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.choose:disabled { cursor: wait; opacity: .55; }
+dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; background: var(--line); }
+dl div { padding: 9px 11px; background: var(--dock-0); }
+dt { color: var(--muted); font: 600 10.5px/1 var(--font-label); letter-spacing: .04em; }
+dd { margin: 5px 0 0; color: var(--ink); font: 700 13.5px/1 var(--font-mono); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 720px) {
-  .storage-settings { padding: 16px; }
-  .settings-heading { gap: 11px; }
-  .settings-heading h2 { font-size: 20px; }
-  .settings-heading p { font-size: 13px; }
-  .path-section { margin-top: 14px; }
-}
-@media (max-width: 560px) {
-  .storage-settings { padding: 14px; }
-  .settings-heading h2 { font-size: 18px; }
-  .settings-heading p { font-size: 12px; }
-  .path-label { font-size: 12px; }
-  .path-box { padding: 10px; font-size: 12px; }
-  button { height: 40px; font-size: 13px; }
-  dl { margin-top: 12px; }
-  dt, dd { font-size: 12px; }
-  .safety-note { margin-top: 10px; padding: 11px; font-size: 12px; }
-}
 </style>

@@ -36,6 +36,8 @@ pub struct Config {
     pub catalog: Option<Arc<Catalog>>,
     /// 外部注入的传输进度跟踪器（桌面端任务栏进度）；缺省时内部创建。
     pub progress: Option<Arc<crate::progress::ProgressTracker>>,
+    /// 是否需要六位配对码才能访问；关闭时所有受保护端点对局域网匿名放行。
+    pub require_pairing: bool,
 }
 
 /// 服务器状态（全部字段为共享引用，可廉价克隆）。
@@ -54,6 +56,8 @@ pub struct Server {
     progress: Arc<crate::progress::ProgressTracker>,
     /// 分块上传会话及临时文件状态。
     uploads: Arc<UploadManager>,
+    /// 是否需要配对码访问（快照自设置；更改后由宿主重启服务器生效）。
+    require_pairing: bool,
 }
 
 impl Server {
@@ -99,6 +103,7 @@ impl Server {
             file_mu: Arc::new(tokio::sync::Mutex::new(())),
             progress: config.progress.unwrap_or_default(),
             uploads,
+            require_pairing: config.require_pairing,
         })
     }
 
@@ -279,7 +284,7 @@ async fn handle_info(State(server): State<Arc<Server>>) -> Response {
         StatusCode::OK,
         InfoPayload {
             device_name: &server.device_name,
-            requires_auth: true,
+            requires_auth: server.require_pairing,
             max_upload_bytes: server.max_upload_bytes,
             version: &server.version,
         },
@@ -287,9 +292,11 @@ async fn handle_info(State(server): State<Arc<Server>>) -> Response {
 }
 
 async fn handle_session_status(State(server): State<Arc<Server>>, request: Request) -> Response {
-    let authenticated = server
-        .auth
-        .authenticated(session_token_from(&request).as_deref());
+    // 免配对模式下对手机端直接报「已通过」：跳过配对门进入接收页
+    let authenticated = !server.require_pairing
+        || server
+            .auth
+            .authenticated(session_token_from(&request).as_deref());
     json_response(StatusCode::OK, SessionPayload { authenticated })
 }
 
@@ -1002,9 +1009,11 @@ impl Drop for UnsubscribeGuard {
 // ---------------------------------------------------------------------------
 
 async fn require_auth(State(server): State<Arc<Server>>, request: Request, next: Next) -> Response {
-    if server
-        .auth
-        .authenticated(session_token_from(&request).as_deref())
+    // 免配对模式下跳过会话校验（局域网内任何设备可直接访问）
+    if !server.require_pairing
+        || server
+            .auth
+            .authenticated(session_token_from(&request).as_deref())
     {
         next.run(request).await
     } else {
@@ -1067,4 +1076,78 @@ async fn static_fallback(request: Request) -> Response {
 /// 便于外部（CLI/桌面）使用的辅助：创建服务器并返回路由器。
 pub fn build_router(server: &Server) -> Router {
     server.router()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tower::ServiceExt;
+
+    async fn server_with(require_pairing: bool) -> Arc<Server> {
+        let storage = std::env::temp_dir().join(format!(
+            "packetboat-server-auth-{}-{}",
+            std::process::id(),
+            require_pairing as u8,
+        ));
+        let _ = std::fs::remove_dir_all(&storage);
+        let server = Server::new(Config {
+            device_name: "TEST-PC".into(),
+            storage_dir: storage,
+            max_upload_bytes: 1024,
+            version: "test".into(),
+            catalog: None,
+            progress: None,
+            require_pairing,
+        })
+        .expect("server");
+        Arc::new(server)
+    }
+
+    async fn get(router: Router, path: &str) -> (StatusCode, serde_json::Value) {
+        let request = Request::builder()
+            .method(Method::GET)
+            .uri(path)
+            .body(Body::empty())
+            .expect("request");
+        let response = router.oneshot(request).await.expect("infallible");
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap_or_default();
+        let payload = serde_json::from_slice(&body).unwrap_or(serde_json::Value::Null);
+        (status, payload)
+    }
+
+    #[tokio::test]
+    async fn pairing_required_blocks_anonymous_by_default() {
+        let server = server_with(true).await;
+        let (status, _) = get(server.router(), "/api/files").await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+        let (status, payload) = get(server.router(), "/api/info").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(payload["requires_auth"], serde_json::Value::Bool(true));
+
+        let (status, payload) = get(server.router(), "/api/session").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(payload["authenticated"], serde_json::Value::Bool(false));
+    }
+
+    #[tokio::test]
+    async fn pairing_disabled_grants_anonymous_access() {
+        let server = server_with(false).await;
+        // 受保护端点匿名放行
+        let (status, _) = get(server.router(), "/api/files").await;
+        assert_eq!(status, StatusCode::OK);
+
+        // info 告知手机端无需配对
+        let (status, payload) = get(server.router(), "/api/info").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(payload["requires_auth"], serde_json::Value::Bool(false));
+
+        // 会话状态直接报「已通过」，跳过配对门
+        let (status, payload) = get(server.router(), "/api/session").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(payload["authenticated"], serde_json::Value::Bool(true));
+    }
 }

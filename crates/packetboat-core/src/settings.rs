@@ -23,6 +23,14 @@ pub struct Settings {
     /// 单文件上传上限；specta 导出为 number（TS 侧 2^53 内精度安全）。
     #[cfg_attr(feature = "specta", specta(type = u32))]
     pub max_upload_bytes: i64,
+    /// 是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。
+    #[serde(default = "default_require_pairing")]
+    pub require_pairing: bool,
+}
+
+/// 配对码开关默认值：默认开启（与历史行为一致）。
+fn default_require_pairing() -> bool {
+    true
 }
 
 /// 缺省端口（与 Go 版默认一致）。
@@ -54,6 +62,7 @@ impl Settings {
             port: 8080,
             receive_dir: receive_dir.to_string_lossy().into_owned(),
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
+            require_pairing: true,
         }
     }
 }
@@ -114,6 +123,20 @@ impl Store {
         let mut guard = self.inner.write().expect("settings lock poisoned");
         let previous = guard.clone();
         guard.port = port;
+        match self.save_locked(&guard) {
+            Ok(()) => Ok(guard.clone()),
+            Err(err) => {
+                *guard = previous;
+                Err(err)
+            }
+        }
+    }
+
+    /// 更新配对码开关（是否需要六位配对码才能访问）。
+    pub fn set_require_pairing(&self, enabled: bool) -> Result<Settings, String> {
+        let mut guard = self.inner.write().expect("settings lock poisoned");
+        let previous = guard.clone();
+        guard.require_pairing = enabled;
         match self.save_locked(&guard) {
             Ok(()) => Ok(guard.clone()),
             Err(err) => {
@@ -190,6 +213,7 @@ mod tests {
             port: 8080,
             receive_dir: r"C:\Temp\PacketBoat".into(),
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
+            require_pairing: true,
         }
     }
 
@@ -250,6 +274,7 @@ mod tests {
                 port: 0,
                 receive_dir: "C:\\T".into(),
                 max_upload_bytes: 1,
+                require_pairing: true,
             },
         )
         .unwrap();
@@ -266,10 +291,35 @@ mod tests {
             port: 0, // 0 = 自动分配，保持不动
             receive_dir: String::new(),
             max_upload_bytes: 0,
+            require_pairing: true,
         };
         apply_fallbacks(&mut settings, &defaults);
         assert_eq!(settings.port, 0);
         assert_eq!(settings.device_name, "TEST-PC");
         assert_eq!(settings.max_upload_bytes, defaults.max_upload_bytes);
+    }
+
+    #[test]
+    fn missing_require_pairing_defaults_to_true() {
+        // 旧版 settings.json 无 require_pairing 字段：保持历史行为（需要配对码）
+        let dir =
+            std::env::temp_dir().join(format!("packetboat-settings-rp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.json");
+        std::fs::write(
+            &path,
+            r#"{"device_name":"X","host":"0.0.0.0","port":8080,"receive_dir":"C:\\T","max_upload_bytes":1}"#,
+        )
+        .unwrap();
+        let store = Store::open(path, test_settings()).unwrap();
+        assert!(store.get().require_pairing);
+
+        // 显式关闭后落盘并可重载
+        let store = store.set_require_pairing(false).unwrap();
+        let reloaded = Store::open(dir.join("settings.json"), test_settings()).unwrap();
+        assert!(!reloaded.get().require_pairing);
+        assert!(!store.require_pairing);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { Check, ChevronDown, CircleStop, Copy, ExternalLink, LoaderCircle, Network, Power } from '@lucide/vue'
-import type { DesktopHostState } from '@/types'
+import {
+  AlertTriangle,
+  Check,
+  CircleStop,
+  Copy,
+  ExternalLink,
+  LoaderCircle,
+  Power,
+} from '@lucide/vue'
+import type { DesktopHostState, LocalAddress } from '@/types'
 
 const props = defineProps<{
   deviceName: string
   host: DesktopHostState
   accessUrl: string
-  accessUrlIndex: number
+  activeAddress: LocalAddress | null
+  addressUnreachable: boolean
   busy: boolean
   copied: string
 }>()
@@ -15,165 +24,127 @@ const emit = defineEmits<{
   toggle: []
   copy: [url: string]
   open: [url: string]
-  selectAddress: [url: string]
 }>()
-
-function handleAddressChange(event: Event) {
-  emit('selectAddress', (event.target as HTMLSelectElement).value)
-}
 </script>
 
 <template>
-  <header class="desktop-header">
-    <div class="brand-block">
-      <div class="brand-mark" aria-hidden="true">L</div>
-      <div class="brand-copy">
-        <p>PacketBoat 局域网投递站</p>
-        <h1>{{ props.deviceName }}</h1>
-      </div>
-    </div>
+  <!-- 命令条：把驾驶舱压成一行——常看的三件事（在跑吗 / 地址 / 配对码）留在面上，
+       切换地址、扫码行为、接收目录等低频设置移到右侧边栏。 -->
+  <header class="cmdbar" aria-label="服务命令条">
+    <span class="brand" aria-hidden="true">L</span>
 
-    <div class="connection-block">
-      <div class="conn-row">
-        <div class="host-status" :class="{ online: props.host.running }">
-          <span class="status-dot" aria-hidden="true" />
-          <strong>{{ props.host.running ? '服务运行中' : '服务已停止' }}</strong>
-        </div>
-        <div v-if="props.host.running" class="code-pill" :title="`配对码：${props.host.access_code}`">
-          <span>访问码</span>
-          <strong>{{ props.host.access_code }}</strong>
-        </div>
-        <div v-if="props.host.running && props.host.urls.length > 1" class="address-switch">
-          <Network :size="14" aria-hidden="true" />
-          <label for="access-address">访问地址</label>
-          <div class="select-wrap">
-            <select id="access-address" :value="props.accessUrl" aria-label="切换局域网访问地址" @change="handleAddressChange">
-              <option v-for="(url, index) in props.host.urls" :key="url" :value="url">
-                {{ index === 0 ? '主地址' : `备用地址 ${index}` }} · {{ url }}
-              </option>
-            </select>
-            <span>{{ props.accessUrlIndex + 1 }}/{{ props.host.urls.length }}</span>
-            <ChevronDown :size="14" aria-hidden="true" />
-          </div>
-        </div>
-      </div>
-      <div class="conn-row">
-        <div v-if="props.host.running && props.accessUrl" class="primary-url">
-          <button type="button" :class="{ copied: props.copied === props.accessUrl }" :title="props.copied === props.accessUrl ? '已复制地址' : '复制访问地址'" @click="emit('copy', props.accessUrl)">
-            <Check v-if="props.copied === props.accessUrl" :size="16" />
-            <Copy v-else :size="16" />
-            <span>{{ props.accessUrl }}</span>
-          </button>
-          <button type="button" title="用默认浏览器打开" aria-label="用默认浏览器打开" @click="emit('open', props.accessUrl)">
-            <ExternalLink :size="16" />
-          </button>
-        </div>
-        <span v-if="!props.host.running" class="stopped-hint">启动服务后生成访问地址与配对码</span>
-      </div>
-    </div>
+    <span class="identity">
+      <strong class="device" :title="props.deviceName">{{ props.deviceName }}</strong>
+      <span class="state" :class="{ online: props.host.running }">
+        <i aria-hidden="true" />
+        {{ props.host.running ? '运行中' : '已停止' }}
+      </span>
+    </span>
 
-    <div class="header-actions">
-      <button class="power-button" type="button" :disabled="props.busy" @click="emit('toggle')">
-        <LoaderCircle v-if="props.busy" class="spin" :size="20" />
-        <CircleStop v-else-if="props.host.running" :size="20" />
-        <Power v-else :size="20" />
-        {{ props.host.running ? '停止服务' : '启动服务' }}
-      </button>
-    </div>
+    <template v-if="props.host.running && props.accessUrl">
+      <span class="url" :class="{ warn: props.addressUnreachable }">
+        <AlertTriangle v-if="props.addressUnreachable" :size="14" aria-hidden="true" />
+        <code :title="props.addressUnreachable ? `${props.accessUrl}（手机可能无法直连，见右侧连接设置）` : props.accessUrl">
+          {{ props.accessUrl }}
+        </code>
+        <button
+          type="button"
+          class="chip-action"
+          :class="{ ok: props.copied === props.accessUrl }"
+          :title="props.copied === props.accessUrl ? '已复制地址' : '复制访问地址'"
+          @click="emit('copy', props.accessUrl)"
+        >
+          <Check v-if="props.copied === props.accessUrl" :size="13" />
+          <Copy v-else :size="13" />
+          {{ props.copied === props.accessUrl ? '已复制' : '复制' }}
+        </button>
+        <button
+          type="button"
+          class="chip-action icon-only"
+          title="用默认浏览器打开"
+          aria-label="用默认浏览器打开"
+          @click="emit('open', props.accessUrl)"
+        >
+          <ExternalLink :size="13" />
+        </button>
+      </span>
+
+      <span class="code" :title="`配对码：${props.host.access_code}`">
+        <strong>{{ props.host.access_code }}</strong>
+      </span>
+    </template>
+
+    <p v-else class="idle-hint">启动服务后这里会显示访问地址与配对码</p>
+
+    <span class="spacer" />
+
+    <button
+      class="power"
+      :class="{ 'is-running': props.host.running }"
+      type="button"
+      :disabled="props.busy"
+      @click="emit('toggle')"
+    >
+      <LoaderCircle v-if="props.busy" class="spin" :size="16" />
+      <CircleStop v-else-if="props.host.running" :size="16" />
+      <Power v-else :size="16" />
+      {{ props.host.running ? '停止服务' : '启动服务' }}
+    </button>
   </header>
 </template>
 
 <style scoped>
-.desktop-header {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(0, 1.5fr) auto;
-  min-height: 100px;
-  overflow: hidden;
-  border: 1px solid #30372d;
-  border-radius: 12px;
-  background: var(--ink);
-  color: var(--paper);
-  box-shadow: 0 14px 34px rgb(22 27 20 / 12%);
-}
+/* 64px：56px 时 14px 设备名与 30px 地址框挤在一条 56px 的深色带里，
+   两侧各留 16px 后视觉重心贴边。放宽到 64px 后 gap 14px、内边距 20px，
+   控件与带边的关系恢复「有呼吸的容器」而不是「刚好塞下」。
+   代价：首屏可见行数 9 → 8（这是明知的取舍）。 */
+.cmdbar { display: flex; align-items: center; gap: 14px; height: 64px; padding: 0 20px; background: var(--ink); color: var(--paper); }
+.brand { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--acid); color: var(--acid); font: 800 15px/1 var(--font-display); transform: rotate(-3deg); }
+.identity { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.device { max-width: 170px; overflow: hidden; font: 700 15.5px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
+.state { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 4px 10px; border-radius: 999px; background: rgb(255 255 255 / 8%); color: rgb(251 252 247 / 72%); font: 650 11.5px/1 var(--font-label); }
+.state i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #79826f; }
+/* 在线状态用 info 蓝：acid 绿专供「品牌 / 主行动」，不兼任状态灯 */
+.state.online { background: rgb(120 182 255 / 16%); color: var(--info-lit); }
+.state.online i { background: var(--info-lit); }
 
-.brand-block { display: flex; align-items: center; gap: 18px; min-width: 0; padding: 18px 24px; }
-.brand-mark { width: 58px; height: 58px; display: grid; place-items: center; flex: none; border: 1.5px solid var(--acid); color: var(--acid); font: 800 28px/1 var(--font-display); transform: rotate(-3deg); }
-.brand-copy { min-width: 0; }
-.brand-copy p { margin: 0 0 8px; color: var(--paper); font: 650 14px/1 var(--font-label); letter-spacing: .08em; }
-.brand-copy h1 { overflow: hidden; margin: 0; font: 720 25px/1 var(--font-display); letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.url { flex: 1; min-width: 0; max-width: 340px; display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 5px 0 12px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 9px; background: rgb(255 255 255 / 5%); }
+.url > svg { flex: none; color: #ffd6a8; }
+.url > code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 12.5px/1 var(--font-mono); }
+.url.warn { border-color: rgb(255 195 120 / 55%); background: rgb(255 170 90 / 12%); }
 
-.connection-block { min-width: 0; display: grid; align-content: center; gap: 11px; padding: 14px 24px; border-left: 1px solid rgb(255 255 255 / 11%); }
-.conn-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.host-status { display: flex; align-items: center; gap: 11px; flex: none; }
-.host-status strong { font: 720 20px/1 var(--font-display); }
-.status-dot { width: 12px; height: 12px; flex: none; border-radius: 50%; background: #747a70; box-shadow: 0 0 0 5px rgb(255 255 255 / 5%); }
-.host-status.online { color: var(--acid); }
-.host-status.online .status-dot { background: var(--acid); box-shadow: 0 0 0 5px rgb(217 255 82 / 12%); }
-.code-pill { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 6px 11px; border: 1px solid rgb(217 255 82 / 26%); border-radius: 5px; background: rgb(217 255 82 / 7%); }
-.code-pill span { color: rgb(241 238 228 / 58%); font: 600 11px/1 var(--font-label); }
-.code-pill strong { color: var(--acid); font: 700 16px/1 var(--font-mono); letter-spacing: .12em; white-space: nowrap; }
-.primary-url { display: flex; align-items: stretch; min-width: 0; }
-.primary-url button { min-height: 32px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border: 1px solid rgb(255 255 255 / 16%); background: transparent; color: var(--paper); cursor: pointer; }
-.primary-url button:first-child { flex: 1 1 auto; font: 550 13px/1.4 var(--font-mono); text-align: left; }
-.primary-url button:last-child { width: 34px; flex: none; justify-content: center; padding: 0; border-left: 0; }
-.primary-url button:hover { border-color: var(--acid); color: var(--acid); }
-.primary-url button.copied { border-color: var(--acid); color: var(--acid); }
-.primary-url button svg { flex: none; }
-.primary-url span { overflow-wrap: anywhere; white-space: normal; }
-.address-switch { display: flex; align-items: center; gap: 7px; min-width: 0; margin-left: auto; color: rgb(241 238 228 / 54%); font-size: 12px; }
-.address-switch > svg { flex: none; color: var(--acid); }
-.address-switch label { flex: none; }
-.select-wrap { position: relative; min-width: 0; flex: 1 1 auto; max-width: 55%; }
-.select-wrap select { width: 100%; height: 28px; padding: 0 58px 0 9px; overflow: hidden; border: 1px solid rgb(255 255 255 / 15%); border-radius: 4px; appearance: none; background: rgb(255 255 255 / 4%); color: var(--paper); cursor: pointer; font: 550 11px/1 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-.select-wrap select:hover, .select-wrap select:focus-visible { border-color: var(--acid); outline: none; }
-.select-wrap select option { background: var(--ink); color: var(--paper); }
-.select-wrap span { position: absolute; top: 50%; right: 25px; color: var(--acid); font: 650 11px/1 var(--font-mono); pointer-events: none; transform: translateY(-50%); }
-.select-wrap svg { position: absolute; top: 50%; right: 7px; pointer-events: none; transform: translateY(-50%); }
-.stopped-hint { color: rgb(241 238 228 / 45%); font-size: 13px; }
+.chip-action { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 0; border-radius: 6px; background: rgb(255 255 255 / 10%); color: var(--paper); cursor: pointer; font: 650 11px/1 var(--font-label); transition: background 140ms ease, color 140ms ease; }
+.chip-action:hover { background: rgb(215 249 84 / 20%); color: var(--acid); }
+.chip-action.ok { background: var(--acid); color: var(--ink); }
+.chip-action.icon-only { width: 26px; justify-content: center; padding: 0; }
 
-.header-actions { display: flex; min-width: 0; }
-.power-button { flex: 1; min-width: 134px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 0; background: var(--acid); color: var(--ink); cursor: pointer; font: 720 16px/1 var(--font-label); }
-.power-button:hover:not(:disabled) { background: #e4ff7c; }
-.power-button:disabled { cursor: wait; opacity: .6; }
+.code { flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 13px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 9px; background: rgb(215 249 84 / 8%); }
+.code strong { color: var(--acid); font: 700 14.5px/1 var(--font-mono); letter-spacing: .14em; }
+
+.idle-hint { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: rgb(251 252 247 / 72%); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
+.spacer { flex: 1; }
+
+/* 停止服务是危险操作，用中性描边降到与「选择文件」匹配的次级权重 */
+.power { flex: none; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid rgb(251 252 247 / 32%); border-radius: 9px; background: transparent; color: var(--paper); cursor: pointer; font: 680 13.5px/1 var(--font-label); letter-spacing: .02em; transition: background 140ms ease, border-color 140ms ease; }
+.power:hover:not(:disabled) { border-color: rgb(251 252 247 / 60%); background: rgb(255 255 255 / 8%); }
+/* 启动服务才是这一屏的主行动，独占 acid 实心 */
+.power:not(.is-running) { border-color: var(--acid); background: var(--acid); color: var(--ink); font-weight: 720; }
+.power:not(.is-running):hover:not(:disabled) { border-color: var(--acid-hi); background: var(--acid-hi); }
+.power:disabled { cursor: wait; opacity: .6; }
+
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 1120px) {
-  .desktop-header { grid-template-columns: minmax(200px, 1fr) minmax(0, 1.35fr) auto; }
-  .brand-block, .connection-block { padding-right: 18px; padding-left: 18px; }
-  .brand-mark { width: 52px; height: 52px; font-size: 25px; }
-  .brand-copy p { font-size: 13px; }
-  .brand-copy h1 { font-size: 22px; }
-  .power-button { min-width: 124px; font-size: 15px; }
+
+@media (max-width: 1050px) {
+  .device { max-width: 120px; }
+  .url { max-width: none; }
 }
-@media (max-width: 900px) {
-  .desktop-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; }
-  .brand-block { grid-column: 1; grid-row: 1; }
-  .header-actions { grid-column: 2; grid-row: 1; border-left: 1px solid rgb(255 255 255 / 10%); }
-  .connection-block { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid rgb(255 255 255 / 10%); border-left: 0; padding: 12px 18px; }
-  .power-button { min-height: 54px; }
-  .address-switch label { display: none; }
+@media (max-width: 780px) {
+  .cmdbar { gap: 10px; padding: 0 14px; }
+  .device { display: none; }
+  .power { padding: 0 12px; }
 }
-@media (max-width: 720px) {
-  .brand-block { gap: 14px; padding: 14px 18px; }
-  .brand-mark { width: 46px; height: 46px; font-size: 22px; }
-  .brand-copy p { margin-bottom: 6px; font-size: 12px; }
-  .brand-copy h1 { font-size: 19px; }
-  .host-status strong { font-size: 17px; }
-  .code-pill { padding: 5px 9px; }
-  .code-pill strong { font-size: 14px; }
-  .connection-block { gap: 9px; }
-  .power-button { min-width: 116px; min-height: 48px; font-size: 14px; }
-}
-@media (max-width: 560px) {
-  .brand-block { padding: 12px 14px; }
-  .brand-mark { width: 42px; height: 42px; font-size: 20px; }
-  .brand-copy p { font-size: 11px; }
-  .brand-copy h1 { font-size: 17px; }
-  .connection-block { padding: 10px 14px; }
-  .host-status strong { font-size: 15px; }
-  .code-pill span { font-size: 10px; }
-  .code-pill strong { font-size: 13px; }
-  .primary-url button:first-child { font-size: 12px; }
-  .power-button { min-width: 104px; min-height: 44px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
 }
 </style>

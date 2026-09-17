@@ -18,6 +18,8 @@ export const commands = {
 	chooseReceiveDirectory: () => typedError<string, AppError>(__TAURI_INVOKE("choose_receive_directory")),
 	/**  开关局域网服务器。 */
 	toggleServer: () => typedError<null, AppError>(__TAURI_INVOKE("toggle_server")),
+	/**  更新「是否需要配对码访问」开关；服务运行中时重启以生效。 */
+	setRequirePairing: (enabled: boolean) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_require_pairing", { enabled })),
 	/**  在资源管理器中显示条目所在目录。 */
 	revealItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("reveal_item", { id })),
 	/**  当前传输进度（任务栏进度条轮询）。 */
@@ -47,7 +49,10 @@ export type HostState = HostState_Serialize | HostState_Deserialize;
 /**  宿主运行状态（桌面 UI 直接序列化为 JSON）。 */
 export type HostState_Deserialize = {
 	running: boolean,
+	/**  可达性排序后的访问 URL 列表（等价于 `addresses` 的 `url` 投影，保留向后兼容）。 */
 	urls: string[],
+	/**  带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。 */
+	addresses: LocalAddress[],
 	access_code: string,
 	error: string | null,
 };
@@ -55,7 +60,10 @@ export type HostState_Deserialize = {
 /**  宿主运行状态（桌面 UI 直接序列化为 JSON）。 */
 export type HostState_Serialize = {
 	running: boolean,
+	/**  可达性排序后的访问 URL 列表（等价于 `addresses` 的 `url` 投影，保留向后兼容）。 */
 	urls: string[],
+	/**  带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。 */
+	addresses: LocalAddress[],
 	access_code: string,
 	error?: string | null,
 };
@@ -75,6 +83,25 @@ export type Item = {
 	is_dir?: boolean,
 };
 
+/**  单个候选访问地址及其可达性元信息。 */
+export type LocalAddress = {
+	/**  完整访问 URL，如 `http://192.168.1.8:8080`。 */
+	url: string,
+	/**  适配器名（Windows 上即「网络连接」显示名），如 `以太网`、`Tailscale`。 */
+	interface: string,
+	/**  点分十进制 IP（不含端口）。 */
+	ip: string,
+	/**  前缀长度；无法获取时为 `None`。 */
+	prefix_len: number | null,
+	/**  该地址是否被识别为虚拟网卡 / 点对点链路。 */
+	virtual_link: boolean,
+	/**
+	 *  可达性分级，越小越可能被手机访问到。
+	 *  `0` = 真实局域网，`1` = 存疑，`2` = 虚拟或点对点链路。
+	 */
+	tier: number,
+};
+
 /**
  *  与 Go 版 `settings.Settings` 字段完全一致。所有字段带默认值，
  *  缺失字段/越界端口不阻塞启动（与 Go 版 `applyFallbacks` 容错语义一致）。
@@ -92,6 +119,8 @@ export type Settings_Deserialize = {
 	receive_dir?: string,
 	/**  单文件上传上限；specta 导出为 number（TS 侧 2^53 内精度安全）。 */
 	max_upload_bytes?: number,
+	/**  是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。 */
+	require_pairing?: boolean,
 };
 
 /**
@@ -105,6 +134,8 @@ export type Settings_Serialize = {
 	receive_dir: string,
 	/**  单文件上传上限；specta 导出为 number（TS 侧 2^53 内精度安全）。 */
 	max_upload_bytes: number,
+	/**  是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。 */
+	require_pairing: boolean,
 };
 
 /**  条目来源类型，JSON 序列化为小写。 */

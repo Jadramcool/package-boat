@@ -2,7 +2,7 @@
 //! 对应 Go 版 `internal/host`。
 
 use crate::catalog::Catalog;
-use crate::network::local_urls;
+use crate::network::{local_addresses, LocalAddress};
 use crate::progress::ProgressTracker;
 use crate::server::{Config, Server};
 use crate::settings::Store as SettingsStore;
@@ -20,7 +20,10 @@ use tracing::warn;
 #[serde(rename_all = "snake_case")]
 pub struct HostState {
     pub running: bool,
+    /// 可达性排序后的访问 URL 列表（等价于 `addresses` 的 `url` 投影，保留向后兼容）。
     pub urls: Vec<String>,
+    /// 带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。
+    pub addresses: Vec<LocalAddress>,
     pub access_code: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -106,6 +109,7 @@ impl HostManager {
             version: self.version.clone(),
             catalog: Some(self.catalog.clone()),
             progress: Some(Arc::clone(&self.progress)),
+            require_pairing: settings.require_pairing,
         })
         .inspect_err(|err| {
             let mut inner = self.inner.lock().expect("host lock poisoned");
@@ -146,9 +150,11 @@ impl HostManager {
 
         let mut inner = self.inner.lock().expect("host lock poisoned");
         inner.handle = Some(HostHandle { token, task });
+        let addresses = local_addresses(&settings.host, actual_port);
         inner.state = HostState {
             running: true,
-            urls: local_urls(&settings.host, actual_port),
+            urls: addresses.iter().map(|a| a.url.clone()).collect(),
+            addresses,
             access_code: app.access_code(),
             error: None,
         };
@@ -165,6 +171,7 @@ impl HostManager {
             }
             inner.state.running = false;
             inner.state.urls.clear();
+            inner.state.addresses.clear();
             inner.state.access_code.clear();
             inner.handle.take()
         };
@@ -218,6 +225,7 @@ mod tests {
                     port: 0,
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
+                    require_pairing: true,
                 },
             )
             .unwrap(),
@@ -227,8 +235,18 @@ mod tests {
         let state = manager.state();
         assert!(state.running);
         assert_eq!(state.urls.len(), 1);
+        assert_eq!(state.addresses.len(), 1);
         assert!(!state.access_code.is_empty());
         assert!(state.urls[0].contains("127.0.0.1"));
+        // urls 必须是 addresses 的 url 投影，且顺序一致
+        assert_eq!(
+            state.urls,
+            state
+                .addresses
+                .iter()
+                .map(|a| a.url.clone())
+                .collect::<Vec<_>>()
+        );
 
         let response = reqwest_get(&state.urls[0]).await;
         assert_eq!(response, 200);
@@ -260,6 +278,7 @@ mod tests {
                     port: occupied_port,
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
+                    require_pairing: true,
                 },
             )
             .unwrap(),
@@ -296,6 +315,7 @@ mod tests {
                     port: 0,
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
+                    require_pairing: true,
                 },
             )
             .unwrap(),

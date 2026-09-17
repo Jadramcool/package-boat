@@ -71,6 +71,7 @@ async fn file_lifecycle() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -163,6 +164,7 @@ async fn existing_receive_files_are_not_shared_on_startup() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -196,6 +198,7 @@ async fn static_app_and_security_headers() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
 
@@ -225,6 +228,7 @@ async fn static_asset_compression_and_caching() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
 
@@ -301,6 +305,7 @@ async fn linked_file_download_and_unshare_preserves_original() {
         version: "test".into(),
         catalog: Some(file_catalog.clone()),
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -346,6 +351,7 @@ async fn empty_file_downloads_with_zero_length() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -393,6 +399,7 @@ async fn conditional_and_range_requests() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -509,6 +516,7 @@ async fn folder_share_downloads_as_zip() {
         version: "test".into(),
         catalog: Some(file_catalog.clone()),
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -577,6 +585,7 @@ async fn save_upload_uses_unique_name_and_size_limit() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();
@@ -630,6 +639,7 @@ async fn chunk_upload_resumes_validates_and_cleans_up() {
         version: "test".into(),
         catalog: None,
         progress: None,
+        require_pairing: true,
     })
     .await;
     let client = cookie_client();

@@ -83,20 +83,21 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
 <style scoped>
 .file-row { min-height: 86px; padding: 14px 20px; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 17px; border-bottom: 1px solid var(--line); transition: background .15s; }
 .file-row:last-child { border-bottom: 0; }
-.file-row:hover { background: var(--paper-deep); }
-.file-type { width: 58px; height: 58px; padding: 8px 4px 5px; display: grid; grid-template-rows: 1fr auto; place-items: center; border: 1px solid var(--line-strong); color: var(--ink); background: var(--surface); }
+.file-row:hover { background: rgb(215 249 84 / 12%); }
+.file-type { width: 58px; height: 58px; padding: 8px 4px 5px; display: grid; grid-template-rows: 1fr auto; place-items: center; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink); background: var(--surface); }
 .file-type span { font: 700 7px/1 var(--font-label); letter-spacing: .08em; }
 .file-info { min-width: 0; }
 .file-name-line { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .file-info strong { overflow: hidden; display: block; color: var(--ink); font: 650 14px/1.35 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
-.source-label, .missing-label { flex: none; padding: 4px 6px; font: 650 7px/1 var(--font-label); letter-spacing: .04em; }
-.source-label.linked { color: var(--ink); background: var(--acid); }
-.source-label.received { color: var(--paper); background: var(--ink); }
-.missing-label { color: #7a260f; background: var(--signal-soft); }
+.source-label, .missing-label { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font: 650 10px/1 var(--font-label); letter-spacing: .04em; }
+.source-label::before, .missing-label::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.source-label.linked { color: var(--acid-deep); background: var(--acid-wash); }
+.source-label.received { color: #23559e; background: var(--info-wash); }
+.missing-label { color: var(--signal-deep); background: var(--signal-soft); }
 .file-meta { margin-top: 8px; display: flex; gap: 9px; color: var(--muted); font: 550 9px/1 var(--font-mono); }
 .file-meta span + span::before { content: '·'; margin-right: 9px; }
 .file-actions { display: flex; align-items: center; gap: 7px; }
-.download-button, .unavailable-button, .delete-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); color: var(--ink); background: transparent; text-decoration: none; }
+.download-button, .unavailable-button, .delete-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: transparent; text-decoration: none; }
 .download-button { padding: 0 12px; gap: 7px; font-size: 11px; }
 .unavailable-button { padding: 0 10px; color: var(--muted); cursor: not-allowed; font-size: 9px; }
 .delete-button { width: 36px; color: var(--muted); cursor: pointer; }

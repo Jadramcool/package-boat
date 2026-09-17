@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PacketBoat · 全屏布局重构方案 PB-UI-02</title>
+<style>
+/* ==========================================================
+   PB-UI-02 全屏自适应布局重构方案
+   问题：1280×764 全屏下 28% 纵向死区、地址栏 76% 空置、
+        两侧 86px 空边、720–1100px 断点断层。
+   解法：纵向三段填满 + 驾驶舱重排 + 断点补全。
+   展板样式仅供本提案；.win/.desk 系列即未来落地样式。
+   ========================================================== */
+:root {
+  --dock-0: #f2f4ec;  --dock-1: #fbfcf7;
+  --ink: #1f271c;  --ink-2: #39432f;
+  --muted: #646c57;  --line: #dfe2d2;  --line-strong: #b9bfa6;
+  --acid: #d7f954;  --acid-hi: #e6ff85;  --acid-deep: #4d6707;  --acid-wash: #eef9c8;
+  --signal: #ef5a32;  --signal-deep: #b23a1c;  --signal-wash: #fde9e0;
+  --info: #2f6fd3;  --info-wash: #e4edfb;  --info-lit: #78b6ff;  --ok: #35874a;
+  --paper: #fbfcf7;
+  --on-ink: rgb(251 252 247 / 66%);
+  --on-ink-strong: rgb(251 252 247 / 88%);
+  --f-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --f-label: "Bahnschrift SemiCondensed", "Bahnschrift", "Noto Sans SC", sans-serif;
+  --f-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --f-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --r-s: 8px; --r-m: 12px; --r-l: 16px;
+  --sh-card: 0 1px 2px rgb(31 39 28 / 5%), 0 10px 28px rgb(31 39 28 / 7%);
+}
+* { box-sizing: border-box; margin: 0; }
+html { background: #e9ebe2; }
+body {
+  font-family: var(--f-sans); color: var(--ink); line-height: 1.6;
+  background:
+    linear-gradient(rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    #e9ebe2;
+  background-size: 28px 28px, 28px 28px, auto;
+  text-rendering: optimizeLegibility; padding-bottom: 80px;
+}
+::selection { background: var(--acid); color: var(--ink); }
+
+.board-top { max-width: 1400px; margin: 0 auto; padding: 40px 32px 0; }
+.board-title { margin: 0 0 8px; font: 720 clamp(28px, 4vw, 42px)/1.1 var(--f-display); letter-spacing: -.02em; }
+.board-title em { font-style: normal; background: var(--acid); padding: 0 10px; box-shadow: 3px 3px 0 var(--ink); }
+.board-sub { max-width: 860px; color: var(--muted); font-size: 15px; }
+.board-sub b { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 22px 0 0; font: 600 12px/1 var(--f-mono); color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; }
+.l-good { background: var(--acid); border: 1px solid var(--acid-deep); }
+.l-bad { background: var(--signal-wash); border: 1px solid var(--signal); }
+.l-new { background: var(--info-wash); border: 1px solid var(--info); }
+
+main { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
+.sec { margin-top: 46px; }
+.sec-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.sec-h h2 { font: 720 22px/1.2 var(--f-display); letter-spacing: -.01em; }
+.sec-h span { color: var(--muted); font: 600 12px/1 var(--f-label); letter-spacing: .08em; }
+.sec-p { max-width: 900px; color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.sec-p b { color: var(--ink); }
+
+/* ---------- 窗口 mockup ---------- */
+.stage { margin-top: 14px; }
+.win-frame { border: 1px solid var(--ink); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px rgb(31 39 28 / 18%), 0 4px 12px rgb(31 39 28 / 8%); background: var(--dock-0); }
+.win-bar { height: 38px; display: flex; align-items: center; justify-content: space-between; background: var(--ink); color: var(--paper); user-select: none; }
+.win-brand { display: flex; align-items: center; gap: 9px; padding: 0 14px; min-width: 0; }
+.win-mark { width: 20px; height: 20px; display: grid; place-items: center; flex: none; border: 1px solid var(--acid); color: var(--acid); font: 800 10px/1 var(--f-display); transform: rotate(-3deg); }
+.win-title { overflow: hidden; color: rgb(251 252 247 / 72%); font: 600 11.5px/1 var(--f-label); letter-spacing: .13em; text-overflow: ellipsis; white-space: nowrap; }
+.win-ctl { display: flex; height: 100%; }
+.win-ctl span { width: 42px; display: grid; place-items: center; color: rgb(251 252 247 / 70%); font-size: 11px; }
+.win-ctl span:hover { background: rgb(255 255 255 / 9%); color: var(--paper); }
+.win-ctl .x:hover { background: var(--signal); color: #fff; }
+.win-pin { width: 38px; display: grid; place-items: center; color: var(--acid); }
+
+/* ==========================================================
+   核心：全屏三段式骨架（新）
+   ──────────────────────────────────────────────────────────
+   旧：.shell{display:flex;flex-direction:column} + main{flex:1;overflow-y:auto}
+       → 内容不参与纵向分配，底部塌出死区
+   新：.shell 用 grid-template-rows: auto minmax(0,1fr) auto
+       → 中段强制吸收剩余高度，无论窗口多高都不留死区
+   ========================================================== */
+.win-body { height: 764px; padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--dock-0); }
+.win-body > .row-band { padding: 18px 22px 0; }
+.win-body > .row-mid { min-height: 0; padding: 16px 22px 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; }
+.win-body > .row-foot { padding: 10px 22px 12px; }
+
+/* ---------- 驾驶舱（新：对称双栏，地址栏收窄） ---------- */
+.deck { display: grid; grid-template-columns: minmax(0, 1fr) 232px; overflow: hidden; border-radius: var(--r-l); background: var(--ink); color: var(--paper); box-shadow: var(--sh-card); }
+.deck-main { min-width: 0; padding: 18px 22px; display: grid; gap: 13px; align-content: start; }
+.deck-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.deck-logo { width: 46px; height: 46px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--acid); color: var(--acid); font: 800 22px/1 var(--f-display); transform: rotate(-3deg); }
+.deck-name { min-width: 0; flex: 1; }
+.deck-name small { display: block; margin-bottom: 5px; color: var(--on-ink); font: 650 11.5px/1 var(--f-label); letter-spacing: .1em; }
+.deck-name h3 { overflow: hidden; font: 720 21px/1.05 var(--f-display); letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.deck-status { display: flex; align-items: center; gap: 9px; flex: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #79826f; box-shadow: 0 0 0 4px rgb(255 255 255 / 7%); }
+.dot.on { background: var(--info-lit); box-shadow: 0 0 0 4px rgb(120 182 255 / 20%); }
+.deck-status b { font: 700 14px/1 var(--f-display); color: var(--on-ink); }
+.deck-status.on b { color: var(--info-lit); }
+
+.deck-rows { display: grid; gap: 8px; }
+.deck-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.deck-label { flex: none; width: 56px; color: var(--on-ink); font: 600 11px/1 var(--f-label); letter-spacing: .1em; }
+.url-chip { flex: 1; min-width: 0; max-width: 460px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 5px 0 11px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 9px; background: rgb(255 255 255 / 5%); }
+.url-chip code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 12.5px/1 var(--f-mono); }
+.url-chip button { flex: none; height: 24px; padding: 0 9px; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 6px; background: rgb(255 255 255 / 10%); color: var(--paper); cursor: pointer; font: 650 11px/1 var(--f-label); }
+.url-chip button:hover { background: rgb(215 249 84 / 18%); color: var(--acid); }
+.url-chip button.ok { background: var(--acid); color: var(--ink); }
+.row-note { flex: none; color: var(--on-ink); font-size: 11.5px; }
+.pair-chip { flex: none; display: inline-flex; align-items: center; height: 32px; padding: 0 13px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 9px; background: rgb(215 249 84 / 8%); }
+.pair-chip strong { color: var(--acid); font: 700 16px/1 var(--f-mono); letter-spacing: .18em; }
+
+/* 二维码席位：186px → 232px，扫码提示 + 开关垂直排布更舒展 */
+.deck-side { min-width: 0; border-left: 1px solid rgb(255 255 255 / 10%); padding: 16px; display: grid; align-content: center; justify-items: center; gap: 9px; background: rgb(255 255 255 / 3%); }
+.qr-box { width: 132px; height: 132px; padding: 7px; border-radius: 10px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.qr-box svg { display: block; width: 118px; height: 118px; }
+.qr-hint { color: var(--on-ink); font: 600 11px/1.4 var(--f-label); letter-spacing: .05em; text-align: center; }
+.auto-pair { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.auto-pair i { position: relative; width: 32px; height: 19px; flex: none; border-radius: 999px; background: var(--info-lit); transition: background 160ms; }
+.auto-pair i::after { content: ''; position: absolute; top: 2px; left: 15px; width: 15px; height: 15px; border-radius: 50%; background: var(--ink); }
+.auto-pair span { color: rgb(251 252 247 / 72%); font: 600 11px/1 var(--f-label); }
+
+.deck-power { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.btn-stop { min-width: 120px; height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; border: 1px solid rgb(251 252 247 / 32%); border-radius: 10px; background: transparent; color: var(--paper); cursor: pointer; font: 680 14px/1 var(--f-label); }
+.btn-stop:hover { border-color: rgb(251 252 247 / 60%); background: rgb(255 255 255 / 8%); }
+.power-note { color: var(--on-ink); font-size: 12px; }
+
+/* ---------- 中段左列：拖放区（紧凑化） ---------- */
+.mid-left { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 13px; }
+.dropzone { position: relative; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 13px 18px; border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--dock-1); }
+.dropzone::after { content: ''; position: absolute; inset: 7px; border: 1px dashed var(--line-strong); border-radius: 8px; pointer-events: none; }
+.dz-ico { position: relative; z-index: 1; width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 11px; background: var(--acid); }
+.dz-copy { position: relative; z-index: 1; min-width: 0; }
+.dz-copy h4 { font: 720 17px/1.1 var(--f-display); letter-spacing: -.01em; }
+.dz-copy p { margin: 5px 0 0; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-ink { position: relative; z-index: 1; min-width: 118px; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 18px; border: 1px solid var(--ink); border-radius: 8px; background: var(--ink); color: var(--paper); cursor: pointer; font: 680 14px/1 var(--f-label); }
+.btn-ink:hover { background: #343c31; }
+
+/* ---------- 中段左列：清单卡（撑满剩余高度） ---------- */
+.shelf { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); box-shadow: var(--sh-card); overflow: hidden; }
+.shelf-head { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.shelf-title h4 { font: 720 24px/1 var(--f-display); letter-spacing: -.02em; }
+.shelf-title p { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.shelf-acts { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.stat { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; }
+.stat b { color: var(--ink); font: 700 15px/1 var(--f-mono); }
+.safe-note { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; background: var(--acid-wash); color: var(--acid-deep); font: 650 11.5px/1.3 var(--f-label); }
+.btn-clear { height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--muted); cursor: pointer; font: 650 12.5px/1 var(--f-label); }
+.btn-clear:hover { border-color: var(--signal); background: var(--signal); color: #fff; }
+.icon-btn { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; }
+.icon-btn:hover { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1.6fr) 88px 116px 96px 100px; gap: 16px; padding: 11px 18px; border-bottom: 1px solid var(--line); color: var(--muted); font: 600 11px/1 var(--f-label); letter-spacing: .08em; }
+.cols :last-child { text-align: right; }
+.rows { min-height: 0; overflow-y: auto; }
+.file-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 88px 116px 96px 100px; gap: 16px; align-items: center; min-height: 66px; padding: 11px 18px; border-bottom: 1px solid var(--line); }
+.file-row:last-child { border-bottom: 0; }
+.file-row:hover { background: rgb(215 249 84 / 12%); }
+.f-name { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.f-glyph { width: 42px; height: 48px; flex: none; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 7px 4px 5px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+.f-glyph b { font: 700 8px/1 var(--f-label); letter-spacing: .06em; }
+.f-glyph.dir { border-color: color-mix(in srgb, var(--acid-deep) 45%, transparent); background: var(--acid-wash); color: var(--acid-deep); }
+.f-main { min-width: 0; }
+.f-main > b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 680 14.5px/1.3 var(--f-display); }
+.f-main > small { display: block; overflow: hidden; margin-top: 7px; color: var(--muted); font: 500 11.5px/1.2 var(--f-mono); text-overflow: ellipsis; white-space: nowrap; }
+.f-size, .f-date { color: var(--muted); font: 550 13px/1.35 var(--f-mono); }
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 999px; font: 650 11.5px/1.4 var(--f-label); }
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.b-linked { background: var(--acid-wash); color: var(--acid-deep); }
+.b-recved { background: var(--info-wash); color: #23559e; }
+.f-acts { display: flex; gap: 7px; justify-content: flex-end; }
+.ib-sm { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; }
+.ib-sm:hover { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.ib-sm.del:hover { border-color: var(--signal); background: var(--signal); color: #fff; }
+
+/* 空态：撑满剩余高度而非塌成一条 */
+.empty { height: 100%; min-height: 190px; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 30px 20px; text-align: center; color: var(--muted); }
+.empty b { margin-top: 6px; color: var(--ink); font: 700 18px/1 var(--f-display); }
+.empty p { font-size: 13.5px; }
+
+/* ---------- 中段右列：侧栏（纵向铺满，两卡等分） ---------- */
+.mid-right { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 13px; align-content: start; }
+.side-card { min-width: 0; border: 1px solid var(--line-strong); border-radius: var(--r-l); background: var(--dock-1); box-shadow: var(--sh-card); padding: 16px 17px; display: grid; align-content: start; gap: 0; }
+.side-card.grow { align-content: stretch; grid-template-rows: auto auto minmax(0, 1fr); }
+.side-h { display: flex; align-items: flex-start; gap: 12px; }
+.side-h h5 { font: 720 20px/1.15 var(--f-display); letter-spacing: -.02em; }
+.side-h p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+.path-box { margin-top: 13px; padding: 11px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; font: 550 12px/1.5 var(--f-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-out { width: 100%; height: 40px; display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 9px; border: 1px solid var(--ink); border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; font: 680 14px/1 var(--f-label); }
+.btn-out:hover { background: var(--ink); color: var(--paper); }
+.dl { margin-top: 13px; display: grid; gap: 0; }
+.dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 11px; background: var(--dock-0); border-bottom: 1px solid var(--line); }
+.dl > div:first-child { border-radius: 7px 7px 0 0; }
+.dl > div:last-child { border-bottom: 0; border-radius: 0 0 7px 7px; }
+.dl dt { color: var(--muted); font-size: 13px; }
+.dl dd { color: var(--ink-2); font: 680 13px/1 var(--f-mono); }
+
+/* 侧栏第三卡：传输记录（新，把右列填满） */
+.log-list { min-height: 0; margin-top: 13px; display: grid; align-content: start; gap: 7px; }
+.log-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px; background: var(--dock-0); }
+.log-item i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--info); }
+.log-item i.up { background: var(--ok); }
+.log-body { min-width: 0; flex: 1; }
+.log-body b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
+.log-body small { color: var(--muted); font: 500 10.5px/1 var(--f-mono); }
+.log-empty { margin-top: 13px; padding: 22px 12px; border: 1px dashed var(--line-strong); border-radius: 8px; color: var(--muted); font-size: 12.5px; text-align: center; }
+
+/* ---------- 底栏 ---------- */
+.win-foot { display: flex; align-items: center; gap: 18px; padding-top: 10px; border-top: 1px solid var(--line-strong); color: var(--muted); font: 600 11.5px/1 var(--f-label); letter-spacing: .08em; flex-wrap: wrap; }
+.win-foot .sp { margin-left: auto; }
+.foot-btn { padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: 6px; background: transparent; color: var(--muted); font: 600 11.5px/1 var(--f-label); letter-spacing: .08em; cursor: pointer; }
+.foot-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---------- 对照：旧布局（缩略） ---------- */
+.cmp { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 22px; margin-top: 18px; }
+.cmp-card { border: 1px solid var(--line-strong); border-radius: var(--r-m); background: var(--dock-1); padding: 15px; box-shadow: var(--sh-card); }
+.cmp-card h6 { font: 700 13px/1 var(--f-display); margin-bottom: 11px; }
+.cmp-card.bad h6 { color: var(--signal-deep); }
+.cmp-card.good h6 { color: var(--acid-deep); }
+.mini { height: 232px; position: relative; display: grid; gap: 7px; padding: 10px; border-radius: 8px; background: var(--dock-0); overflow: hidden; }
+.mini .m-band { border-radius: 6px; background: var(--ink); height: 42px; }
+.mini .m-mid { border-radius: 6px; background: #fff; border: 1px solid var(--line-strong); }
+.mini .gapzone { border: 1px dashed var(--signal); border-radius: 6px; background: repeating-linear-gradient(45deg, rgb(239 90 50 / 7%) 0 6px, transparent 6px 12px); display: grid; place-items: center; color: var(--signal-deep); font: 650 11px/1.4 var(--f-label); text-align: center; }
+.mini .tag { position: absolute; padding: 2px 6px; border-radius: 4px; background: var(--signal); color: #fff; font: 650 10px/1.4 var(--f-label); }
+.tbl { margin-top: 14px; width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th, .tbl td { padding: 9px 11px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.tbl th { color: var(--muted); font: 650 11.5px/1.3 var(--f-label); letter-spacing: .06em; white-space: nowrap; }
+.tbl td:first-child { font-weight: 600; white-space: nowrap; }
+.tbl code { font: 550 12px/1.4 var(--f-mono); background: var(--dock-0); padding: 1px 5px; border-radius: 4px; }
+.yes { color: var(--acid-deep); font-weight: 650; }
+.no { color: var(--signal-deep); font-weight: 650; }
+</style>
+</head>
+<body>
+
+<header class="board-top">
+  <h1 class="board-title">PacketBoat 桌面端 · <em>全屏布局重构</em></h1>
+  <p class="board-sub">
+    针对 <b>1280 × 764 全屏</b>下暴露的布局问题。实测：内容仅占 548px 高，底部塌出 <b>216px 死区（占窗口 28%）</b>；
+    主容器两侧各空 86px；驾驶舱「访问地址」输入框被拉伸到约 800px，装 190px 文本，<b>76% 空置</b>。
+    本方案用「纵向三段填满 + 驾驶舱重排 + 断点补全」解决，布局骨架不变，仅调分配规则。
+  </p>
+  <div class="legend">
+    <span><i class="l-bad"></i>问题区域</span>
+    <span><i class="l-good"></i>修复后</span>
+    <span><i class="l-new"></i>新增内容</span>
+    <span>设计 token：晴空码头（acid 绿 = 品牌行动 / info 蓝 = 状态开关 / signal 橙 = 危险）</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ 1 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>1 · 现状问题拆解</h2><span>MEASURED @ 1280×764</span></div>
+  <p class="sec-p">
+    三个独立问题叠加，共同造成「全屏下不好看」的观感。
+  </p>
+
+  <div class="cmp">
+    <div class="cmp-card bad">
+      <h6>现状 · 内容塌在上半屏</h6>
+      <div class="mini">
+        <div class="m-band"></div>
+        <div class="m-mid" style="height:150px"></div>
+        <div class="gapzone" style="height:52px">216px 纵向死区 · 占窗口 28%</div>
+      </div>
+    </div>
+    <div class="cmp-card good">
+      <h6>重构 · 纵向三段填满</h6>
+      <div class="mini">
+        <div class="m-band"></div>
+        <div class="m-mid" style="height:150px"></div>
+        <div class="m-mid" style="height:52px;background:var(--info-wash);border-color:var(--info)"></div>
+      </div>
+    </div>
+  </div>
+
+  <table class="tbl">
+    <thead>
+      <tr><th>问题</th><th>实测数据</th><th>根因</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>纵向 28% 死区</td>
+        <td>内容底 548px / 窗口 764px</td>
+        <td><code>main { flex: 1 }</code> 只被撑开、不参与分配。子元素全是 <code>max-content</code>，多余高度无处可去。</td>
+      </tr>
+      <tr>
+        <td>地址栏 76% 空置</td>
+        <td>输入框约 800px，文本约 190px</td>
+        <td><code>.url-chip { flex: 1 }</code> 在大宽屏下无上限，随容器无限拉伸。</td>
+      </tr>
+      <tr>
+        <td>两侧 86px 空边</td>
+        <td>卡片区 x=86 → 1194，宽 1108px</td>
+        <td>左右 padding 24px + <code>max-width: 1480px</code> 未生效（窗口仅 1280），实际边距由 padding 决定而非居中约束。</td>
+      </tr>
+      <tr>
+        <td>断点断层</td>
+        <td>720 → 1100px 无适配</td>
+        <td>仅设 <code>1100px</code> / <code>900px</code> / <code>720px</code> 三档，<b>720–1100px 区间</b>（窗口化常用尺寸）无专门布局。</td>
+      </tr>
+      <tr>
+        <td>视觉重心错位</td>
+        <td>二维码仅占 186px 窄条</td>
+        <td>该尺寸为小窗口设计；全屏下第一屏应是「手机怎么连上」，但二维码被挤到最右侧角落。</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>2 · 重构方案：全屏三段式</h2><span>1280 × 764 实际渲染</span></div>
+  <p class="sec-p">
+    骨架从 <code>flex column</code> 改为 <b>grid 三段行</b>：<code>grid-template-rows: auto minmax(0,1fr) auto</code>。
+    中段拿到 <code>1fr</code> 强制吸收全部剩余高度，无论窗口多高都不塌出死区；中段内部再嵌套
+    <code>auto minmax(0,1fr)</code>，让清单卡撑满、空态居中。
+  </p>
+
+  <div class="stage">
+  <div class="win-frame">
+    <div class="win-bar">
+      <div class="win-brand"><span class="win-mark">L</span><span class="win-title">PacketBoat · 局域网投递站</span></div>
+      <div class="win-ctl"><span class="win-pin">▮</span><span>—</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+
+    <div class="win-body">
+      <div class="row-band">
+        <section class="deck">
+          <div class="deck-main">
+            <div class="deck-id">
+              <div class="deck-logo">L</div>
+              <div class="deck-name">
+                <small>PacketBoat 局域网投递站</small>
+                <h3>JAY</h3>
+              </div>
+              <div class="deck-status on">
+                <span class="dot on"></span><b>服务运行中</b>
+              </div>
+            </div>
+
+            <div class="deck-rows">
+              <div class="deck-row">
+                <span class="deck-label">访问地址</span>
+                <div class="url-chip">
+                  <code>http://10.80.40.166:8081</code>
+                  <button>⧉ 复制</button>
+                  <button style="width:24px;padding:0;justify-content:center">↗</button>
+                </div>
+              </div>
+              <div class="deck-row">
+                <span class="deck-label">切换地址</span>
+                <div class="url-chip" style="max-width:460px">
+                  <code>局域网 · 10.80.40.166 (以太网 2 /22)</code>
+                </div>
+                <span class="row-note">1 / 4</span>
+              </div>
+              <div class="deck-row">
+                <span class="deck-label">配对码</span>
+                <div class="pair-chip"><strong>732323</strong></div>
+                <span class="row-note">同局域网设备输入此码即可连接</span>
+              </div>
+            </div>
+
+            <div class="deck-power">
+              <button class="btn-stop">◼ 停止服务</button>
+              <span class="power-note">关闭窗口会最小化到托盘，服务保持运行</span>
+            </div>
+          </div>
+
+          <div class="deck-side">
+            <div class="qr-box">
+              <svg viewBox="0 0 29 29" shape-rendering="crispEdges">
+                <rect width="29" height="29" fill="#fff"/>
+                <g fill="#1f271c">
+                  <path d="M0 0h7v7h-7zm1 1v5h5v-5zm1 1h3v3h-3z"/>
+                  <path d="M22 0h7v7h-7zm1 1v5h5v-5zm1 1h3v3h-3z"/>
+                  <path d="M0 22h7v7h-7zm1 1v5h5v-5zm1 1h3v3h-3z"/>
+                  <path d="M9 0h1v2h-1zm2 1h1v2h-1zm2 0h1v1h-1zm2 1h2v1h-2zm-6 3h1v1h-1zm3 1h2v1h-2zm3 0h1v2h-1zm2 0h1v1h-1z"/>
+                  <path d="M0 9h2v1h-2zm3 0h1v2h-1zm2 1h2v1h-2zm3 0h1v1h-1zm3 0h2v1h-2zm3 1h1v2h-1zm3 1h1v1h-1zm2-2h1v1h-1zm3 0h1v2h-1zm3 1h1v1h-1z"/>
+                  <path d="M1 12h1v1h-1zm3 1h2v1h-2zm4 0h1v2h-1zm3 0h1v1h-1zm2 1h1v1h-1zm3 0h2v1h-2zm4 1h1v1h-1zm3 0h1v1h-1zm3 1h1v2h-1z"/>
+                  <path d="M0 15h1v1h-1zm2 0h2v1h-2zm4 1h1v1h-1zm3 0h1v2h-1zm3 0h2v1h-2zm4 0h1v1h-1zm2 1h1v1h-1zm3 0h1v1h-1zm3 1h2v1h-2z"/>
+                  <path d="M1 18h2v1h-2zm4 0h1v1h-1zm3 1h2v1h-2zm4 0h2v1h-2zm4 1h1v1h-1zm3 0h2v1h-2zm4 0h1v1h-1zm3 1h1v1h-1z"/>
+                  <path d="M0 21h1v1h-1zm3 0h1v1h-1zm3 1h1v1h-1zm3 0h1v1h-1zm3 1h2v1h-2zm4 0h1v1h-1zm3 0h1v1h-1zm3 1h1v1h-1zm3-3h1v1h-1z"/>
+                  <path d="M9 24h1v2h-1zm2 0h2v1h-2zm4 1h1v2h-1zm3 0h2v1h-2zm4 0h1v2h-1zm3 1h1v1h-1z"/>
+                  <path d="M9 27h1v1h-1zm3 0h2v1h-2zm4 0h1v1h-1zm3 0h1v1h-1zm3 0h2v1h-2zm4 0h1v1h-1z"/>
+                </g>
+              </svg>
+            </div>
+            <p class="qr-hint">手机扫码直连</p>
+            <label class="auto-pair"><i></i><span>扫码自动进入</span></label>
+          </div>
+        </section>
+      </div>
+
+      <div class="row-mid" style="grid-template-columns:minmax(0,1fr) 306px;">
+        <div class="mid-left">
+          <div class="dropzone">
+            <div class="dz-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f271c" stroke-width="1.5"><path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.4.6L11.4 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5m0-5-2 2m2-2 2 2"/></svg>
+            </div>
+            <div class="dz-copy">
+              <h4>把文件拖到这里</h4>
+              <p>仅保存原始路径，不复制、不移动。文件始终保留在磁盘原处。</p>
+            </div>
+            <button class="btn-ink">＋ 选择文件</button>
+          </div>
+
+          <section class="shelf">
+            <header class="shelf-head">
+              <div class="shelf-title">
+                <h4>共享文件</h4>
+                <p>1 个文件 · 865 B</p>
+              </div>
+              <div class="shelf-acts">
+                <span class="stat">⧉ <b>0</b> 原位共享</span>
+                <span class="stat">↓ <b>1</b> 远程接收</span>
+                <span class="safe-note">🛡 清空只移除清单，不删除原文件</span>
+                <button class="btn-clear">🗑 一键清空</button>
+                <button class="icon-btn">⟳</button>
+              </div>
+            </header>
+            <div class="cols">
+              <span>文件名</span><span>大小</span><span>修改时间</span><span>来源</span><span>操作</span>
+            </div>
+            <div class="rows">
+              <div class="file-row">
+                <div class="f-name">
+                  <div class="f-glyph"><span style="font-size:15px">🖼</span><b>PNG</b></div>
+                  <div class="f-main">
+                    <b>ICON_256.PNG</b>
+                    <small>C:\Users\jdm\Downloads\PacketBoat\ICON_256.PNG</small>
+                  </div>
+                </div>
+                <div class="f-size">865 B</div>
+                <div class="f-date">10:34</div>
+                <div><span class="badge b-recved">远程接收</span></div>
+                <div class="f-acts">
+                  <button class="ib-sm">👁</button>
+                  <button class="ib-sm del">🗑</button>
+                </div>
+              </div>
+              <div class="file-row">
+                <div class="f-name">
+                  <div class="f-glyph dir"><span style="font-size:15px">📁</span><b>文件夹</b></div>
+                  <div class="f-main">
+                    <b>2026-Q3-应收对账明细</b>
+                    <small>D:\work\2026-Q3-应收对账明细</small>
+                  </div>
+                </div>
+                <div class="f-size">文件夹</div>
+                <div class="f-date">09:12</div>
+                <div><span class="badge b-linked">原位共享</span></div>
+                <div class="f-acts">
+                  <button class="ib-sm">👁</button>
+                  <button class="ib-sm del">⛓</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="mid-right">
+          <aside class="side-card">
+            <div class="side-h">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f271c" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v7l2.5-1.5L12 11V4"/></svg>
+              <div>
+                <h5>接收设置</h5>
+                <p>其他设备上传的文件保存位置</p>
+              </div>
+            </div>
+            <div class="path-box">C:\Users\jdm\Downloads\PacketBoat\</div>
+            <button class="btn-out">📂 更改目录</button>
+            <div class="dl">
+              <div><dt>单文件上限</dt><dd>2.0 GB</dd></div>
+              <div><dt>端口</dt><dd>8081</dd></div>
+            </div>
+          </aside>
+
+          <aside class="side-card grow">
+            <div class="side-h">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f271c" stroke-width="1.5"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>
+              <div>
+                <h5>传输记录</h5>
+                <p>本次会话收发的文件</p>
+              </div>
+            </div>
+            <div class="log-list">
+              <div class="log-item">
+                <i class="up"></i>
+                <div class="log-body"><b>ICON_256.PNG</b><small>接收 · 865 B · 10:34</small></div>
+              </div>
+              <div class="log-item">
+                <i></i>
+                <div class="log-body"><b>产品发布会素材.zip</b><small>发出 · 128 MB · 09:48</small></div>
+              </div>
+              <div class="log-item">
+                <i class="up"></i>
+                <div class="log-body"><b>客户回访录音-0908.mp3</b><small>接收 · 18 MB · 09:05</small></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="row-foot">
+        <footer class="win-foot">
+          <span>PacketBoat 桌面端 · v0.1.0</span>
+          <span>文件通过本机局域网直达 · 无云端中转</span>
+          <span class="sp"></span>
+          <button class="foot-btn">检查更新</button>
+        </footer>
+      </div>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>3 · 关键改动清单</h2><span>WHAT CHANGED</span></div>
+  <table class="tbl">
+    <thead>
+      <tr><th>项目</th><th>原值 / 原规则</th><th>新值 / 新规则</th><th>解决的问题</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>外层骨架</td>
+        <td><code>flex column</code> + <code>main{flex:1}</code></td>
+        <td><code>grid-rows: auto minmax(0,1fr) auto</code></td>
+        <td class="yes">28% 纵向死区</td>
+      </tr>
+      <tr>
+        <td>中段内部</td>
+        <td>各自 <code>max-content</code></td>
+        <td><code>grid-rows: auto minmax(0,1fr)</code>，清单卡撑满</td>
+        <td class="yes">清单卡高度随窗口伸缩</td>
+      </tr>
+      <tr>
+        <td>地址栏</td>
+        <td><code>flex:1</code> 无上限（实测 800px）</td>
+        <td><code>max-width: 460px</code></td>
+        <td class="yes">76% 空置</td>
+      </tr>
+      <tr>
+        <td>二维码席位</td>
+        <td>186px 窄条</td>
+        <td>232px，二维码 118→118px 但卡片留白增加</td>
+        <td class="yes">视觉重心前置</td>
+      </tr>
+      <tr>
+        <td>右列侧栏</td>
+        <td>单卡 + 下方空白</td>
+        <td>接收设置 + <b>传输记录（新增）</b> 两卡纵向铺满</td>
+        <td class="yes">右列高度得到利用</td>
+      </tr>
+      <tr>
+        <td>空态</td>
+        <td>塌成一条 44px</td>
+        <td><code>height:100%</code> 居中，撑满清单卡</td>
+        <td class="yes">空清单不再显空</td>
+      </tr>
+      <tr>
+        <td>拖放区</td>
+        <td>min-height 108px，双行大标题</td>
+        <td>紧凑单行 13px 内边距</td>
+        <td class="yes">为清单卡让出高度</td>
+      </tr>
+      <tr>
+        <td>应答断点</td>
+        <td>1100 / 900 / 720</td>
+        <td>补 <b>1100–1500 宽屏档</b> + <b>1100–860 平板档</b></td>
+        <td class="yes">720–1100px 断层</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="sec">
+  <div class="sec-h"><h2>4 · 断点策略重构</h2><span>RESPONSIVE</span></div>
+  <p class="sec-p">
+    原三档在 <b>720–1100px</b> 之间没有专门布局，恰好覆盖窗口化常用尺寸。补齐为五档，并明确每档的列数变化。
+  </p>
+  <table class="tbl">
+    <thead>
+      <tr><th>档位</th><th>宽度</th><th>驾驶舱</th><th>主区列</th><th>清单列</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>宽屏</td><td>≥ 1500px</td><td>侧栏 232px</td><td>1fr + 306px</td><td>5 列全显</td></tr>
+      <tr><td>标准</td><td>1100 – 1500px</td><td>侧栏 232px</td><td>1fr + 306px</td><td>5 列全显</td></tr>
+      <tr><td>紧凑</td><td>860 – 1100px</td><td>侧栏 200px</td><td>1fr + 264px</td><td>隐藏「来源」</td></tr>
+      <tr><td>平板</td><td>720 – 860px</td><td>二维码转下方横排</td><td>单列堆叠</td><td>隐藏「修改时间」</td></tr>
+      <tr><td>窄窗</td><td>&lt; 720px</td><td>图标与状态换行</td><td>单列堆叠</td><td>仅名称 + 操作</td></tr>
+    </tbody>
+  </table>
+  <p class="sec-p" style="margin-top:16px">
+    <b>关键点</b>：三段式骨架在所有档位都保留（<code>minmax(0,1fr)</code> 在窄窗同样有效），
+    只是中段内部的列数随档位塌缩 —— 因此小窗口下也不会出现「内容挤在上半屏」。
+  </p>
+</section>
+
+</main>
+</body>
+</html>

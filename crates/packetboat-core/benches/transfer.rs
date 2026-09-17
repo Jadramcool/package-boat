@@ -242,6 +242,7 @@ impl BenchServer {
             version: env!("CARGO_PKG_VERSION").into(),
             catalog: None,
             progress: None,
+            require_pairing: true,
         })
         .map_err(failure)?;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;

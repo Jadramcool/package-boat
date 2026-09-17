@@ -7,6 +7,7 @@ use crate::state::{
 };
 use packetboat_core::catalog::Item;
 use packetboat_core::progress::TransferProgress;
+use packetboat_core::settings::Settings;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -148,6 +149,29 @@ pub async fn toggle_server(app: AppHandle, state: State<'_, Desktop>) -> Result<
             Err(err.into())
         }
     }
+}
+
+/// 更新「是否需要配对码访问」开关；服务运行中时重启以生效。
+#[tauri::command]
+#[specta::specta]
+pub async fn set_require_pairing(
+    app: AppHandle,
+    state: State<'_, Desktop>,
+    enabled: bool,
+) -> Result<Settings, AppError> {
+    let updated = state
+        .settings
+        .set_require_pairing(enabled)
+        .inspect_err(|err| emit_error(&app, err))?;
+
+    if state.host.state().running {
+        if let Err(err) = state.host.restart().await {
+            emit_error(&app, &err);
+            return Err(err.into());
+        }
+    }
+    emit_state_changed(&app);
+    Ok(updated)
 }
 
 /// 在资源管理器中显示条目所在目录。

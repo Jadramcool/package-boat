@@ -1,19 +1,58 @@
 :root {
-  --paper: #f1eee4;
-  --paper-deep: #e8e4d8;
-  --surface: #f9f7f0;
-  --ink: #20261d;
-  --muted: #6f7469;
-  --line: #d9d5c9;
-  --line-strong: #aaa99e;
-  --acid: #d9ff52;
-  --signal: #f05a32;
-  --signal-soft: #ffe0d4;
+  /* ========================================================
+     晴空码头 Clear Harbor · PB-UI-01
+     深海墨 × 航速绿 × 船坞白；旧变量名保留为兼容别名，
+     组件层可渐进迁移到新命名（--dock-0/--acid-wash 等）。
+     ======================================================== */
+
+  /* —— 底色 —— */
+  --dock-0: #f2f4ec;            /* 船坞白 · 页面底 */
+  --dock-1: #fbfcf7;            /* 舱面白 · 卡片面 */
+  --paper: #fbfcf7;             /* 兼容别名 → 舱面白（深底反白文字 / 旧卡片底） */
+  --paper-deep: #e9ebe2;        /* 兼容别名 → hover 洗色底 */
+  --surface: #fbfcf7;           /* 兼容别名 → 舱面白 */
+
+  /* —— 文字 —— */
+  --ink: #1f271c;               /* 深海墨 · 主文字 / 深色块 */
+  --ink-2: #39432f;             /* 深海墨·浅一档（次级强调） */
+  --muted: #646c57;             /* 雾灰 · 次级文字（舱面白上 4.9:1） */
+
+  /* —— 分隔 —— */
+  --line: #dfe2d2;              /* 弱分隔 */
+  --line-strong: #b9bfa6;       /* 描边 / 强分隔 */
+
+  /* —— 航速绿（主行动 / 品牌）——
+     acid 绿只承担三种角色：品牌标识、主行动按钮底、深底上的强调。
+     在线状态 / 开关改由 info 系承担（见下方语义色），避免一个颜色讲六件事。 */
+  --acid: #d7f954;              /* 主行动底（深海墨文字 12.1:1） */
+  --acid-hi: #e6ff85;           /* hover */
+  --acid-deep: #4d6707;         /* 浅底上的绿字（acid-wash 上 5.84:1，过 AA） */
+  --acid-wash: #eef9c8;         /* 选中 / 提示洗色底 */
+
+  /* —— 信号橙（危险 / 删除）—— */
+  --signal: #ef5a32;            /* 图标 / 实底（白字仅限大字与图标） */
+  --signal-deep: #b23a1c;       /* 浅底上的危险文字（洗色底上 5.1:1） */
+  --signal-soft: #fde9e0;       /* 兼容别名 → 危险洗色底 */
+
+  /* —— 语义色 —— */
+  --info: #2f6fd3;              /* 链接 / 焦点 / 远程接收（浅底） */
+  --info-lit: #78b6ff;          /* 深色底上的 info（深海墨上 7.28:1，过 AA） */
+  --info-wash: #e4edfb;
+  --ok: #35874a;                /* 成功 / 在线文字（浅底） */
+
+  /* —— 深色底反白文字（深海墨上）——
+     统一给到 α ≥ .66，保证 ≥4.5:1；此前 .42/.45 只有 3.8~4.2:1，不达 AA。 */
+  --on-ink: rgb(251 252 247 / 66%);      /* 次级说明文字 */
+  --on-ink-strong: rgb(251 252 247 / 88%); /* 近主文字 */
+  --on-ink-dim: rgb(251 252 247 / 55%);  /* 仅用于 ≥18px 大字或纯装饰 */
+
+  /* —— 字体（全部 Windows 自带，零加载）—— */
   --font-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
   --font-label: "Bahnschrift SemiCondensed", "Noto Sans SC", sans-serif;
   --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+
   color: var(--ink);
-  background: var(--paper);
+  background: var(--dock-0);
   font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -23,7 +62,7 @@
 
 html {
   min-width: 320px;
-  background: var(--paper);
+  background: var(--dock-0);
   scroll-behavior: smooth;
 }
 
@@ -32,8 +71,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 74% 7%, rgb(217 255 82 / 13%), transparent 25rem),
-    var(--paper);
+    radial-gradient(circle at 74% 7%, rgb(215 249 84 / 14%), transparent 25rem),
+    var(--dock-0);
 }
 
 button,
@@ -42,7 +81,7 @@ input { font: inherit; }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--signal) 70%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--info) 75%, transparent);
   outline-offset: 3px;
 }
 
@@ -57,7 +96,7 @@ input:focus-visible {
   height: 1px !important;
   overflow: hidden !important;
   clip: rect(0, 0, 0, 0) !important;
-  white-space: nowrap !important;
+  white-space: nowrap;
   clip-path: inset(50%) !important;
 }
 
@@ -82,4 +121,3 @@ input:focus-visible {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-thumb:active { background: var(--ink); }
 ::-webkit-scrollbar-corner { background: transparent; }
-
