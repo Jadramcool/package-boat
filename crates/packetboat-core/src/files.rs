@@ -2,13 +2,9 @@
 
 use crate::catalog::{Catalog, Item};
 use rand::RngCore;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter as AsyncBufWriter};
-use zip::write::SimpleFileOptions;
-use zip::CompressionMethod;
 
 /// 大文件传输使用较大的用户态缓冲，减少异步运行时与系统调用开销。
 pub const TRANSFER_BUFFER_SIZE: usize = 256 * 1024;
@@ -424,54 +420,95 @@ pub(crate) fn random_hex(length: usize) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// 递归打包文件夹为 zip 文件。zip 内以文件夹名作为顶层目录（解压得到同名文件夹），
+/// 递归把文件夹写入 zip 输出流：zip 内以文件夹名作为顶层目录（解压得到同名文件夹），
 /// 相对路径使用 `/` 分隔，符号链接跳过（防循环），空文件夹写入目录条目。
-/// 此函数为同步阻塞操作，应在 `spawn_blocking` 中调用。
-pub fn build_folder_zip(source_dir: &Path, zip_path: &Path) -> Result<(), String> {
-    let folder_name = source_dir
-        .file_name()
-        .ok_or_else(|| "文件夹名称无效".to_string())?
-        .to_string_lossy()
-        .into_owned();
-    let file = File::create(zip_path).map_err(|err| format!("创建 zip 文件: {err}"))?;
-    let mut writer = zip::ZipWriter::new(BufWriter::new(file));
-    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+///
+/// 使用 data descriptor 流式写入，不需要 Seek，也不会先把完整压缩包落到磁盘。
+pub async fn stream_folder_zip(
+    source_dir: PathBuf,
+    folder_name: String,
+    output: tokio::io::DuplexStream,
+) -> Result<(), String> {
+    use async_zip::base::write::ZipFileWriter;
 
-    write_dir_to_zip(&mut writer, source_dir, &folder_name, &options)
+    if folder_name.trim().is_empty() {
+        return Err("文件夹名称无效".to_string());
+    }
+
+    let mut writer = ZipFileWriter::with_tokio(output);
+    write_dir_to_zip_stream(&mut writer, &source_dir, &folder_name)
+        .await
         .map_err(|err| err.to_string())?;
     writer
-        .finish()
+        .close()
+        .await
         .map_err(|err| format!("完成 zip 写入: {err}"))?;
     Ok(())
 }
 
-fn write_dir_to_zip(
-    writer: &mut zip::ZipWriter<BufWriter<File>>,
+async fn write_dir_to_zip_stream<W>(
+    writer: &mut async_zip::base::write::ZipFileWriter<W>,
     dir: &Path,
     prefix: &str,
-    options: &SimpleFileOptions,
-) -> std::io::Result<()> {
-    let entries = std::fs::read_dir(dir)?;
+) -> Result<(), String>
+where
+    W: futures_lite::io::AsyncWrite + Unpin,
+{
+    use async_zip::{Compression, ZipEntryBuilder};
+    use futures_lite::io::AsyncWriteExt as _;
+
+    let entries = std::fs::read_dir(dir).map_err(|err| format!("读取目录 {dir:?}: {err}"))?;
     for entry in entries {
-        let entry = entry?;
+        let entry = entry.map_err(|err| format!("读取目录项: {err}"))?;
         let name = entry.file_name().to_string_lossy().into_owned();
         let relative = if prefix.is_empty() {
             name.clone()
         } else {
             format!("{prefix}/{name}")
         };
-        let file_type = entry.file_type()?;
+        let file_type = entry
+            .file_type()
+            .map_err(|err| format!("读取文件类型 {relative}: {err}"))?;
         if file_type.is_symlink() {
             continue; // 跳过符号链接，避免循环与越界
         }
         if file_type.is_dir() {
-            // 目录条目（以 / 结尾）+ 递归
-            writer.add_directory(relative.clone(), *options)?;
-            write_dir_to_zip(writer, &entry.path(), &relative, options)?;
+            let dir_entry =
+                ZipEntryBuilder::new(format!("{relative}/").into(), Compression::Deflate).build();
+            writer
+                .write_entry_whole(dir_entry, &[])
+                .await
+                .map_err(|err| format!("写入目录条目 {relative}: {err}"))?;
+            Box::pin(write_dir_to_zip_stream(writer, &entry.path(), &relative)).await?;
         } else if file_type.is_file() {
-            writer.start_file(relative, *options)?;
-            let mut file = File::open(entry.path())?;
-            std::io::copy(&mut file, writer)?;
+            let file_entry =
+                ZipEntryBuilder::new(relative.clone().into(), Compression::Deflate).build();
+            let mut entry_writer = writer
+                .write_entry_stream(file_entry)
+                .await
+                .map_err(|err| format!("开始写入 {relative}: {err}"))?;
+
+            let mut file = tokio::fs::File::open(entry.path())
+                .await
+                .map_err(|err| format!("打开 {relative}: {err}"))?;
+            let mut buffer = vec![0u8; TRANSFER_BUFFER_SIZE];
+            loop {
+                let read = file
+                    .read(&mut buffer)
+                    .await
+                    .map_err(|err| format!("读取 {relative}: {err}"))?;
+                if read == 0 {
+                    break;
+                }
+                entry_writer
+                    .write_all(&buffer[..read])
+                    .await
+                    .map_err(|err| format!("写入 {relative}: {err}"))?;
+            }
+            entry_writer
+                .close()
+                .await
+                .map_err(|err| format!("结束 {relative}: {err}"))?;
         }
     }
     Ok(())

@@ -4,7 +4,7 @@
 use crate::assets;
 use crate::auth::{AuthManager, SESSION_COOKIE_NAME};
 use crate::catalog::{Catalog, Item, SourceType};
-use crate::files::{random_hex, save_upload, SaveUploadError};
+use crate::files::{save_upload, SaveUploadError};
 use crate::hub::Hub;
 use crate::uploads::{UploadError, UploadManager, MAX_CHUNK_SIZE};
 use axum::body::Body;
@@ -847,7 +847,7 @@ impl Drop for DownloadCountStream {
     }
 }
 
-/// 文件夹下载：后台线程打包为 zip，流式输出，响应体结束后自动删除临时文件。
+/// 文件夹下载：边读源目录边压缩，通过 duplex 管道流式发送，不落完整临时 zip。
 async fn zip_download(item: &crate::catalog::Item, head_only: bool) -> Response {
     let zip_name = format!("{}.zip", item.name);
 
@@ -855,47 +855,22 @@ async fn zip_download(item: &crate::catalog::Item, head_only: bool) -> Response 
     let mut response = if head_only {
         Response::new(Body::empty())
     } else {
-        let zip_path = std::env::temp_dir().join(format!(
-            ".packetboat-zip-{}-{}.zip",
-            std::process::id(),
-            random_suffix()
-        ));
-
-        let source = item.local_path.clone();
-        let destination = zip_path.clone();
-        let build = tokio::task::spawn_blocking(move || {
-            crate::files::build_folder_zip(std::path::Path::new(&source), &destination)
-        })
-        .await;
-        match build {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => {
-                let _ = std::fs::remove_file(&zip_path);
-                warn!("打包文件夹失败: {err}");
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "打包文件夹失败，请重试");
-            }
-            Err(err) => {
-                let _ = std::fs::remove_file(&zip_path);
-                warn!("打包任务异常: {err}");
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "打包文件夹失败，请重试");
-            }
+        let source = std::path::PathBuf::from(&item.local_path);
+        if !source.is_dir() {
+            return json_error(StatusCode::NOT_FOUND, "文件夹不存在");
         }
 
-        let file = match tokio::fs::File::open(&zip_path).await {
-            Ok(file) => file,
-            Err(err) => {
-                let _ = std::fs::remove_file(&zip_path);
-                warn!("读取 zip 失败: {err}");
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "打包文件夹失败，请重试");
+        let folder_name = item.name.clone();
+        let (reader, writer) = tokio::io::duplex(crate::files::TRANSFER_BUFFER_SIZE * 2);
+        tokio::spawn(async move {
+            if let Err(err) = crate::files::stream_folder_zip(source, folder_name, writer).await {
+                // 头部已发出后无法改为 500；截断 zip 由客户端表现为空白/解压失败。
+                warn!("流式打包文件夹失败: {err}");
             }
-        };
-        let stream = ZipCleanupStream {
-            inner: tokio_util::io::ReaderStream::with_capacity(
-                file,
-                crate::files::TRANSFER_BUFFER_SIZE,
-            ),
-            cleanup_path: zip_path,
-        };
+        });
+
+        let stream =
+            tokio_util::io::ReaderStream::with_capacity(reader, crate::files::TRANSFER_BUFFER_SIZE);
         Response::new(Body::from_stream(stream))
     };
 
@@ -913,36 +888,6 @@ async fn zip_download(item: &crate::catalog::Item, head_only: bool) -> Response 
         HeaderValue::from_static("private, no-store"),
     );
     response
-}
-
-/// 流式输出 zip 并在流结束（或客户端断开）时删除临时文件。
-struct ZipCleanupStream {
-    inner: tokio_util::io::ReaderStream<tokio::fs::File>,
-    cleanup_path: PathBuf,
-}
-
-impl futures_util::Stream for ZipCleanupStream {
-    type Item = Result<axum::body::Bytes, std::io::Error>;
-
-    fn poll_next(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Self::Item>> {
-        let inner = &mut self.get_mut().inner;
-        futures_util::StreamExt::poll_next_unpin(inner, cx)
-    }
-}
-
-impl Drop for ZipCleanupStream {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.cleanup_path);
-    }
-}
-
-fn random_suffix() -> String {
-    // 使用密码学随机而非时间戳：同进程内并发打包时纳秒时间戳可能重复，
-    // 导致 ZIP 临时文件互相覆盖、下载内容被污染
-    random_hex(8)
 }
 
 async fn handle_delete(State(server): State<Arc<Server>>, Path(id): Path<String>) -> Response {
