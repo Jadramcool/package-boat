@@ -1,4 +1,4 @@
-import { computed, onUnmounted, readonly, ref, shallowRef } from 'vue'
+import { computed, onUnmounted, readonly, ref, shallowRef, watch } from 'vue'
 import {
   cancelUploadSession,
   deleteSharedFile,
@@ -10,10 +10,19 @@ import {
   signOutDevice,
 } from '../api'
 import { runResumableUpload } from '../resumableUpload'
+import {
+  appendHistoryEntry,
+  createHistoryEntry,
+  loadHistory,
+  saveHistory,
+} from '../transferHistory'
 import { createTransferMetricsTracker } from '../transferMetrics'
-import type { ServiceInfo, SharedFile, UploadTask } from '../types'
+import type { ServiceInfo, SharedFile, TransferHistoryEntry, UploadTask } from '../types'
 
-const MAX_CONCURRENT_UPLOADS = 2
+const DEFAULT_CONCURRENT_UPLOADS = 2
+const MIN_CONCURRENT_UPLOADS = 1
+const MAX_CONCURRENT_UPLOADS = 8
+const CONCURRENCY_STORAGE_KEY = 'packetboat.uploadConcurrency'
 
 function taskID(): string {
   return globalThis.crypto?.randomUUID?.()
@@ -37,10 +46,37 @@ function pairingCodeFromHash(): string {
   return normalized.length === 6 ? normalized : ''
 }
 
+function normalizeConcurrency(value: unknown): number {
+  const number = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(number))
+    return DEFAULT_CONCURRENT_UPLOADS
+  return Math.min(MAX_CONCURRENT_UPLOADS, Math.max(MIN_CONCURRENT_UPLOADS, Math.round(number)))
+}
+
+function loadConcurrency(): number {
+  try {
+    const raw = localStorage.getItem(CONCURRENCY_STORAGE_KEY)
+    return raw === null ? DEFAULT_CONCURRENT_UPLOADS : normalizeConcurrency(raw)
+  }
+  catch {
+    return DEFAULT_CONCURRENT_UPLOADS
+  }
+}
+
+function persistConcurrency(value: number): void {
+  try {
+    localStorage.setItem(CONCURRENCY_STORAGE_KEY, String(value))
+  }
+  catch {
+    // 隐私模式下忽略持久化失败。
+  }
+}
+
 export function useFileShare() {
   const serviceInfo = shallowRef<ServiceInfo | null>(null)
   const files = shallowRef<SharedFile[]>([])
   const uploads = ref<UploadTask[]>([])
+  const history = shallowRef<TransferHistoryEntry[]>(loadHistory())
   const authenticated = shallowRef(false)
   const initializing = shallowRef(true)
   const pairing = shallowRef(false)
@@ -49,8 +85,10 @@ export function useFileShare() {
   const error = shallowRef('')
   const deletingID = shallowRef('')
   const activeUploads = shallowRef(0)
+  const uploadConcurrency = shallowRef(loadConcurrency())
 
   const uploadControllers = new Map<string, AbortController>()
+  const abortIntents = new Map<string, 'pause' | 'cancel'>()
   let events: EventSource | null = null
 
   const completedUploads = computed(() =>
@@ -59,6 +97,11 @@ export function useFileShare() {
   const totalBytes = computed(() =>
     files.value.reduce((total, file) => total + file.size, 0),
   )
+
+  watch(uploadConcurrency, (value) => {
+    persistConcurrency(value)
+    scheduleUploads()
+  })
 
   async function initialize(): Promise<void> {
     initializing.value = true
@@ -120,6 +163,7 @@ export function useFileShare() {
       disconnectEvents()
       for (const controller of uploadControllers.values())
         controller.abort()
+      abortIntents.clear()
       authenticated.value = false
       files.value = []
       error.value = ''
@@ -159,7 +203,7 @@ export function useFileShare() {
   }
 
   function scheduleUploads(): void {
-    while (activeUploads.value < MAX_CONCURRENT_UPLOADS) {
+    while (activeUploads.value < uploadConcurrency.value) {
       const task = uploads.value.find(candidate => candidate.status === 'queued')
       if (!task)
         return
@@ -215,13 +259,27 @@ export function useFileShare() {
       task.etaSeconds = 0
       task.sessionID = undefined
       online.value = true
+      recordHistory(task)
       await loadFiles()
     }
     catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') {
-        task.status = 'cancelled'
-        task.error = undefined
-        await discardUploadSession(task)
+        const intent = abortIntents.get(task.id) ?? 'cancel'
+        abortIntents.delete(task.id)
+        if (intent === 'pause') {
+          // 保留 sessionID 与已确认进度，继续时从缺块处恢复。
+          task.status = 'paused'
+          task.speedBytesPerSecond = 0
+          task.etaSeconds = undefined
+        }
+        else {
+          task.status = 'cancelled'
+          task.error = undefined
+          task.speedBytesPerSecond = 0
+          task.etaSeconds = undefined
+          await discardUploadSession(task)
+          recordHistory(task)
+        }
       }
       else {
         if (cause instanceof HttpError && cause.status === 401)
@@ -232,12 +290,14 @@ export function useFileShare() {
         task.etaSeconds = undefined
         if (!(cause instanceof HttpError))
           online.value = false
+        recordHistory(task)
       }
     }
     finally {
       if (metricsTimer !== undefined)
         clearInterval(metricsTimer)
       uploadControllers.delete(task.id)
+      abortIntents.delete(task.id)
       activeUploads.value = Math.max(0, activeUploads.value - 1)
       scheduleUploads()
     }
@@ -247,13 +307,41 @@ export function useFileShare() {
     const task = uploads.value.find(candidate => candidate.id === id)
     if (!task)
       return
-    if (task.status === 'queued') {
+    if (task.status === 'queued' || task.status === 'paused') {
       task.status = 'cancelled'
+      recordHistory(task)
       void discardUploadSession(task)
       return
     }
+    if (task.status !== 'uploading')
+      return
+    abortIntents.set(id, 'cancel')
     task.status = 'cancelled'
     uploadControllers.get(id)?.abort()
+  }
+
+  function pauseUpload(id: string): void {
+    const task = uploads.value.find(candidate => candidate.id === id)
+    if (!task)
+      return
+    if (task.status === 'queued') {
+      task.status = 'paused'
+      return
+    }
+    if (task.status !== 'uploading')
+      return
+    // 先记录暂停意图并标记 paused，Abort 处理器才能区分「暂停」与「取消」。
+    abortIntents.set(id, 'pause')
+    task.status = 'paused'
+    uploadControllers.get(id)?.abort()
+  }
+
+  function resumeUpload(id: string): void {
+    const task = uploads.value.find(candidate => candidate.id === id)
+    if (!task || task.status !== 'paused')
+      return
+    task.status = 'queued'
+    scheduleUploads()
   }
 
   function retryUpload(id: string): void {
@@ -267,6 +355,7 @@ export function useFileShare() {
     task.etaSeconds = undefined
     task.error = undefined
     task.resumed = false
+    // 保留 sessionID 以便在服务端会话仍有效时断点续传；会话失效会自动重建。
     scheduleUploads()
   }
 
@@ -283,10 +372,28 @@ export function useFileShare() {
     }
   }
 
+  function recordHistory(task: UploadTask): void {
+    history.value = appendHistoryEntry(history.value, createHistoryEntry({
+      id: task.id,
+      name: task.file.name,
+      size: task.file.size,
+      status: task.status === 'complete' || task.status === 'error' || task.status === 'cancelled'
+        ? task.status
+        : 'cancelled',
+      error: task.error,
+    }))
+    saveHistory(history.value)
+  }
+
   function clearFinishedUploads(): void {
     uploads.value = uploads.value.filter(task =>
       task.status !== 'complete' && task.status !== 'cancelled',
     )
+  }
+
+  function clearHistory(): void {
+    history.value = []
+    saveHistory(history.value)
   }
 
   async function deleteFile(id: string): Promise<void> {
@@ -339,12 +446,14 @@ export function useFileShare() {
     disconnectEvents()
     for (const controller of uploadControllers.values())
       controller.abort()
+    abortIntents.clear()
   })
 
   return {
     serviceInfo: readonly(serviceInfo),
     files: readonly(files),
     uploads: readonly(uploads),
+    history: readonly(history),
     authenticated: readonly(authenticated),
     initializing: readonly(initializing),
     pairing: readonly(pairing),
@@ -352,6 +461,7 @@ export function useFileShare() {
     online: readonly(online),
     error: readonly(error),
     deletingID: readonly(deletingID),
+    uploadConcurrency,
     completedUploads,
     totalBytes,
     initialize,
@@ -360,8 +470,11 @@ export function useFileShare() {
     loadFiles,
     addFiles,
     cancelUpload,
+    pauseUpload,
+    resumeUpload,
     retryUpload,
     clearFinishedUploads,
+    clearHistory,
     deleteFile,
   }
 }

@@ -47,7 +47,7 @@ export interface UploadProgressSnapshot {
   resumed: boolean
 }
 
-export type UploadStatus = 'queued' | 'uploading' | 'complete' | 'error' | 'cancelled'
+export type UploadStatus = 'queued' | 'uploading' | 'paused' | 'complete' | 'error' | 'cancelled'
 
 export interface UploadTask {
   id: string
@@ -60,4 +60,15 @@ export interface UploadTask {
   error?: string
   sessionID?: string
   resumed?: boolean
+}
+
+export type TransferHistoryStatus = 'complete' | 'error' | 'cancelled'
+
+export interface TransferHistoryEntry {
+  id: string
+  name: string
+  size: number
+  status: TransferHistoryStatus
+  error?: string
+  finishedAt: string
 }

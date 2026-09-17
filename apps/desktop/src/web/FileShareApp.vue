@@ -81,12 +81,18 @@ async function confirmDelete(id: string, name: string): Promise<void> {
         @select-files="share.addFiles"
       />
       <UploadQueue
-        v-if="share.uploads.value.length > 0"
+        v-if="share.uploads.value.length > 0 || share.history.value.length > 0"
         :uploads="share.uploads.value"
+        :history="share.history.value"
         :completed-count="share.completedUploads.value"
+        :concurrency="share.uploadConcurrency.value"
         @cancel="share.cancelUpload"
+        @pause="share.pauseUpload"
+        @resume="share.resumeUpload"
         @retry="share.retryUpload"
         @clear="share.clearFinishedUploads"
+        @clear-history="share.clearHistory"
+        @update:concurrency="share.uploadConcurrency.value = $event"
       />
       <FileShelf
         :files="share.files.value"
