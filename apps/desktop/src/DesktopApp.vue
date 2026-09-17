@@ -144,8 +144,7 @@ onMounted(() => {
             @choose="desktop.chooseFiles"
             @clear="desktop.clearSharedFiles" />
 
-          <!-- 低频设置常驻右列：竖着住，纵向一分不占，宽屏不折叠。
-             「扫码接入」卡含常驻二维码（用户指令），清单概览已并入清单标题行。 -->
+          <!-- 低频设置常驻右列：竖着住，纵向一分不占，宽屏不折叠。 -->
           <aside class="side-panel" aria-label="设置">
             <ConnectionSettings
               :addresses="desktop.addresses.value"
