@@ -1,4 +1,4 @@
-export type SourceType = 'linked' | 'received'
+export type SourceType = 'linked' | 'received' | 'inbox'
 
 export interface ServiceInfo {
   device_name: string

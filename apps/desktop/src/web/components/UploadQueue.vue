@@ -160,8 +160,8 @@ function historyLabel(entry: TransferHistoryEntry): string {
 </template>
 
 <style scoped>
-.upload-queue { margin-top: 26px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgb(31 39 28 / 5%); }
-.queue-header { min-height: 74px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+.upload-queue { overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); box-shadow: 0 8px 24px rgb(31 39 28 / 5%); }
+.queue-header { min-height: 56px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
 .section-index { color: var(--muted); font: 650 8px/1 var(--font-label); letter-spacing: .16em; }
 .queue-header h2 { margin: 6px 0 0; font: 700 18px/1 var(--font-display); }
 .queue-actions { display: flex; align-items: center; gap: 14px; }
@@ -172,7 +172,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .clear-button:hover { color: var(--signal); border-color: var(--signal); }
 .queue-empty { margin: 0; padding: 18px 20px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
 .task-list { margin: 0; padding: 0; list-style: none; }
-.task-row { padding: 16px 20px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); }
+.task-row { padding: 14px 16px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
 .task-row:last-child { border-bottom: 0; }
 .task-state { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--muted); }
 .task-state.uploading svg { animation: spin 1.2s linear infinite; }

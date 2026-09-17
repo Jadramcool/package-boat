@@ -906,9 +906,15 @@ async fn handle_delete(State(server): State<Arc<Server>>, Path(id): Path<String>
         None => return json_error(StatusCode::NOT_FOUND, "文件不存在"),
     };
 
-    if item.source_type == SourceType::Received {
+    if item.source_type == SourceType::Received || item.source_type == SourceType::Inbox {
         let _guard = server.file_mu.lock().await;
-        if let Err(err) = std::fs::remove_file(&item.local_path) {
+        if item.is_dir {
+            if let Err(err) = std::fs::remove_dir_all(&item.local_path) {
+                if err.kind() != std::io::ErrorKind::NotFound {
+                    return json_error(StatusCode::INTERNAL_SERVER_ERROR, "无法删除接收文件");
+                }
+            }
+        } else if let Err(err) = std::fs::remove_file(&item.local_path) {
             if err.kind() != std::io::ErrorKind::NotFound {
                 return json_error(StatusCode::INTERNAL_SERVER_ERROR, "无法删除接收文件");
             }

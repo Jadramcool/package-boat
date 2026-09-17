@@ -20,6 +20,8 @@ export const commands = {
 	toggleServer: () => typedError<null, AppError>(__TAURI_INVOKE("toggle_server")),
 	/**  更新「是否需要配对码访问」开关；服务运行中时重启以生效。 */
 	setRequirePairing: (enabled: boolean) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_require_pairing", { enabled })),
+	/**  更新「是否展示接收目录内既有文件」开关；服务运行中时重启以生效。 */
+	setShareReceiveDir: (enabled: boolean) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_share_receive_dir", { enabled })),
 	/**  在资源管理器中显示条目所在目录。 */
 	revealItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("reveal_item", { id })),
 	/**  当前传输进度（任务栏进度条轮询）。 */
@@ -121,6 +123,11 @@ export type Settings_Deserialize = {
 	max_upload_bytes?: number,
 	/**  是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。 */
 	require_pairing?: boolean,
+	/**
+	 *  是否把接收目录中的既有文件/子文件夹一并列入共享清单（便于整夹共享）。
+	 *  默认关闭，保持「只展示明确上传/原位共享」的安全边界。
+	 */
+	share_receive_dir?: boolean,
 };
 
 /**
@@ -136,10 +143,21 @@ export type Settings_Serialize = {
 	max_upload_bytes: number,
 	/**  是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。 */
 	require_pairing: boolean,
+	/**
+	 *  是否把接收目录中的既有文件/子文件夹一并列入共享清单（便于整夹共享）。
+	 *  默认关闭，保持「只展示明确上传/原位共享」的安全边界。
+	 */
+	share_receive_dir: boolean,
 };
 
 /**  条目来源类型，JSON 序列化为小写。 */
-export type SourceType = "linked" | "received";
+export type SourceType = 
+/**  原位共享：用户明确选择的本机路径，不复制。 */
+"linked" | 
+/**  远程接收：本次服务通过上传接口落盘的文件。 */
+"received" | 
+/**  接收目录扫描：目录内已有的顶层文件/文件夹（非上传产生）。 */
+"inbox";
 
 /**  共享目录表或服务状态发生变化，前端应刷新状态快照。 */
 export type StateChanged = null;

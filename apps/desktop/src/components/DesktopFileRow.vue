@@ -9,7 +9,20 @@ const emit = defineEmits<{ reveal: [id: string]; unshare: [id: string] }>()
 
 const isBusy = computed(() => props.busy.endsWith(`:${props.item.id}`))
 const isLinked = computed(() => props.item.source_type === 'linked')
-const actionTitle = computed(() => isLinked.value ? '取消共享（不会删除原文件）' : '删除（从共享清单移除）')
+const sourceLabel = computed(() => {
+  if (props.item.source_type === 'linked')
+    return '原位共享'
+  if (props.item.source_type === 'inbox')
+    return '本地文件'
+  return '远程接收'
+})
+const actionTitle = computed(() => {
+  if (isLinked.value)
+    return '取消共享（不会删除原文件）'
+  if (props.item.source_type === 'inbox')
+    return '从清单移除并删除接收目录中的本地文件'
+  return '删除（从共享清单与磁盘移除）'
+})
 </script>
 
 <template>
@@ -30,7 +43,7 @@ const actionTitle = computed(() => isLinked.value ? '取消共享（不会删除
           <span>{{ props.item.is_dir ? '文件夹' : formatBytes(props.item.size) }}</span>
           <span>{{ formatDate(props.item.modified_at) }}</span>
           <span v-if="!props.item.available" class="source-badge missing">文件缺失</span>
-          <span v-else class="source-badge" :class="props.item.source_type">{{ isLinked ? '原位共享' : '远程接收' }}</span>
+          <span v-else class="source-badge" :class="props.item.source_type">{{ sourceLabel }}</span>
         </div>
       </div>
     </div>
@@ -40,7 +53,7 @@ const actionTitle = computed(() => isLinked.value ? '取消共享（不会删除
     <div class="source-cell">
       <span v-if="!props.item.available" class="source-badge missing">文件缺失</span>
       <span v-else class="source-badge" :class="props.item.source_type">
-        {{ isLinked ? '原位共享' : '远程接收' }}
+        {{ sourceLabel }}
       </span>
     </div>
     <div class="row-actions">
@@ -78,6 +91,7 @@ const actionTitle = computed(() => isLinked.value ? '取消共享（不会删除
 .source-badge::before { content: ''; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
 .source-badge.linked { background: var(--acid-wash); color: var(--acid-deep); }
 .source-badge.received { background: var(--info-wash); color: #23559e; }
+.source-badge.inbox { background: var(--paper-deep, #e9ebe2); color: var(--ink-2, #39432f); }
 .source-badge.missing { background: var(--signal-soft); color: var(--signal-deep); }
 .missing-badge { background: var(--signal-soft); color: var(--signal-deep); }
 .file-main p { overflow: hidden; margin: 5px 0 0; color: var(--muted); font: 500 11.5px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }

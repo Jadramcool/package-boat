@@ -41,6 +41,14 @@ const icon = computed(() => {
     return FileText
   return File
 })
+const sourceLabel = computed(() => {
+  if (props.file.source_type === 'linked')
+    return '原位共享'
+  if (props.file.source_type === 'inbox')
+    return '本地文件'
+  return '远程接收'
+})
+const isLinked = computed(() => props.file.source_type === 'linked')
 const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.id)}/download`)
 </script>
 
@@ -54,7 +62,7 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
       <div class="file-name-line">
         <strong :title="file.name">{{ file.name }}</strong>
         <span class="source-label" :class="file.source_type">
-          {{ file.source_type === 'linked' ? '原位共享' : '远程接收' }}
+          {{ sourceLabel }}
         </span>
         <span v-if="!file.available" class="missing-label">原文件已移动</span>
       </div>
@@ -69,8 +77,8 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
         type="button"
         class="delete-button"
         :disabled="deleting"
-        :title="file.source_type === 'linked' ? '取消共享，不删除原文件' : '删除接收的文件'"
-        :aria-label="file.source_type === 'linked' ? '取消共享' : '删除文件'"
+        :title="isLinked ? '取消共享，不删除原文件' : '删除磁盘上的文件'"
+        :aria-label="isLinked ? '取消共享' : '删除文件'"
         @click="emit('delete', file.id, file.name)"
       >
         <LoaderCircle v-if="deleting" class="spin" :size="16" aria-hidden="true" />
@@ -81,7 +89,7 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
 </template>
 
 <style scoped>
-.file-row { min-height: 86px; padding: 14px 20px; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 17px; border-bottom: 1px solid var(--line); transition: background .15s; }
+.file-row { min-height: 92px; padding: 16px 18px; display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); transition: background .15s; }
 .file-row:last-child { border-bottom: 0; }
 .file-row:hover { background: rgb(215 249 84 / 12%); }
 .file-type { width: 58px; height: 58px; padding: 8px 4px 5px; display: grid; grid-template-rows: 1fr auto; place-items: center; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink); background: var(--surface); }
@@ -93,8 +101,9 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
 .source-label::before, .missing-label::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .source-label.linked { color: var(--acid-deep); background: var(--acid-wash); }
 .source-label.received { color: #23559e; background: var(--info-wash); }
+.source-label.inbox { color: var(--ink-2, #39432f); background: var(--paper-deep, #e9ebe2); }
 .missing-label { color: var(--signal-deep); background: var(--signal-soft); }
-.file-meta { margin-top: 8px; display: flex; gap: 9px; color: var(--muted); font: 550 9px/1 var(--font-mono); }
+.file-meta { margin-top: 9px; display: flex; gap: 10px; color: var(--muted); font: 550 10px/1 var(--font-mono); }
 .file-meta span + span::before { content: '·'; margin-right: 9px; }
 .file-actions { display: flex; align-items: center; gap: 7px; }
 .download-button, .unavailable-button, .delete-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: transparent; text-decoration: none; }

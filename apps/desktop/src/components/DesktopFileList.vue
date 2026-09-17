@@ -12,6 +12,7 @@ const props = defineProps<{
   /** 清单概览卡移除后，原位/接收的分类汇总并入副标题这一行。 */
   linkedCount: number
   receivedCount: number
+  inboxCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -43,7 +44,7 @@ const totalSize = computed(() => formatBytes(props.items.reduce((total, item) =>
     <header class="list-header">
       <div class="list-heading">
         <h2 id="desktop-list-title">共享文件</h2>
-        <p>{{ props.items.length }} 个文件 · {{ totalSize }} · 原位共享 {{ props.linkedCount }} · 远程接收 {{ props.receivedCount }}</p>
+        <p>{{ props.items.length }} 个文件 · {{ totalSize }} · 原位共享 {{ props.linkedCount }} · 远程接收 {{ props.receivedCount }}<template v-if="props.inboxCount"> · 本地文件 {{ props.inboxCount }}</template></p>
       </div>
       <div class="list-tools">
         <!-- 安全承诺贴着清空按钮：用户准备清空前最需要看到的就是这一句；

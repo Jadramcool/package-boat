@@ -51,6 +51,7 @@ mod tests {
                 commands::choose_receive_directory,
                 commands::toggle_server,
                 commands::set_require_pairing,
+                commands::set_share_receive_dir,
                 commands::reveal_item,
                 commands::get_transfer_progress,
             ])
@@ -113,6 +114,7 @@ pub fn run() {
             commands::choose_receive_directory,
             commands::toggle_server,
             commands::set_require_pairing,
+            commands::set_share_receive_dir,
             commands::reveal_item,
             commands::get_transfer_progress,
         ])

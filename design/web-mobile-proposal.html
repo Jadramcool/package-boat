@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PacketBoat · 网页端手机布局 PB-WEB-M01</title>
+<style>
+/* ==========================================================
+   PB-WEB-M01 手机端接收页完整设计稿
+   原则：
+   1) 三段式：顶栏 / 内容 / 通栏贴底页脚
+   2) 不展示扫码卡（用户已是扫进来的）
+   3) 文件架尽量靠前；地址+会话沉到文件之后
+   4) 视觉 token 沿用晴空码头 PB-UI-01
+   ========================================================== */
+:root {
+  --dock-0: #f2f4ec;  --dock-1: #fbfcf7;  --surface: #fbfcf7;
+  --ink: #1f271c;  --muted: #646c57;
+  --line: #dfe2d2;  --line-strong: #b9bfa6;
+  --acid: #d7f954;  --acid-hi: #e6ff85;  --acid-deep: #4d6707;  --acid-wash: #eef9c8;
+  --signal: #ef5a32;  --signal-deep: #b23a1c;  --signal-soft: #fde9e0;
+  --info: #2f6fd3;  --info-wash: #e4edfb;  --ok: #35874a;
+  --paper: #fbfcf7;
+  --f-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --f-label: "Bahnschrift SemiCondensed", "Bahnschrift", "Noto Sans SC", sans-serif;
+  --f-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --f-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html { background: #e9ebe2; }
+body {
+  font-family: var(--f-sans); color: var(--ink); line-height: 1.6;
+  background:
+    linear-gradient(rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    #e9ebe2;
+  background-size: 28px 28px, 28px 28px, auto;
+  padding: 28px 16px 56px;
+}
+::selection { background: var(--acid); color: var(--ink); }
+
+.board-top, .board { max-width: 920px; margin: 0 auto; }
+.board-title {
+  margin: 0 0 8px;
+  font: 720 clamp(24px, 5vw, 34px)/1.15 var(--f-display);
+  letter-spacing: -.02em;
+}
+.board-title em {
+  font-style: normal; background: var(--acid);
+  padding: 0 8px; box-shadow: 3px 3px 0 var(--ink);
+}
+.board-sub { max-width: 720px; color: var(--muted); font-size: 14px; }
+.board-sub b { color: var(--ink); }
+
+.sec { margin-top: 28px; }
+.sec-h {
+  display: flex; align-items: baseline; gap: 10px;
+  flex-wrap: wrap; margin-bottom: 8px;
+}
+.sec-h h2 { font: 720 18px/1.2 var(--f-display); }
+.sec-h span { color: var(--muted); font: 600 11px/1 var(--f-label); letter-spacing: .1em; }
+.sec-lead { max-width: 720px; margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.sec-lead b { color: var(--ink); }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip {
+  padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--paper);
+  font: 600 11px/1 var(--f-label); letter-spacing: .06em;
+}
+.chip.ok { border-color: var(--acid-deep); background: var(--acid-wash); color: var(--acid-deep); }
+.chip.info { border-color: var(--info); background: var(--info-wash); color: var(--info); }
+.chip.bad { border-color: var(--signal); background: var(--signal-soft); color: var(--signal-deep); }
+
+/* ===== 手机真页 ===== */
+.phone-stage {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 390px));
+  gap: 18px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.phone-wrap { display: flex; flex-direction: column; gap: 10px; }
+.phone-cap {
+  color: var(--muted);
+  font: 650 11px/1.4 var(--f-label);
+  letter-spacing: .08em;
+  text-align: center;
+}
+.phone-cap b { color: var(--ink); display: block; font-size: 12px; margin-bottom: 2px; }
+
+.phone {
+  width: 100%;
+  min-height: 720px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  background: var(--dock-0);
+  box-shadow: 0 16px 40px rgb(31 39 28 / 12%);
+}
+.phone.short { min-height: 0; }
+
+/* —— 顶栏 —— */
+.web-header {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 50px; padding: 0 14px;
+  border-bottom: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.brand-glyph {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--ink); border-radius: 7px;
+  background: var(--acid); font: 750 13px/1 var(--f-display);
+  transform: rotate(-3deg); flex: none;
+}
+.brand-word { font: 750 14.5px/1 var(--f-display); letter-spacing: .08em; }
+.header-right { display: flex; align-items: center; gap: 7px; }
+.status-pill {
+  padding: 4px 8px; display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 999px; background: var(--info-wash); color: var(--info);
+  font: 650 10px/1 var(--f-label); letter-spacing: .08em;
+}
+.status-pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--info); }
+.status-pill.offline { background: var(--signal-soft); color: var(--signal-deep); }
+.status-pill.offline i { background: var(--signal); }
+.header-btn {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  color: var(--muted); background: var(--surface); font-size: 12px;
+}
+
+/* —— 内容 —— */
+.content {
+  min-width: 0;
+  padding: 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+/* 主行动拖放条 */
+.drop-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px; align-items: center;
+  min-height: 56px; padding: 10px 12px;
+  border: 1px solid var(--ink); border-radius: 14px;
+  background: var(--acid);
+}
+.drop-strip .di {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border-radius: 9px; background: var(--ink); color: var(--acid);
+  font-size: 15px; flex: none;
+}
+.drop-strip strong { display: block; font: 700 14px/1.2 var(--f-display); }
+.drop-strip span { display: block; margin-top: 3px; color: rgb(31 39 28 / 72%); font-size: 11px; }
+.drop-strip .cta {
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--ink);
+  background: var(--ink); color: var(--paper);
+  font: 650 11px/1 var(--f-label); white-space: nowrap;
+}
+.drop-strip.offline {
+  border: 1.5px dashed var(--line-strong); background: var(--surface); opacity: .75;
+}
+.drop-strip.offline .di { background: var(--line-strong); color: var(--muted); }
+.drop-strip.offline strong, .drop-strip.offline span { color: var(--muted); }
+
+/* 文件架 */
+.panel {
+  overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px;
+  background: var(--surface); box-shadow: 0 6px 18px rgb(31 39 28 / 5%);
+}
+.panel-h {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 48px; padding: 8px 12px;
+  border-bottom: 1px solid var(--line); background: var(--dock-0);
+}
+.panel-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.panel-title .ix {
+  flex: none; padding-right: 9px; border-right: 1px solid var(--line-strong);
+  color: var(--acid-deep); font: 650 9px/1 var(--f-label); letter-spacing: .14em;
+}
+.panel-title h3 { font: 700 14.5px/1.15 var(--f-display); }
+.panel-title p {
+  margin-top: 3px; color: var(--muted);
+  font: 600 10px/1.2 var(--f-label); letter-spacing: .04em;
+}
+.icon-btn {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  color: var(--ink); background: var(--surface); font-size: 12px; flex: none;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px; align-items: center;
+  min-height: 64px; padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.file-row:last-child { border-bottom: 0; }
+.file-ic {
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  background: var(--paper); font: 700 9px/1 var(--f-mono); color: var(--muted);
+}
+.file-ic.folder { background: var(--acid-wash); color: var(--acid-deep); border-color: color-mix(in srgb, var(--acid-deep) 30%, var(--line)); }
+.file-name { min-width: 0; font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-name small {
+  display: block; margin-top: 3px; color: var(--muted);
+  font: 600 10px/1.2 var(--f-label); font-weight: 600;
+}
+.file-acts { display: flex; gap: 5px; }
+.file-acts span {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 9px;
+  color: var(--ink); background: var(--surface); font-size: 12px;
+}
+.file-acts span.danger { color: var(--muted); }
+
+/* 空态 */
+.empty {
+  min-height: 140px; display: grid; place-content: center; justify-items: center;
+  text-align: center; color: var(--muted); padding: 16px;
+}
+.empty h4 { margin-top: 10px; color: var(--ink); font: 700 15px/1 var(--f-display); }
+.empty p { margin-top: 6px; max-width: 260px; font-size: 11.5px; line-height: 1.55; }
+
+/* 会话卡（文件之后） */
+.session .body { padding: 12px; }
+.addr-row {
+  width: 100%; margin-bottom: 10px; padding: 9px 11px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'label icon' 'value icon';
+  gap: 3px 8px; align-items: center;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--dock-0); text-align: left;
+}
+.addr-row em {
+  grid-area: label; font-style: normal;
+  color: var(--muted); font: 600 10px/1 var(--f-label); letter-spacing: .1em;
+}
+.addr-row b {
+  grid-area: value; font: 600 12px/1.35 var(--f-mono); word-break: break-all;
+}
+.addr-row i { grid-area: icon; color: var(--muted); font-style: normal; font-size: 12px; }
+.stat-list { display: grid; gap: 8px; }
+.stat-list div { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.stat-list dt { color: var(--muted); }
+.stat-list dd { font: 650 12.5px/1.2 var(--f-mono); }
+
+/* 传输队列示例 */
+.task {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px; align-items: center; padding: 10px 12px;
+}
+.task + .task { border-top: 1px solid var(--line); }
+.task-ic {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border-radius: 8px; border: 1px solid var(--info);
+  color: var(--info); background: var(--info-wash); font-size: 11px;
+}
+.task-ic.pause { border-color: var(--acid-deep); color: var(--acid-deep); background: var(--acid-wash); }
+.task-name { font-size: 12px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar { height: 5px; margin-top: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--acid), var(--acid-hi)); }
+.bar > i.blue { background: var(--info); }
+.task-sub { margin-top: 4px; color: var(--muted); font: 600 10px/1.3 var(--f-label); }
+.task-acts { display: flex; gap: 4px; }
+.task-acts span {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 7px;
+  color: var(--muted); background: var(--surface); font-size: 11px;
+}
+
+/* —— 通栏页脚 —— */
+.web-footer {
+  border-top: 1px solid var(--line);
+  background: var(--dock-0);
+}
+.web-footer .inner {
+  padding: 12px 14px 14px;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  color: var(--muted);
+  font: 600 10px/1.35 var(--f-label);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.web-footer .inner span:last-child { text-align: right; }
+
+/* 顺序标注 */
+.order-list { list-style: none; padding: 0; display: grid; gap: 8px; }
+.order-list li {
+  display: grid; grid-template-columns: 36px 1fr; gap: 10px;
+  align-items: start; padding: 10px 12px;
+  border: 1px solid var(--line-strong); border-radius: 12px;
+  background: var(--paper); font-size: 13px;
+}
+.order-list .n {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: 8px; background: var(--ink); color: var(--acid);
+  font: 700 12px/1 var(--f-display);
+}
+.order-list b { color: var(--ink); }
+.order-list p { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+table.cmp { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; }
+table.cmp th, table.cmp td { padding: 9px 11px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.cmp th { background: var(--dock-0); color: var(--muted); font: 650 11px/1 var(--f-label); letter-spacing: .08em; }
+table.cmp tr:last-child td { border-bottom: 0; }
+.yes { color: var(--ok); font-weight: 700; }
+.no { color: var(--signal-deep); font-weight: 700; }
+
+.note-box {
+  margin-top: 14px; padding: 12px 14px;
+  border-left: 3px solid var(--info); background: var(--info-wash);
+  font-size: 12.5px; line-height: 1.7;
+}
+.note-box b { color: var(--info); }
+
+footer.board-foot {
+  max-width: 920px; margin: 28px auto 0; padding-top: 14px;
+  border-top: 1px solid var(--line-strong); color: var(--muted);
+  font: 600 11px/1.6 var(--f-label); letter-spacing: .06em;
+}
+</style>
+</head>
+<body>
+
+<header class="board-top">
+  <h1 class="board-title">网页端 · <em>手机布局</em> PB-WEB-M01</h1>
+  <p class="board-sub">
+    手机上用户已经扫进来了，不需要再展示二维码。首屏必须尽快看到
+    <b>投递入口 + 文件架</b>；地址与会话信息放到文件之后，作为补充。
+    整页保持 <b>顶栏 / 内容 / 通栏贴底页脚</b> 三段式。
+  </p>
+  <div class="chip-row">
+    <span class="chip bad">不展示扫码卡</span>
+    <span class="chip ok">文件架靠前</span>
+    <span class="chip">390 参考宽</span>
+    <span class="chip info">地址+会话在后</span>
+  </div>
+</header>
+
+<main class="board">
+
+  <!-- 信息架构 -->
+  <section class="sec">
+    <div class="sec-h"><h2>1 · 纵向信息架构</h2><span>ORDER</span></div>
+    <ol class="order-list">
+      <li><span class="n">1</span><div><b>顶栏</b>（sticky）<p>品牌 · 在线状态 · 断开。不展示设备名/版本（窄屏隐藏）。</p></div></li>
+      <li><span class="n">2</span><div><b>投递条</b><p>酸绿主行动；离线时降为虚线中性条。</p></div></li>
+      <li><span class="n">3</span><div><b>传输队列</b>（仅有任务时）<p>进行中/暂停任务；历史折叠在卡内。</p></div></li>
+      <li><span class="n">4</span><div><b>共享文件架</b><p>本页主体。文件名 + 体积/来源小字 + 下载/更多。</p></div></li>
+      <li><span class="n">5</span><div><b>本机会话</b><p>可复制访问地址 + 主机/货架/占用/上限。无二维码。</p></div></li>
+      <li><span class="n">6</span><div><b>页脚</b>（贴底）<p>通栏分隔线；文案与内容区左右对齐。</p></div></li>
+    </ol>
+  </section>
+
+  <!-- 首屏：有文件 -->
+  <section class="sec">
+    <div class="sec-h"><h2>2 · 首屏（有共享文件）</h2><span>390×844 · DEFAULT</span></div>
+    <div class="phone-stage">
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="web-header">
+            <div class="brand">
+              <span class="brand-glyph">L</span>
+              <span class="brand-word">PacketBoat</span>
+            </div>
+            <div class="header-right">
+              <span class="status-pill"><i></i>在线</span>
+              <span class="header-btn">⎋</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="drop-strip">
+              <div class="di">↑</div>
+              <div>
+                <strong>投递文件</strong>
+                <span>点击选择 · 上限 10 GB</span>
+              </div>
+              <div class="cta">选择</div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-h">
+                <div class="panel-title">
+                  <span class="ix">SHELF</span>
+                  <div>
+                    <h3>共享文件架</h3>
+                    <p>4 件 · 1.4 GB · 原位 2 · 接收 2</p>
+                  </div>
+                </div>
+                <span class="icon-btn">↻</span>
+              </div>
+              <div class="file-row">
+                <div class="file-ic folder">DIR</div>
+                <div class="file-name">设计交付物<small>842 MB · 原位共享</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">ZIP</div>
+                <div class="file-name">项目素材包.zip<small>312 MB · 远程接收</small></div>
+                <div class="file-acts"><span>↓</span><span class="danger">🗑</span></div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">PDF</div>
+                <div class="file-name">验收清单.pdf<small>1.2 MB · 原位共享</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">MP4</div>
+                <div class="file-name">演示录屏.mp4<small>186 MB · 远程接收</small></div>
+                <div class="file-acts"><span>↓</span><span class="danger">🗑</span></div>
+              </div>
+            </div>
+
+            <div class="panel session">
+              <div class="panel-h">
+                <div class="panel-title"><span class="ix">HOST</span><h3>本机会话</h3></div>
+              </div>
+              <div class="body">
+                <div class="addr-row">
+                  <em>访问地址</em>
+                  <b>10.80.40.166:8081</b>
+                  <i>⧉</i>
+                </div>
+                <dl class="stat-list">
+                  <div><dt>主机</dt><dd>JAY</dd></div>
+                  <div><dt>货架</dt><dd>4 份</dd></div>
+                  <div><dt>占用</dt><dd>1.4 GB</dd></div>
+                  <div><dt>单件上限</dt><dd>10 GB</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <div class="web-footer">
+            <div class="inner">
+              <span>PacketBoat 接收页</span>
+              <span>关闭主机即停止共享</span>
+            </div>
+          </div>
+        </div>
+        <p class="phone-cap"><b>默认首屏</b>投递 + 文件架已在视口内；会话卡在下方滚动后到达</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 传输中 / 空架 -->
+  <section class="sec">
+    <div class="sec-h"><h2>3 · 其它状态</h2><span>QUEUE / EMPTY / OFFLINE</span></div>
+    <div class="phone-stage">
+
+      <!-- 传输中 -->
+      <div class="phone-wrap">
+        <div class="phone short">
+          <div class="web-header">
+            <div class="brand"><span class="brand-glyph">L</span><span class="brand-word">PacketBoat</span></div>
+            <div class="header-right">
+              <span class="status-pill"><i></i>在线</span>
+              <span class="header-btn">⎋</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="drop-strip">
+              <div class="di">↑</div>
+              <div><strong>投递文件</strong><span>点击选择 · 上限 10 GB</span></div>
+              <div class="cta">选择</div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">
+                <div class="panel-title"><span class="ix">QUEUE</span><h3>传输队列</h3></div>
+                <span style="color:var(--muted);font:600 10px/1 var(--f-label)">并行 2</span>
+              </div>
+              <div class="task">
+                <div class="task-ic">…</div>
+                <div>
+                  <div class="task-name">素材备份.zip</div>
+                  <div class="bar"><i style="width:62%"></i></div>
+                  <div class="task-sub">62% · 4.1 MB/s · 剩余 18 秒</div>
+                </div>
+                <div class="task-acts"><span>⏸</span><span>✕</span></div>
+              </div>
+              <div class="task">
+                <div class="task-ic pause">⏸</div>
+                <div>
+                  <div class="task-name">会议录音.m4a</div>
+                  <div class="bar"><i class="blue" style="width:28%"></i></div>
+                  <div class="task-sub">已暂停 · 28%</div>
+                </div>
+                <div class="task-acts"><span>▶</span><span>✕</span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">
+                <div class="panel-title">
+                  <span class="ix">SHELF</span>
+                  <div><h3>共享文件架</h3><p>2 件 · 1.1 GB</p></div>
+                </div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">ZIP</div>
+                <div class="file-name">交付包.zip<small>980 MB · 接收</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">PDF</div>
+                <div class="file-name">说明.pdf<small>0.8 MB · 原位</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="web-footer">
+            <div class="inner"><span>PacketBoat 接收页</span><span>关闭主机即停止共享</span></div>
+          </div>
+        </div>
+        <p class="phone-cap"><b>传输中</b>队列插在投递条与文件架之间</p>
+      </div>
+
+      <!-- 空架 -->
+      <div class="phone-wrap">
+        <div class="phone short">
+          <div class="web-header">
+            <div class="brand"><span class="brand-glyph">L</span><span class="brand-word">PacketBoat</span></div>
+            <div class="header-right">
+              <span class="status-pill"><i></i>在线</span>
+              <span class="header-btn">⎋</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="drop-strip">
+              <div class="di">↑</div>
+              <div><strong>投递文件</strong><span>点击选择 · 上限 10 GB</span></div>
+              <div class="cta">选择</div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">
+                <div class="panel-title">
+                  <span class="ix">SHELF</span>
+                  <div><h3>共享文件架</h3><p>0 件</p></div>
+                </div>
+              </div>
+              <div class="empty">
+                <div style="font-size:28px">▤</div>
+                <h4>货架还是空的</h4>
+                <p>从上方投递第一份文件，它会立即出现在这里。</p>
+              </div>
+            </div>
+            <div class="panel session">
+              <div class="panel-h">
+                <div class="panel-title"><span class="ix">HOST</span><h3>本机会话</h3></div>
+              </div>
+              <div class="body">
+                <div class="addr-row">
+                  <em>访问地址</em>
+                  <b>10.80.40.166:8081</b>
+                  <i>⧉</i>
+                </div>
+                <dl class="stat-list">
+                  <div><dt>主机</dt><dd>JAY</dd></div>
+                  <div><dt>货架</dt><dd>0 份</dd></div>
+                  <div><dt>占用</dt><dd>0 B</dd></div>
+                  <div><dt>单件上限</dt><dd>10 GB</dd></div>
+                </dl>
+              </div>
+            </div>
+          </div>
+          <div class="web-footer">
+            <div class="inner"><span>PacketBoat 接收页</span><span>关闭主机即停止共享</span></div>
+          </div>
+        </div>
+        <p class="phone-cap"><b>空货架</b>投递入口仍是第一视觉</p>
+      </div>
+
+      <!-- 离线 -->
+      <div class="phone-wrap">
+        <div class="phone short">
+          <div class="web-header">
+            <div class="brand"><span class="brand-glyph">L</span><span class="brand-word">PacketBoat</span></div>
+            <div class="header-right">
+              <span class="status-pill offline"><i></i>重连中</span>
+              <span class="header-btn">⎋</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="drop-strip offline">
+              <div class="di">↑</div>
+              <div><strong>投递文件</strong><span>正在等待网络重新连接</span></div>
+            </div>
+            <div class="panel">
+              <div class="panel-h">
+                <div class="panel-title">
+                  <span class="ix">SHELF</span>
+                  <div><h3>共享文件架</h3><p>2 件 · 数据可能滞后</p></div>
+                </div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">ZIP</div>
+                <div class="file-name">交付包.zip<small>980 MB · 接收</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+              <div class="file-row">
+                <div class="file-ic">PDF</div>
+                <div class="file-name">说明.pdf<small>0.8 MB · 原位</small></div>
+                <div class="file-acts"><span>↓</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="web-footer">
+            <div class="inner"><span>PacketBoat 接收页</span><span>关闭主机即停止共享</span></div>
+          </div>
+        </div>
+        <p class="phone-cap"><b>离线重连</b>投递禁用；列表可残留展示</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 规格 -->
+  <section class="sec">
+    <div class="sec-h"><h2>4 · 手机规格</h2><span>SPEC</span></div>
+    <table class="cmp">
+      <thead>
+        <tr><th>项</th><th>值</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>参考视口</b></td><td>390 × 844</td><td>断点 &lt;1100 走单列手机布局</td></tr>
+        <tr><td><b>三段式</b></td><td>auto / 1fr / auto</td><td>页脚通栏贴底；内容区可滚动</td></tr>
+        <tr><td><b>扫码卡</b></td><td class="no">不展示</td><td>桌面端仍保留 QR 侧栏</td></tr>
+        <tr><td><b>地址</b></td><td class="yes">会话卡内可复制</td><td>不单独占首屏高度</td></tr>
+        <tr><td><b>文件架位置</b></td><td class="yes">投递条之后</td><td>首屏可见 ≥3–4 行</td></tr>
+        <tr><td><b>行高</b></td><td>约 64px</td><td>图标 42 + 名称/来源两行</td></tr>
+        <tr><td><b>操作按钮</b></td><td>≥34×34</td><td>满足触控目标</td></tr>
+        <tr><td><b>顶栏高度</b></td><td>50px</td><td>隐藏设备名/版本/副标</td></tr>
+        <tr><td><b>页边距</b></td><td>12px</td><td>内容区左右；页脚文案同边距</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box">
+      <b>与桌面端差异：</b>桌面 = 主列 + 320px 扫码侧栏；手机 = 单列、无二维码、会话沉底。
+      组件映射：<code>ConnectCard</code> 仅 ≥1100 显示；<code>SessionCard</code> 在 &lt;1100 内嵌地址行。
+    </div>
+  </section>
+
+</main>
+
+<footer class="board-foot">
+  PB-WEB-M01 · 手机端完整设计稿 · 与已落地代码对齐并作为后续微调基准
+</footer>
+
+</body>
+</html>

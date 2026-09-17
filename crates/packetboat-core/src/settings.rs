@@ -26,6 +26,10 @@ pub struct Settings {
     /// 是否需要六位配对码才能访问（安全开关）；缺失时默认开启，保持旧行为。
     #[serde(default = "default_require_pairing")]
     pub require_pairing: bool,
+    /// 是否把接收目录中的既有文件/子文件夹一并列入共享清单（便于整夹共享）。
+    /// 默认关闭，保持「只展示明确上传/原位共享」的安全边界。
+    #[serde(default)]
+    pub share_receive_dir: bool,
 }
 
 /// 配对码开关默认值：默认开启（与历史行为一致）。
@@ -63,6 +67,7 @@ impl Settings {
             receive_dir: receive_dir.to_string_lossy().into_owned(),
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
             require_pairing: true,
+            share_receive_dir: false,
         }
     }
 }
@@ -146,6 +151,20 @@ impl Store {
         }
     }
 
+    /// 更新「是否展示接收目录内既有文件」开关。
+    pub fn set_share_receive_dir(&self, enabled: bool) -> Result<Settings, String> {
+        let mut guard = self.inner.write().expect("settings lock poisoned");
+        let previous = guard.clone();
+        guard.share_receive_dir = enabled;
+        match self.save_locked(&guard) {
+            Ok(()) => Ok(guard.clone()),
+            Err(err) => {
+                *guard = previous;
+                Err(err)
+            }
+        }
+    }
+
     fn save_locked(&self, settings: &Settings) -> Result<(), String> {
         if self.path.as_os_str().is_empty() {
             return Ok(());
@@ -214,6 +233,7 @@ mod tests {
             receive_dir: r"C:\Temp\PacketBoat".into(),
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
             require_pairing: true,
+            share_receive_dir: false,
         }
     }
 
@@ -275,6 +295,7 @@ mod tests {
                 receive_dir: "C:\\T".into(),
                 max_upload_bytes: 1,
                 require_pairing: true,
+                share_receive_dir: false,
             },
         )
         .unwrap();
@@ -292,6 +313,7 @@ mod tests {
             receive_dir: String::new(),
             max_upload_bytes: 0,
             require_pairing: true,
+            share_receive_dir: false,
         };
         apply_fallbacks(&mut settings, &defaults);
         assert_eq!(settings.port, 0);

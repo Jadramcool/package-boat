@@ -24,8 +24,12 @@ pub const MAX_WATCH_ROOTS: usize = 256;
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
+    /// 原位共享：用户明确选择的本机路径，不复制。
     Linked,
+    /// 远程接收：本次服务通过上传接口落盘的文件。
     Received,
+    /// 接收目录扫描：目录内已有的顶层文件/文件夹（非上传产生）。
+    Inbox,
 }
 
 /// 目录表条目，字段与 Go 版 `catalog.Item` 一致（`is_dir` 为文件夹共享新增）。
@@ -60,6 +64,8 @@ pub struct Catalog {
     inner: RwLock<Vec<Item>>,
     /// `list()` 的短 TTL 缓存；`None` 表示需要重建。
     list_cache: Mutex<Option<(Instant, Vec<Item>)>>,
+    /// 接收目录扫描根；`Some` 时列表会合并该目录顶层文件/文件夹（不落盘 catalog）。
+    inbox_dir: RwLock<Option<PathBuf>>,
 }
 
 impl Catalog {
@@ -69,11 +75,22 @@ impl Catalog {
             path,
             inner: RwLock::new(Vec::new()),
             list_cache: Mutex::new(None),
+            inbox_dir: RwLock::new(None),
         };
         if !catalog.path.as_os_str().is_empty() {
             catalog.load()?;
         }
         Ok(catalog)
+    }
+
+    /// 启用/关闭「展示接收目录既有文件」。关闭时传 `None`。
+    pub fn set_inbox_dir(&self, dir: Option<PathBuf>) {
+        *self.inbox_dir.write().expect("inbox lock poisoned") = dir;
+        self.invalidate_list_cache();
+    }
+
+    fn inbox_dir(&self) -> Option<PathBuf> {
+        self.inbox_dir.read().expect("inbox lock poisoned").clone()
     }
 
     fn invalidate_list_cache(&self) {
@@ -200,6 +217,9 @@ impl Catalog {
         for item in result.iter_mut() {
             apply_disk_meta(item);
         }
+        if let Some(dir) = self.inbox_dir() {
+            append_inbox_items(&mut result, &dir);
+        }
         result.sort_by_key(|item| std::cmp::Reverse(item.added_at));
         *self.list_cache.lock().expect("list cache poisoned") =
             Some((Instant::now(), result.clone()));
@@ -281,11 +301,22 @@ impl Catalog {
                 break;
             }
         }
+        if let Some(inbox) = self.inbox_dir() {
+            let key = normalize_path_key(&inbox.to_string_lossy());
+            if seen.insert(key) {
+                roots.push(inbox);
+            }
+        }
         roots
     }
 
     /// 按 id 解析条目与文件元数据；目标不可用（缺失/符号链接/非普通文件或目录）时返回错误。
     pub fn resolve(&self, id: &str) -> Result<(Item, std::fs::Metadata), std::io::Error> {
+        if let Some(dir) = self.inbox_dir() {
+            if let Some((item, metadata)) = resolve_inbox_item(id, &dir) {
+                return Ok((item, metadata));
+            }
+        }
         let guard = self.inner.read().expect("catalog lock poisoned");
         for item in guard.iter() {
             if item.id != id {
@@ -309,12 +340,32 @@ impl Catalog {
 
     /// 按 id 查询条目。
     pub fn get(&self, id: &str) -> Option<Item> {
+        if let Some(dir) = self.inbox_dir() {
+            if let Some((item, _)) = resolve_inbox_item(id, &dir) {
+                return Some(item);
+            }
+        }
         let guard = self.inner.read().expect("catalog lock poisoned");
         guard.iter().find(|item| item.id == id).cloned()
     }
 
     /// 移除条目（仅目录表，不触碰源文件）；保存失败时回滚。
+    /// 接收目录扫描条目会删除磁盘上的对应文件/文件夹（与远程接收文件一致）。
     pub fn remove(&self, id: &str) -> Result<Item, String> {
+        if let Some(dir) = self.inbox_dir() {
+            if inbox_id_prefix_ok(id) {
+                let (item, _) =
+                    resolve_inbox_item(id, &dir).ok_or_else(|| "条目不存在".to_string())?;
+                let path = PathBuf::from(&item.local_path);
+                if path.is_dir() {
+                    std::fs::remove_dir_all(&path).map_err(|err| format!("删除目录失败: {err}"))?;
+                } else {
+                    std::fs::remove_file(&path).map_err(|err| format!("删除文件失败: {err}"))?;
+                }
+                self.invalidate_list_cache();
+                return Ok(item);
+            }
+        }
         let mut guard = self.inner.write().expect("catalog lock poisoned");
         let index = guard.iter().position(|item| item.id == id);
         let index = match index {
@@ -455,6 +506,127 @@ fn path_eq_ignore_case(a: &str, b: &str) -> bool {
     let a: String = a.chars().flat_map(char::to_lowercase).collect();
     let b: String = b.chars().flat_map(char::to_lowercase).collect();
     a == b
+}
+
+/// 接收目录扫描条目 id：`inbox:` + 路径 UTF-8 的小写十六进制。
+pub fn inbox_item_id(path: &Path) -> String {
+    let mut id = String::from("inbox:");
+    for byte in path.to_string_lossy().as_bytes() {
+        id.push_str(&format!("{byte:02x}"));
+    }
+    id
+}
+
+fn inbox_id_prefix_ok(id: &str) -> bool {
+    id.starts_with("inbox:") && id.len() > "inbox:".len()
+}
+
+fn path_from_inbox_id(id: &str) -> Option<PathBuf> {
+    let hex = id.strip_prefix("inbox:")?;
+    if hex.is_empty() || hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let mut bytes = Vec::with_capacity(hex.len() / 2);
+    let chars: Vec<char> = hex.chars().collect();
+    for pair in chars.chunks(2) {
+        let hi = pair[0].to_digit(16)? as u8;
+        let lo = pair[1].to_digit(16)? as u8;
+        bytes.push((hi << 4) | lo);
+    }
+    Some(PathBuf::from(String::from_utf8(bytes).ok()?))
+}
+
+fn is_inbox_temp_name(name: &str) -> bool {
+    name.starts_with('.') || name.starts_with(".packetboat-") || name.ends_with(".part")
+}
+
+fn append_inbox_items(result: &mut Vec<Item>, dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let known: HashSet<String> = result
+        .iter()
+        .map(|item| normalize_path_key(&item.local_path))
+        .collect();
+    let now = Utc::now();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if is_inbox_temp_name(&name) {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        if !file_type.is_file() && !file_type.is_dir() {
+            continue;
+        }
+        let path = entry.path();
+        let key = normalize_path_key(&path.to_string_lossy());
+        if known.contains(&key) {
+            continue;
+        }
+        let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        result.push(Item {
+            id: inbox_item_id(&path),
+            name: name.clone(),
+            source_type: SourceType::Inbox,
+            local_path: path.to_string_lossy().into_owned(),
+            size: metadata.len() as i64,
+            modified_at: DateTime::from(
+                metadata
+                    .modified()
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            ),
+            added_at: now,
+            available: true,
+            is_dir: file_type.is_dir(),
+        });
+    }
+}
+
+fn resolve_inbox_item(id: &str, receive_dir: &Path) -> Option<(Item, std::fs::Metadata)> {
+    if !inbox_id_prefix_ok(id) {
+        return None;
+    }
+    let path = path_from_inbox_id(id)?;
+    // 仅允许解析接收目录内的直接子项，避免 id 伪造指向任意路径。
+    let receive_key = normalize_path_key(&receive_dir.to_string_lossy());
+    let path_key = normalize_path_key(&path.to_string_lossy());
+    if path_key == receive_key || !path_key.starts_with(&format!("{receive_key}\\")) {
+        return None;
+    }
+    let rest = &path_key[receive_key.len() + 1..];
+    if rest.contains('\\') {
+        return None;
+    }
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() || (!file_type.is_file() && !file_type.is_dir()) {
+        return None;
+    }
+    Some((
+        Item {
+            id: id.to_string(),
+            name: file_name_of(&path).to_string_lossy().into_owned(),
+            source_type: SourceType::Inbox,
+            local_path: path.to_string_lossy().into_owned(),
+            size: metadata.len() as i64,
+            modified_at: DateTime::from(
+                metadata
+                    .modified()
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            ),
+            added_at: Utc::now(),
+            available: true,
+            is_dir: file_type.is_dir(),
+        },
+        metadata,
+    ))
 }
 
 /// 16 字节随机数的十六进制编码（32 字符），与 Go 版 `randomID` 一致。
@@ -700,6 +872,61 @@ mod tests {
         let roots = catalog.watch_roots();
         assert!(roots.contains(&root));
         assert!(roots.contains(&folder));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn inbox_lists_receive_dir_files_and_skips_catalog_paths() {
+        let root = temp_dir("inbox");
+        let plain = root.join("manual.txt");
+        let uploaded = root.join("uploaded.txt");
+        std::fs::write(&plain, b"hello").unwrap();
+        std::fs::write(&uploaded, b"up").unwrap();
+        std::fs::write(root.join(".hidden"), b"x").unwrap();
+        std::fs::write(root.join(".packetboat-1-a.part"), b"tmp").unwrap();
+
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog.add_received(uploaded.clone()).unwrap();
+        catalog.set_inbox_dir(Some(root.clone()));
+
+        let items = catalog.list();
+        let names: Vec<&str> = items.iter().map(|item| item.name.as_str()).collect();
+        assert!(names.contains(&"manual.txt"));
+        assert!(names.contains(&"uploaded.txt"));
+        assert!(!names.contains(&".hidden"));
+        assert!(!names.contains(&".packetboat-1-a.part"));
+
+        let manual = items.iter().find(|item| item.name == "manual.txt").unwrap();
+        assert!(manual.id.starts_with("inbox:"));
+        assert_eq!(manual.source_type, SourceType::Inbox);
+        let resolved = catalog.resolve(&manual.id).unwrap();
+        assert_eq!(
+            resolved.0.local_path,
+            plain.to_string_lossy().replace('/', "\\")
+        );
+
+        catalog.set_inbox_dir(None);
+        assert!(catalog
+            .list()
+            .iter()
+            .all(|item| !item.id.starts_with("inbox:")));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn inbox_remove_deletes_disk_file() {
+        let root = temp_dir("inbox-remove");
+        let file = root.join("share-me.txt");
+        std::fs::write(&file, b"data").unwrap();
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog.set_inbox_dir(Some(root.clone()));
+        let item = catalog
+            .list()
+            .into_iter()
+            .find(|item| item.name == "share-me.txt")
+            .unwrap();
+        catalog.remove(&item.id).unwrap();
+        assert!(!file.exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

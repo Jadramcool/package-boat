@@ -174,6 +174,38 @@ pub async fn set_require_pairing(
     Ok(updated)
 }
 
+/// 更新「是否展示接收目录内既有文件」开关；服务运行中时重启以生效。
+#[tauri::command]
+#[specta::specta]
+pub async fn set_share_receive_dir(
+    app: AppHandle,
+    state: State<'_, Desktop>,
+    enabled: bool,
+) -> Result<Settings, AppError> {
+    let updated = state
+        .settings
+        .set_share_receive_dir(enabled)
+        .inspect_err(|err| emit_error(&app, err))?;
+
+    // 即使服务未运行，也同步 catalog 扫描根，保证桌面清单立刻反映。
+    if enabled {
+        state
+            .catalog
+            .set_inbox_dir(Some(updated.receive_dir.clone().into()));
+    } else {
+        state.catalog.set_inbox_dir(None);
+    }
+
+    if state.host.state().running {
+        if let Err(err) = state.host.restart().await {
+            emit_error(&app, &err);
+            return Err(err.into());
+        }
+    }
+    emit_state_changed(&app);
+    Ok(updated)
+}
+
 /// 在资源管理器中显示条目所在目录。
 #[tauri::command]
 #[specta::specta]

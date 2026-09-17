@@ -14,6 +14,7 @@ import {
   getTransferProgress,
   revealItem as revealItemCommand,
   setRequirePairing as setRequirePairingCommand,
+  setShareReceiveDir as setShareReceiveDirCommand,
   toggleServer as toggleServerCommand,
   unshare as unshareCommand,
 } from '@/api'
@@ -61,6 +62,7 @@ export function useDesktopHost() {
 
   const linkedCount = computed(() => state.value?.items.filter(item => item.source_type === 'linked').length ?? 0)
   const receivedCount = computed(() => state.value?.items.filter(item => item.source_type === 'received').length ?? 0)
+  const inboxCount = computed(() => state.value?.items.filter(item => item.source_type === 'inbox').length ?? 0)
 
   /** 候选地址（带可达性元信息），已由后端按可达性排序。 */
   const addresses = computed<readonly LocalAddress[]>(() => addressMetaOf(state.value))
@@ -91,6 +93,8 @@ export function useDesktopHost() {
   const accessURLIndex = computed(() => Math.max(0, state.value?.host.urls.indexOf(accessURL.value) ?? 0))
   /** 是否需要配对码访问（服务端设置）；旧后端无此字段时按开启处理。 */
   const requirePairing = computed(() => state.value?.settings.require_pairing ?? true)
+  /** 是否把接收目录既有文件列入共享清单。 */
+  const shareReceiveDir = computed(() => state.value?.settings.share_receive_dir ?? false)
   const qrAccessURL = computed(() => {
     const url = accessURL.value
     const code = state.value?.host.access_code.replace(/\D/g, '') ?? ''
@@ -231,6 +235,11 @@ export function useDesktopHost() {
     await perform('pairing', () => setRequirePairingCommand(enabled))
   }
 
+  /** 切换「是否展示接收目录内既有文件」。 */
+  async function setShareReceiveDirEnabled(enabled: boolean) {
+    await perform('share-receive-dir', () => setShareReceiveDirCommand(enabled))
+  }
+
   async function revealItem(id: string) {
     await perform(`reveal:${id}`, () => revealItemCommand(id))
   }
@@ -349,7 +358,9 @@ export function useDesktopHost() {
     qrAccessURL,
     linkedCount,
     receivedCount,
+    inboxCount,
     requirePairing,
+    shareReceiveDir,
     initialize,
     refresh,
     chooseFiles,
@@ -359,6 +370,7 @@ export function useDesktopHost() {
     chooseReceiveDirectory,
     toggleServer,
     setPairingRequired,
+    setShareReceiveDirEnabled,
     revealItem,
     copyURL,
     openURL,

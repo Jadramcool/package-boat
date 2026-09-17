@@ -50,6 +50,11 @@ export async function setRequirePairing(enabled: boolean): Promise<DesktopSettin
   return unwrap(commands.setRequirePairing(enabled))
 }
 
+/** 更新「是否展示接收目录内既有文件」；便于把接收目录当共享文件夹用。 */
+export async function setShareReceiveDir(enabled: boolean): Promise<DesktopSettings> {
+  return unwrap(commands.setShareReceiveDir(enabled))
+}
+
 export async function revealItem(id: string): Promise<void> {
   await unwrap(commands.revealItem(id))
 }

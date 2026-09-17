@@ -137,6 +137,7 @@ onMounted(() => {
             :drag-active="desktop.dragActive.value"
             :linked-count="desktop.linkedCount.value"
             :received-count="desktop.receivedCount.value"
+            :inbox-count="desktop.inboxCount.value"
             @refresh="desktop.refresh"
             @reveal="desktop.revealItem"
             @unshare="desktop.unshare"
@@ -163,7 +164,8 @@ onMounted(() => {
             <StorageSettings
               :settings="desktop.state.value.settings"
               :busy="desktop.busy.value === 'directory'"
-              @choose-directory="desktop.chooseReceiveDirectory" />
+              @choose-directory="desktop.chooseReceiveDirectory"
+              @toggle-share-receive-dir="desktop.setShareReceiveDirEnabled" />
           </aside>
         </div>
       </main>

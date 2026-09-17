@@ -102,6 +102,13 @@ impl HostManager {
         }
 
         let settings = self.settings.get();
+        // 「展示接收目录既有文件」：启动时把扫描根挂到 catalog，列表/下载共用。
+        if settings.share_receive_dir {
+            self.catalog
+                .set_inbox_dir(Some(settings.receive_dir.clone().into()));
+        } else {
+            self.catalog.set_inbox_dir(None);
+        }
         let app = Server::new(Config {
             device_name: settings.device_name.clone(),
             storage_dir: settings.receive_dir.clone().into(),
@@ -227,6 +234,7 @@ mod tests {
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
                     require_pairing: true,
+                    share_receive_dir: false,
                 },
             )
             .unwrap(),
@@ -280,6 +288,7 @@ mod tests {
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
                     require_pairing: true,
+                    share_receive_dir: false,
                 },
             )
             .unwrap(),
@@ -317,6 +326,7 @@ mod tests {
                     receive_dir: temp.to_string_lossy().into_owned(),
                     max_upload_bytes: 1024,
                     require_pairing: true,
+                    share_receive_dir: false,
                 },
             )
             .unwrap(),
