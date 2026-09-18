@@ -42,7 +42,8 @@ async function copyURL(): Promise<void> {
       <p class="qr-hint">手机相机扫码打开本页<br>（{{ deviceName }}）</p>
       <button class="addr-row" type="button" :title="accessUrl" @click="copyURL">
         <span class="addr-label">
-          <ScanLine :size="12" aria-hidden="true" /> 当前地址
+          <ScanLine :size="12" aria-hidden="true" />
+          <span>当前地址</span>
         </span>
         <span class="addr-value">{{ shortURL }}</span>
         <Check v-if="copied" :size="14" aria-hidden="true" />
@@ -107,8 +108,13 @@ async function copyURL(): Promise<void> {
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  font: 600 9px/1 var(--font-label);
+  font: 600 9px/1.2 var(--font-label);
   letter-spacing: .1em;
+}
+.addr-label svg,
+.addr-row > svg {
+  flex: none;
+  display: block;
 }
 .addr-value {
   grid-area: value;

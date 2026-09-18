@@ -181,6 +181,7 @@ async function copyURL(): Promise<void> {
   }
   .mobile-only > svg {
     flex: none;
+    display: block;
     color: var(--muted);
   }
   .stat-list {

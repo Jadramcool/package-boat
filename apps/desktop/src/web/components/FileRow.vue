@@ -48,7 +48,6 @@ const sourceLabel = computed(() => {
     return '本地文件'
   return '远程接收'
 })
-const isLinked = computed(() => props.file.source_type === 'linked')
 const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.id)}/download`)
 </script>
 
@@ -62,9 +61,9 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
       <div class="file-name-line">
         <strong :title="file.name">{{ file.name }}</strong>
         <span class="source-label" :class="file.source_type">
-          {{ sourceLabel }}
+          <span>{{ sourceLabel }}</span>
         </span>
-        <span v-if="!file.available" class="missing-label">原文件已移动</span>
+        <span v-if="!file.available" class="missing-label"><span>原文件已移动</span></span>
       </div>
       <div class="file-meta"><span>{{ formatBytes(file.size) }}</span><span>{{ formatDate(file.modified) }}</span></div>
     </div>
@@ -77,8 +76,8 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
         type="button"
         class="delete-button"
         :disabled="deleting"
-        :title="isLinked ? '取消共享，不删除原文件' : '删除磁盘上的文件'"
-        :aria-label="isLinked ? '取消共享' : '删除文件'"
+        title="移出共享清单，不删除磁盘文件"
+        aria-label="移出共享清单"
         @click="emit('delete', file.id, file.name)"
       >
         <LoaderCircle v-if="deleting" class="spin" :size="16" aria-hidden="true" />
@@ -97,8 +96,8 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
 .file-info { min-width: 0; }
 .file-name-line { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .file-info strong { overflow: hidden; display: block; color: var(--ink); font: 650 14px/1.35 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
-.source-label, .missing-label { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font: 650 10px/1 var(--font-label); letter-spacing: .04em; }
-.source-label::before, .missing-label::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.source-label, .missing-label { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font: 650 10px/1.3 var(--font-label); letter-spacing: .04em; }
+.source-label::before, .missing-label::before { content: ''; width: 5px; height: 5px; flex: none; display: block; border-radius: 50%; background: currentColor; }
 .source-label.linked { color: var(--acid-deep); background: var(--acid-wash); }
 .source-label.received { color: #23559e; background: var(--info-wash); }
 .source-label.inbox { color: var(--ink-2, #39432f); background: var(--paper-deep, #e9ebe2); }
@@ -107,6 +106,7 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
 .file-meta span + span::before { content: '·'; margin-right: 9px; }
 .file-actions { display: flex; align-items: center; gap: 7px; }
 .download-button, .unavailable-button, .delete-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: transparent; text-decoration: none; }
+.download-button svg, .delete-button svg { flex: none; display: block; }
 .download-button { padding: 0 12px; gap: 7px; font-size: 11px; }
 .unavailable-button { padding: 0 10px; color: var(--muted); cursor: not-allowed; font-size: 9px; }
 .delete-button { width: 36px; color: var(--muted); cursor: pointer; }

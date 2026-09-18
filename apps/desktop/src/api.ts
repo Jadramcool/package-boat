@@ -55,6 +55,16 @@ export async function setShareReceiveDir(enabled: boolean): Promise<DesktopSetti
   return unwrap(commands.setShareReceiveDir(enabled))
 }
 
+/** 重新扫描接收目录：把已移出清单的本地文件加回来（不删磁盘）。 */
+export async function rescanReceiveDir(): Promise<number> {
+  return unwrap(commands.rescanReceiveDir())
+}
+
+/** 手动刷新配对码（不重启服务）；返回新的六位码。 */
+export async function refreshAccessCode(): Promise<string> {
+  return unwrap(commands.refreshAccessCode())
+}
+
 export async function revealItem(id: string): Promise<void> {
   await unwrap(commands.revealItem(id))
 }

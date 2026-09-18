@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { FolderCog, FolderOpen, LoaderCircle } from '@lucide/vue'
+import { FolderCog, FolderOpen, LoaderCircle, RefreshCw } from '@lucide/vue'
 import SideCard from '@/components/SideCard.vue'
 import type { DesktopSettings } from '@/types'
 import { formatBytes } from '@/utils/format'
 
-const props = defineProps<{ settings: DesktopSettings; busy: boolean }>()
+const props = defineProps<{
+  settings: DesktopSettings
+  busy: boolean
+  rescanningInbox?: boolean
+}>()
 const emit = defineEmits<{
   chooseDirectory: []
   toggleShareReceiveDir: [enabled: boolean]
+  rescanReceiveDir: []
 }>()
 
 function handleShareReceiveDirChange(event: Event) {
@@ -28,7 +33,7 @@ function handleShareReceiveDirChange(event: Event) {
     <button type="button" class="choose" :disabled="props.busy" @click="emit('chooseDirectory')">
       <LoaderCircle v-if="props.busy" class="spin" :size="15" />
       <FolderCog v-else :size="15" />
-      更改目录
+      <span>更改目录</span>
     </button>
 
     <label class="switch">
@@ -49,6 +54,22 @@ function handleShareReceiveDirChange(event: Event) {
       <i aria-hidden="true" />
     </label>
 
+    <!-- 独立刷新：移出清单的本地文件通过重新扫描加回，与开关键解耦 -->
+    <button
+      type="button"
+      class="choose rescan"
+      :disabled="!props.settings.share_receive_dir || props.busy || props.rescanningInbox"
+      title="重新扫描接收目录，把已移出清单的本地文件加回来（不删除磁盘文件）"
+      @click="emit('rescanReceiveDir')"
+    >
+      <LoaderCircle v-if="props.rescanningInbox" class="spin" :size="15" />
+      <RefreshCw v-else :size="15" />
+      <span>重新扫描接收目录</span>
+    </button>
+    <p v-if="props.settings.share_receive_dir" class="rescan-hint">
+      移出清单的文件仍保留在磁盘上；点此扫描可重新展示。
+    </p>
+
     <dl>
       <div>
         <dt>单文件上限</dt>
@@ -66,11 +87,13 @@ function handleShareReceiveDirChange(event: Event) {
 .field { min-width: 0; }
 .field-label { display: block; margin-bottom: 6px; color: var(--muted); font: 600 11.5px/1 var(--font-label); }
 .path { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--dock-0); }
-.path svg { flex: none; color: var(--muted); }
+.path svg { flex: none; display: block; color: var(--muted); }
 .path span { min-width: 0; overflow: hidden; color: var(--ink); font: 550 11.5px/1.4 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-.choose { height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: 650 12.5px/1 var(--font-label); transition: background 140ms ease, border-color 140ms ease, color 140ms ease; }
+.choose { height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer; font: 650 12.5px/1.2 var(--font-label); transition: background 140ms ease, border-color 140ms ease, color 140ms ease; }
+.choose svg { flex: none; display: block; }
 .choose:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-.choose:disabled { cursor: wait; opacity: .55; }
+.choose:disabled { cursor: not-allowed; opacity: .55; }
+.rescan-hint { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
 .switch-copy { min-width: 0; }
 .switch-copy strong { display: block; color: var(--ink); font: 650 12.5px/1.3 var(--font-label); }

@@ -52,6 +52,8 @@ mod tests {
                 commands::toggle_server,
                 commands::set_require_pairing,
                 commands::set_share_receive_dir,
+                commands::rescan_receive_dir,
+                commands::refresh_access_code,
                 commands::reveal_item,
                 commands::get_transfer_progress,
             ])
@@ -115,6 +117,8 @@ pub fn run() {
             commands::toggle_server,
             commands::set_require_pairing,
             commands::set_share_receive_dir,
+            commands::rescan_receive_dir,
+            commands::refresh_access_code,
             commands::reveal_item,
             commands::get_transfer_progress,
         ])

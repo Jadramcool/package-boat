@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- PacketBoat App Icon · PB-05 私域航迹 · 小尺寸加粗版 -->
+  <rect width="100" height="100" rx="22" fill="#1f271c"/>
+  <path d="M26 66 C38 66 42 36 50 36 C58 36 62 66 74 66"
+        fill="none" stroke="#d7f954" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="26" cy="66" r="7" fill="#d7f954"/>
+  <circle cx="74" cy="66" r="5.5" fill="#d7f954"/>
+  <path d="M50 26 L57 38 L50 50 L43 38 Z" fill="#d7f954"/>
+</svg>

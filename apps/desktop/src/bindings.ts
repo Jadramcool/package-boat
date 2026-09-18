@@ -10,7 +10,7 @@ export const commands = {
 	addLinkedFiles: (paths: string[]) => typedError<Item[], AppError>(__TAURI_INVOKE("add_linked_files", { paths })),
 	/**  弹出文件选择对话框并原位共享所选文件。 */
 	chooseLinkedFiles: () => typedError<Item[], AppError>(__TAURI_INVOKE("choose_linked_files")),
-	/**  取消共享（只移除目录表记录，不删除原文件）。 */
+	/**  取消共享：只移出共享清单，不删除磁盘文件（含本地文件 / 远程接收）。 */
 	unshare: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("unshare", { id })),
 	/**  清空共享清单，但不删除原位共享文件或接收目录中的实际文件。 */
 	clearSharedFiles: () => typedError<number, AppError>(__TAURI_INVOKE("clear_shared_files")),
@@ -22,6 +22,16 @@ export const commands = {
 	setRequirePairing: (enabled: boolean) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_require_pairing", { enabled })),
 	/**  更新「是否展示接收目录内既有文件」开关；服务运行中时重启以生效。 */
 	setShareReceiveDir: (enabled: boolean) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_share_receive_dir", { enabled })),
+	/**
+	 *  重新扫描接收目录：把此前「移出清单」的本地文件加回共享清单（不删除磁盘文件）。
+	 *  返回本次取消隐藏的路径条数。
+	 */
+	rescanReceiveDir: () => typedError<number, AppError>(__TAURI_INVOKE("rescan_receive_dir")),
+	/**
+	 *  手动刷新配对码（热更新，不重启服务）。返回新的六位码。
+	 *  已配对设备的会话仍然有效；新设备需使用新码。
+	 */
+	refreshAccessCode: () => typedError<string, AppError>(__TAURI_INVOKE("refresh_access_code")),
 	/**  在资源管理器中显示条目所在目录。 */
 	revealItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("reveal_item", { id })),
 	/**  当前传输进度（任务栏进度条轮询）。 */

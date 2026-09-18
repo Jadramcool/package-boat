@@ -61,7 +61,7 @@ pub async fn choose_linked_files(
     add_linked_files(app, state, paths).await
 }
 
-/// 取消共享（只移除目录表记录，不删除原文件）。
+/// 取消共享：只移出共享清单，不删除磁盘文件（含本地文件 / 远程接收）。
 #[tauri::command]
 #[specta::specta]
 pub fn unshare(app: AppHandle, state: State<'_, Desktop>, id: String) -> Result<(), AppError> {
@@ -188,6 +188,7 @@ pub async fn set_share_receive_dir(
         .inspect_err(|err| emit_error(&app, err))?;
 
     // 即使服务未运行，也同步 catalog 扫描根，保证桌面清单立刻反映。
+    // 不在此重置隐藏名单：恢复已移出项走独立的「重新扫描」按钮。
     if enabled {
         state
             .catalog
@@ -204,6 +205,41 @@ pub async fn set_share_receive_dir(
     }
     emit_state_changed(&app);
     Ok(updated)
+}
+
+/// 重新扫描接收目录：把此前「移出清单」的本地文件加回共享清单（不删除磁盘文件）。
+/// 返回本次取消隐藏的路径条数。
+#[tauri::command]
+#[specta::specta]
+pub fn rescan_receive_dir(app: AppHandle, state: State<'_, Desktop>) -> Result<u32, AppError> {
+    match state.catalog.rescan_inbox() {
+        Ok(restored) => {
+            emit_state_changed(&app);
+            Ok(restored as u32)
+        }
+        Err(err) => {
+            emit_error(&app, &err);
+            Err(err.into())
+        }
+    }
+}
+
+/// 手动刷新配对码（热更新，不重启服务）。返回新的六位码。
+/// 已配对设备的会话仍然有效；新设备需使用新码。
+#[tauri::command]
+#[specta::specta]
+pub fn refresh_access_code(app: AppHandle, state: State<'_, Desktop>) -> Result<String, AppError> {
+    match state.host.refresh_access_code() {
+        Ok(code) => {
+            emit_state_changed(&app);
+            emit_notice(&app, "配对码已刷新，请使用新码配对".to_string());
+            Ok(code)
+        }
+        Err(err) => {
+            emit_error(&app, &err);
+            Err(err.into())
+        }
+    }
 }
 
 /// 在资源管理器中显示条目所在目录。

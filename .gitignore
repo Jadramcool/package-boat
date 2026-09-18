@@ -23,5 +23,9 @@ Thumbs.db
 .omo/
 .workbuddy/
 .zcode/
+.mimocode/
 .screenshot-qa.png
 apps/desktop/shots/
+
+# 本地临时生成物
+generated-*.png

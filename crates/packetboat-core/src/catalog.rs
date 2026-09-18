@@ -1,6 +1,9 @@
 //! 共享目录表：`catalog.json`。`linked` 条目只保存源文件绝对路径（不复制、不移动），
 //! `received` 条目只由本次服务明确接收的上传文件产生。所有变更先落盘再提交内存状态。
 //!
+//! **安全边界（当前版本）**：`remove` / `clear` / HTTP DELETE 一律只把条目移出共享清单，
+//! 绝不删除磁盘上的原文件或接收目录文件。inbox 扫描条目通过 `hidden_inbox` 路径名单隐藏。
+//!
 //! `list()` 结果带短 TTL 缓存；文件系统监听通过 `apply_path_event` 只重读命中的条目，
 //! 避免每次列表都对全部路径做磁盘 stat。
 
@@ -56,6 +59,9 @@ pub struct Item {
 struct PersistedCatalog {
     version: i32,
     items: Vec<Item>,
+    /// 用户从清单移除过的接收目录路径（规范化 key）。只隐藏，不删盘。
+    #[serde(default)]
+    hidden_inbox: Vec<String>,
 }
 
 /// 共享目录表存储。`path` 为空时仅内存操作（测试用）。
@@ -66,6 +72,8 @@ pub struct Catalog {
     list_cache: Mutex<Option<(Instant, Vec<Item>)>>,
     /// 接收目录扫描根；`Some` 时列表会合并该目录顶层文件/文件夹（不落盘 catalog）。
     inbox_dir: RwLock<Option<PathBuf>>,
+    /// 已从清单移除、但仍在磁盘上的接收目录路径 key。
+    hidden_inbox: RwLock<HashSet<String>>,
 }
 
 impl Catalog {
@@ -76,6 +84,7 @@ impl Catalog {
             inner: RwLock::new(Vec::new()),
             list_cache: Mutex::new(None),
             inbox_dir: RwLock::new(None),
+            hidden_inbox: RwLock::new(HashSet::new()),
         };
         if !catalog.path.as_os_str().is_empty() {
             catalog.load()?;
@@ -84,9 +93,97 @@ impl Catalog {
     }
 
     /// 启用/关闭「展示接收目录既有文件」。关闭时传 `None`。
+    /// 不在此处理隐藏名单：恢复已移出项请用独立的 `rescan_inbox`。
     pub fn set_inbox_dir(&self, dir: Option<PathBuf>) {
         *self.inbox_dir.write().expect("inbox lock poisoned") = dir;
         self.invalidate_list_cache();
+    }
+
+    /// 重新扫描接收目录：清空该目录下的隐藏名单，把此前「移出清单」的本地文件加回来。
+    /// 与开关解耦；未开启扫描时清空全部隐藏名单（开关再开时也能扫到）。
+    /// 返回本次取消隐藏的路径条数。
+    pub fn rescan_inbox(&self) -> Result<usize, String> {
+        let removed = match self.inbox_dir() {
+            Some(dir) => self.clear_hidden_under(&dir),
+            None => self.clear_all_hidden_inbox(),
+        };
+        self.invalidate_list_cache();
+        Ok(removed)
+    }
+
+    /// 清空落在 `receive_dir` 下的 inbox 隐藏路径，返回移除条数。
+    fn clear_hidden_under(&self, receive_dir: &Path) -> usize {
+        let dir_key = normalize_path_key(&receive_dir.to_string_lossy());
+        let prefix = format!("{dir_key}\\");
+        let removed = {
+            let mut hidden = self
+                .hidden_inbox
+                .write()
+                .expect("hidden inbox lock poisoned");
+            let before = hidden.len();
+            hidden.retain(|key| !(key == &dir_key || key.starts_with(&prefix)));
+            before - hidden.len()
+        };
+        if removed == 0 {
+            return 0;
+        }
+        self.persist_hidden_snapshot();
+        removed
+    }
+
+    fn clear_all_hidden_inbox(&self) -> usize {
+        let removed = {
+            let mut hidden = self
+                .hidden_inbox
+                .write()
+                .expect("hidden inbox lock poisoned");
+            let before = hidden.len();
+            hidden.clear();
+            before
+        };
+        if removed == 0 {
+            return 0;
+        }
+        self.persist_hidden_snapshot();
+        removed
+    }
+
+    fn persist_hidden_snapshot(&self) {
+        let items = self.inner.read().expect("catalog lock poisoned").clone();
+        if let Err(err) = self.save_locked(&items, &self.hidden_snapshot()) {
+            eprintln!("保存共享目录隐藏名单失败: {err}");
+        }
+    }
+
+    fn is_hidden_inbox(&self, path: &str) -> bool {
+        let key = normalize_path_key(path);
+        self.hidden_inbox
+            .read()
+            .expect("hidden inbox lock poisoned")
+            .contains(&key)
+    }
+
+    /// 记住「移出清单」的接收目录路径；保存失败时回滚内存名单。
+    fn hide_inbox_path(&self, path: &str) -> Result<(), String> {
+        let key = normalize_path_key(path);
+        {
+            let mut hidden = self
+                .hidden_inbox
+                .write()
+                .expect("hidden inbox lock poisoned");
+            if !hidden.insert(key.clone()) {
+                return Ok(());
+            }
+        }
+        let items = self.inner.read().expect("catalog lock poisoned").clone();
+        if let Err(err) = self.save_locked(&items, &self.hidden_snapshot()) {
+            self.hidden_inbox
+                .write()
+                .expect("hidden inbox lock poisoned")
+                .remove(&key);
+            return Err(err);
+        }
+        Ok(())
     }
 
     fn inbox_dir(&self) -> Option<PathBuf> {
@@ -147,7 +244,7 @@ impl Catalog {
             added.push(candidate);
         }
         if !added.is_empty() {
-            if let Err(err) = self.save_locked(&guard) {
+            if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
                 guard.truncate(start_len);
                 return Err(err);
             }
@@ -165,6 +262,12 @@ impl Catalog {
         if metadata.file_type().is_symlink() || !metadata.file_type().is_file() {
             return Err("接收路径不是普通文件".to_string());
         }
+
+        let path_key = absolute.to_string_lossy();
+        self.hidden_inbox
+            .write()
+            .expect("hidden inbox lock poisoned")
+            .remove(&normalize_path_key(&path_key));
 
         let mut guard = self.inner.write().expect("catalog lock poisoned");
         if let Some(existing) = find_by_path(&guard, &absolute.to_string_lossy()) {
@@ -186,7 +289,7 @@ impl Catalog {
             is_dir: false,
         };
         guard.push(item.clone());
-        if let Err(err) = self.save_locked(&guard) {
+        if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
             guard.pop();
             return Err(err);
         }
@@ -218,7 +321,12 @@ impl Catalog {
             apply_disk_meta(item);
         }
         if let Some(dir) = self.inbox_dir() {
-            append_inbox_items(&mut result, &dir);
+            let hidden = self
+                .hidden_inbox
+                .read()
+                .expect("hidden inbox lock poisoned")
+                .clone();
+            append_inbox_items(&mut result, &dir, &hidden);
         }
         result.sort_by_key(|item| std::cmp::Reverse(item.added_at));
         *self.list_cache.lock().expect("list cache poisoned") =
@@ -314,6 +422,12 @@ impl Catalog {
     pub fn resolve(&self, id: &str) -> Result<(Item, std::fs::Metadata), std::io::Error> {
         if let Some(dir) = self.inbox_dir() {
             if let Some((item, metadata)) = resolve_inbox_item(id, &dir) {
+                if self.is_hidden_inbox(&item.local_path) {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        "not found",
+                    ));
+                }
                 return Ok((item, metadata));
             }
         }
@@ -342,6 +456,9 @@ impl Catalog {
     pub fn get(&self, id: &str) -> Option<Item> {
         if let Some(dir) = self.inbox_dir() {
             if let Some((item, _)) = resolve_inbox_item(id, &dir) {
+                if self.is_hidden_inbox(&item.local_path) {
+                    return None;
+                }
                 return Some(item);
             }
         }
@@ -349,19 +466,15 @@ impl Catalog {
         guard.iter().find(|item| item.id == id).cloned()
     }
 
-    /// 移除条目（仅目录表，不触碰源文件）；保存失败时回滚。
-    /// 接收目录扫描条目会删除磁盘上的对应文件/文件夹（与远程接收文件一致）。
+    /// 移除条目：只移出共享清单，**绝不删除磁盘文件**。
+    /// inbox 扫描条目写入 `hidden_inbox`；接收目录内的 catalog 条目同样隐藏，避免关闭扫描后再次冒出。
+    /// 保存失败时回滚内存状态。
     pub fn remove(&self, id: &str) -> Result<Item, String> {
-        if let Some(dir) = self.inbox_dir() {
-            if inbox_id_prefix_ok(id) {
+        if inbox_id_prefix_ok(id) {
+            if let Some(dir) = self.inbox_dir() {
                 let (item, _) =
                     resolve_inbox_item(id, &dir).ok_or_else(|| "条目不存在".to_string())?;
-                let path = PathBuf::from(&item.local_path);
-                if path.is_dir() {
-                    std::fs::remove_dir_all(&path).map_err(|err| format!("删除目录失败: {err}"))?;
-                } else {
-                    std::fs::remove_file(&path).map_err(|err| format!("删除文件失败: {err}"))?;
-                }
+                self.hide_inbox_path(&item.local_path)?;
                 self.invalidate_list_cache();
                 return Ok(item);
             }
@@ -373,28 +486,99 @@ impl Catalog {
             None => return Err("条目不存在".to_string()),
         };
         let removed = guard.remove(index);
-        if let Err(err) = self.save_locked(&guard) {
+        let mut restored_hidden = false;
+        if self.should_hide_after_remove(&removed) {
+            let key = normalize_path_key(&removed.local_path);
+            if self
+                .hidden_inbox
+                .write()
+                .expect("hidden inbox lock poisoned")
+                .insert(key)
+            {
+                restored_hidden = true;
+            }
+        }
+        if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
             guard.insert(index, removed.clone());
+            if restored_hidden {
+                self.hidden_inbox
+                    .write()
+                    .expect("hidden inbox lock poisoned")
+                    .remove(&normalize_path_key(&removed.local_path));
+            }
             return Err(err);
         }
         self.invalidate_list_cache();
         Ok(removed)
     }
 
-    /// 清空共享目录表，但不删除任何原位共享文件或接收文件。
+    /// 接收目录内的条目（含远程上传）移出清单后必须进隐藏名单，否则开启目录扫描时会再次出现。
+    fn should_hide_after_remove(&self, item: &Item) -> bool {
+        if item.source_type == SourceType::Inbox || item.source_type == SourceType::Received {
+            return true;
+        }
+        if let Some(dir) = self.inbox_dir() {
+            let dir_key = normalize_path_key(&dir.to_string_lossy());
+            let item_key = normalize_path_key(&item.local_path);
+            return item_key.starts_with(&format!("{dir_key}\\"));
+        }
+        false
+    }
+
+    /// 清空共享清单：只移除记录/隐藏扫描条目，不删除任何磁盘文件。
     pub fn clear(&self) -> Result<usize, String> {
         let mut guard = self.inner.write().expect("catalog lock poisoned");
-        if guard.is_empty() {
-            return Ok(0);
-        }
+        let mut hidden = self
+            .hidden_inbox
+            .write()
+            .expect("hidden inbox lock poisoned");
+        let mut hidden_before: Vec<String> = Vec::new();
+        let mut cleared = 0usize;
 
-        let previous = std::mem::take(&mut *guard);
-        if let Err(err) = self.save_locked(&[]) {
-            *guard = previous;
-            return Err(err);
+        if !guard.is_empty() || self.inbox_dir().is_some() {
+            for item in guard.iter() {
+                if self.should_hide_after_remove(item) {
+                    let key = normalize_path_key(&item.local_path);
+                    if hidden.insert(key.clone()) {
+                        hidden_before.push(key);
+                    }
+                }
+            }
+            if let Some(dir) = self.inbox_dir() {
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    for entry in entries.flatten() {
+                        let name = entry.file_name().to_string_lossy().into_owned();
+                        if is_inbox_temp_name(&name) {
+                            continue;
+                        }
+                        let Ok(file_type) = entry.file_type() else {
+                            continue;
+                        };
+                        if file_type.is_symlink() || (!file_type.is_file() && !file_type.is_dir()) {
+                            continue;
+                        }
+                        let key = normalize_path_key(&entry.path().to_string_lossy());
+                        if hidden.insert(key.clone()) {
+                            hidden_before.push(key);
+                        }
+                    }
+                }
+            }
+
+            let previous = std::mem::take(&mut *guard);
+            cleared = previous.len();
+            if let Err(err) = self.save_locked(&[], &hidden) {
+                *guard = previous;
+                for key in hidden_before {
+                    hidden.remove(&key);
+                }
+                return Err(err);
+            }
         }
+        drop(hidden);
+        drop(guard);
         self.invalidate_list_cache();
-        Ok(previous.len())
+        Ok(cleared)
     }
 
     fn load(&self) -> Result<(), String> {
@@ -405,6 +589,7 @@ impl Catalog {
         };
         let stored: PersistedCatalog =
             serde_json::from_slice(&content).map_err(|err| format!("解析共享目录表: {err}"))?;
+        let hidden: HashSet<String> = stored.hidden_inbox.into_iter().collect();
         let mut items = match stored.version {
             CATALOG_VERSION => stored.items,
             1 => {
@@ -412,25 +597,40 @@ impl Catalog {
                 // 为避免升级后继续意外暴露整个目录，只迁移原位共享条目；磁盘文件不删除。
                 let mut items = stored.items;
                 items.retain(|item| item.source_type != SourceType::Received);
-                self.save_locked(&items)?;
+                self.save_locked(&items, &hidden)?;
                 items
             }
             version => return Err(format!("不支持的共享目录表版本: {version}")),
         };
         *self.inner.write().expect("catalog lock poisoned") = std::mem::take(&mut items);
+        *self
+            .hidden_inbox
+            .write()
+            .expect("hidden inbox lock poisoned") = hidden;
         self.invalidate_list_cache();
         Ok(())
     }
 
-    fn save_locked(&self, items: &[Item]) -> Result<(), String> {
+    /// 持久化目录表与 inbox 隐藏名单。调用方需自行持有/传入 hidden 快照，避免锁重入。
+    fn save_locked(&self, items: &[Item], hidden: &HashSet<String>) -> Result<(), String> {
         if self.path.as_os_str().is_empty() {
             return Ok(());
         }
+        let mut hidden_vec: Vec<String> = hidden.iter().cloned().collect();
+        hidden_vec.sort();
         let persisted = PersistedCatalog {
             version: CATALOG_VERSION,
             items: items.to_vec(),
+            hidden_inbox: hidden_vec,
         };
         crate::settings::atomic_write_json(&self.path, &persisted)
+    }
+
+    fn hidden_snapshot(&self) -> HashSet<String> {
+        self.hidden_inbox
+            .read()
+            .expect("hidden inbox lock poisoned")
+            .clone()
     }
 }
 
@@ -540,7 +740,7 @@ fn is_inbox_temp_name(name: &str) -> bool {
     name.starts_with('.') || name.starts_with(".packetboat-") || name.ends_with(".part")
 }
 
-fn append_inbox_items(result: &mut Vec<Item>, dir: &Path) {
+fn append_inbox_items(result: &mut Vec<Item>, dir: &Path, hidden: &HashSet<String>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -565,7 +765,7 @@ fn append_inbox_items(result: &mut Vec<Item>, dir: &Path) {
         }
         let path = entry.path();
         let key = normalize_path_key(&path.to_string_lossy());
-        if known.contains(&key) {
+        if known.contains(&key) || hidden.contains(&key) {
             continue;
         }
         let Ok(metadata) = std::fs::symlink_metadata(&path) else {
@@ -914,7 +1114,7 @@ mod tests {
     }
 
     #[test]
-    fn inbox_remove_deletes_disk_file() {
+    fn inbox_remove_hides_item_but_keeps_disk_file() {
         let root = temp_dir("inbox-remove");
         let file = root.join("share-me.txt");
         std::fs::write(&file, b"data").unwrap();
@@ -926,7 +1126,50 @@ mod tests {
             .find(|item| item.name == "share-me.txt")
             .unwrap();
         catalog.remove(&item.id).unwrap();
-        assert!(!file.exists());
+        assert!(file.exists(), "移出清单不得删除磁盘文件");
+        assert!(
+            catalog
+                .list()
+                .iter()
+                .all(|item| item.name != "share-me.txt"),
+            "移出后不应再出现在清单"
+        );
+        assert!(catalog.get(&item.id).is_none());
+        // 独立「重新扫描」：清空隐藏名单，本地文件回到清单
+        let restored = catalog.rescan_inbox().unwrap();
+        assert!(restored >= 1);
+        assert!(
+            catalog
+                .list()
+                .iter()
+                .any(|item| item.name == "share-me.txt"),
+            "重新扫描接收目录后应恢复展示"
+        );
+        catalog.clear().unwrap();
+        assert!(file.exists(), "清空清单也不得删除磁盘文件");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn received_remove_keeps_disk_file_and_hides_rescan() {
+        let root = temp_dir("received-remove");
+        let file = root.join("upload.bin");
+        std::fs::write(&file, b"payload").unwrap();
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        let item = catalog.add_received(file.clone()).unwrap();
+        catalog.set_inbox_dir(Some(root.clone()));
+        catalog.remove(&item.id).unwrap();
+        assert!(file.exists(), "接收文件移出清单后仍须保留");
+        assert!(catalog
+            .list()
+            .iter()
+            .all(|entry| entry.local_path != item.local_path));
+        // 独立重新扫描后，接收目录内文件以「本地文件」身份回到清单
+        catalog.rescan_inbox().unwrap();
+        assert!(catalog
+            .list()
+            .iter()
+            .any(|entry| entry.local_path == item.local_path));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

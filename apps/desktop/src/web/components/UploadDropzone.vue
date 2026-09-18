@@ -131,16 +131,18 @@ function handleDrop(event: DragEvent): void {
   padding: 0 14px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   border: 1px solid var(--ink);
   border-radius: 10px;
   color: var(--paper);
   background: var(--ink);
   cursor: pointer;
-  font: 650 12.5px/1 var(--font-label);
+  font: 650 12.5px/1.2 var(--font-label);
   letter-spacing: .06em;
   white-space: nowrap;
 }
+.choose-button svg { flex: none; display: block; }
 .choose-button:not(:disabled):hover { background: var(--ink-2); }
 .choose-button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width: 560px) {

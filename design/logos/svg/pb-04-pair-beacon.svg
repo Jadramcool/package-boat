@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 04 配对灯塔 — geometric beacon + signal rays + dock base -->
+  <g fill="currentColor">
+    <!-- tower (trapezoid) -->
+    <path d="M 38 34 L 62 34 L 58 68 L 42 68 Z" />
+    <!-- lantern cap -->
+    <rect x="42" y="26" width="16" height="8" rx="2.5"/>
+    <!-- dock base -->
+    <rect x="30" y="68" width="40" height="6" rx="2"/>
+    <!-- keel / pier -->
+    <path d="M 50 74 L 56 84 L 44 84 Z"/>
+  </g>
+  <!-- signal rays (acid accent zone — parent can tint) -->
+  <g fill="currentColor" opacity="0.55">
+    <path d="M 50 22 L 46 8 L 50 12 L 54 8 Z"/>
+    <path d="M 42 24 L 30 12 L 34 18 L 36 14 Z"/>
+    <path d="M 58 24 L 70 12 L 66 18 L 64 14 Z"/>
+  </g>
+  <!-- pairing gap: two small device dots -->
+  <g fill="currentColor">
+    <circle cx="24" cy="40" r="3"/>
+    <circle cx="76" cy="40" r="3"/>
+  </g>
+</svg>

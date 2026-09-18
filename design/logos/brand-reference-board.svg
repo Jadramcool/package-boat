@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 420" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <!-- PacketBoat Logo 参考图板：概念 → 模式 → 色板 -->
+  <rect width="680" height="420" fill="#f2f4ec"/>
+
+  <!-- Title -->
+  <text x="40" y="36" font-size="14" font-weight="500" fill="#1f271c">PacketBoat · Logo 设计参考图板</text>
+  <text x="40" y="56" font-size="11" fill="#646c57">局域网投递站 · 深海墨 × 航速绿 × 船坞白 · 投递站，不是网盘</text>
+
+  <!-- Palette -->
+  <text x="40" y="92" font-size="11" font-weight="500" fill="#1f271c">品牌色板</text>
+  <g>
+    <rect x="40" y="104" width="72" height="48" rx="8" fill="#1f271c"/>
+    <text x="40" y="166" font-size="10" fill="#1f271c">深海墨</text>
+    <text x="40" y="178" font-size="9" fill="#646c57">#1f271c</text>
+
+    <rect x="124" y="104" width="72" height="48" rx="8" fill="#d7f954"/>
+    <text x="124" y="166" font-size="10" fill="#1f271c">航速绿</text>
+    <text x="124" y="178" font-size="9" fill="#646c57">#d7f954</text>
+
+    <rect x="208" y="104" width="72" height="48" rx="8" fill="#4d6707"/>
+    <text x="208" y="166" font-size="10" fill="#1f271c">深酸绿</text>
+    <text x="208" y="178" font-size="9" fill="#646c57">#4d6707</text>
+
+    <rect x="292" y="104" width="72" height="48" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="292" y="166" font-size="10" fill="#1f271c">船坞白</text>
+    <text x="292" y="178" font-size="9" fill="#646c57">#fbfcf7</text>
+
+    <rect x="376" y="104" width="72" height="48" rx="8" fill="#f2f4ec" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="376" y="166" font-size="10" fill="#1f271c">船坞灰</text>
+    <text x="376" y="178" font-size="9" fill="#646c57">#f2f4ec</text>
+
+    <rect x="460" y="104" width="72" height="48" rx="8" fill="#ef5a32"/>
+    <text x="460" y="166" font-size="10" fill="#1f271c">信号橙</text>
+    <text x="460" y="178" font-size="9" fill="#646c57">#ef5a32</text>
+  </g>
+
+  <!-- Concept → Pattern mapping -->
+  <text x="40" y="214" font-size="11" font-weight="500" fill="#1f271c">产品概念 → 设计模式映射</text>
+
+  <!-- flow nodes -->
+  <g font-size="11" fill="#1f271c">
+    <rect x="40" y="228" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="110" y="244" text-anchor="middle" font-weight="500">局域网投递</text>
+    <text x="110" y="256" text-anchor="middle" font-size="9" fill="#646c57">LAN / 直达 / 无云端</text>
+
+    <path d="M 182 246 H 210" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="212" y="228" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="282" y="244" text-anchor="middle" font-weight="500">船坞 / 航迹 / 灯塔</text>
+    <text x="282" y="256" text-anchor="middle" font-size="9" fill="#646c57">投递隐喻</text>
+
+    <path d="M 354 246 H 382" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="384" y="228" width="140" height="36" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="0.8"/>
+    <text x="454" y="244" text-anchor="middle" font-weight="500">几何 + 负空间</text>
+    <text x="454" y="256" text-anchor="middle" font-size="9" fill="#4d6707">极简 / 可缩放</text>
+  </g>
+
+  <!-- Second row concepts -->
+  <g font-size="11" fill="#1f271c">
+    <rect x="40" y="278" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="110" y="294" text-anchor="middle" font-weight="500">六位配对码</text>
+    <text x="110" y="306" text-anchor="middle" font-size="9" fill="#646c57">设备互联 / 门禁</text>
+
+    <path d="M 182 296 H 210" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="212" y="278" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="282" y="294" text-anchor="middle" font-weight="500">节点 / 灯塔 / 点阵</text>
+    <text x="282" y="306" text-anchor="middle" font-size="9" fill="#646c57">配对隐喻</text>
+
+    <path d="M 354 296 H 382" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="384" y="278" width="140" height="36" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="0.8"/>
+    <text x="454" y="294" text-anchor="middle" font-weight="500">点阵 + 信号弧</text>
+    <text x="454" y="306" text-anchor="middle" font-size="9" fill="#4d6707">可见的连接</text>
+  </g>
+
+  <!-- Third row -->
+  <g font-size="11" fill="#1f271c">
+    <rect x="40" y="328" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="110" y="344" text-anchor="middle" font-weight="500">分块校验 / 隐私</text>
+    <text x="110" y="356" text-anchor="middle" font-size="9" fill="#646c57">SHA-256 / 不出网</text>
+
+    <path d="M 182 346 H 210" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="212" y="328" width="140" height="36" rx="8" fill="#fff" stroke="#c9d0c0" stroke-width="0.8"/>
+    <text x="282" y="344" text-anchor="middle" font-weight="500">蜂窝 / 私域环</text>
+    <text x="282" y="356" text-anchor="middle" font-size="9" fill="#646c57">完整性隐喻</text>
+
+    <path d="M 354 346 H 382" stroke="#1f271c" stroke-width="1" marker-end="url(#arrow)"/>
+
+    <rect x="384" y="328" width="140" height="36" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="0.8"/>
+    <text x="454" y="344" text-anchor="middle" font-weight="500">线系统 + 封印形</text>
+    <text x="454" y="356" text-anchor="middle" font-size="9" fill="#4d6707">秩序 / 可靠</text>
+  </g>
+
+  <!-- Mini logo strip -->
+  <text x="40" y="388" font-size="11" font-weight="500" fill="#1f271c">变体预览（currentColor）</text>
+  <g transform="translate(40, 396)" fill="#1f271c">
+    <!-- mini icons 01-08 as simple glyphs -->
+    <rect x="0" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(11,11) scale(0.16) translate(-50,-50)" fill="#1f271c">
+      <rect x="24" y="28" width="8" height="50" rx="2"/><rect x="68" y="28" width="8" height="50" rx="2"/><rect x="24" y="28" width="52" height="7" rx="2"/><rect x="38" y="44" width="24" height="24" rx="4"/>
+    </g>
+    <rect x="32" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(43,11) scale(0.16) translate(-50,-50)" fill="#1f271c">
+      <rect x="42" y="42" width="16" height="16" rx="3.5"/><circle cx="50" cy="30" r="3"/><circle cx="67.3" cy="34" r="3"/><circle cx="71" cy="51" r="3"/><circle cx="58.6" cy="66" r="3"/><circle cx="41.4" cy="66" r="3"/><circle cx="29" cy="51" r="3"/>
+    </g>
+    <rect x="64" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(75,11) scale(0.16) translate(-50,-50)">
+      <circle cx="50" cy="50" r="32" fill="none" stroke="#1f271c" stroke-width="8"/><circle cx="78" cy="50" r="8" fill="#1f271c"/>
+    </g>
+    <rect x="96" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(107,11) scale(0.16) translate(-50,-50)" fill="#1f271c">
+      <path d="M38 34 L62 34 L58 68 L42 68 Z"/><rect x="42" y="26" width="16" height="8" rx="2.5"/><rect x="30" y="68" width="40" height="6" rx="2"/>
+    </g>
+    <rect x="128" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(139,11) scale(0.16) translate(-50,-50)">
+      <circle cx="28" cy="62" r="10" fill="#1f271c"/><circle cx="72" cy="62" r="8" fill="#1f271c"/><path d="M28 62 C38 62 42 38 50 38 C58 38 62 62 72 62" fill="none" stroke="#1f271c" stroke-width="5"/>
+    </g>
+    <rect x="160" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(171,11) scale(0.16) translate(-50,-50)">
+      <polygon points="50,18 77.7,34 77.7,66 50,82 22.3,66 22.3,34" fill="none" stroke="#1f271c" stroke-width="4"/><circle cx="50" cy="50" r="8" fill="#1f271c"/>
+    </g>
+    <rect x="192" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(203,11) scale(0.16) translate(-50,-50)" fill="#1f271c">
+      <rect x="32" y="28" width="36" height="30" rx="4"/><path d="M28 76 L72 76 L66 86 L34 86 Z"/>
+    </g>
+    <rect x="224" y="0" width="22" height="22" rx="4" fill="#1f271c" opacity="0.08"/>
+    <g transform="translate(235,11) scale(0.16) translate(-50,-50)">
+      <path d="M34 22 L34 78 M34 22 L52 22 A14 14 0 0 1 52 50 L34 50" fill="none" stroke="#1f271c" stroke-width="6"/><path d="M38 36 L60 36 L54 46 L44 46 Z" fill="#1f271c"/>
+    </g>
+  </g>
+
+  <defs>
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6" fill="none" stroke="#1f271c" stroke-width="1"/>
+    </marker>
+  </defs>
+</svg>

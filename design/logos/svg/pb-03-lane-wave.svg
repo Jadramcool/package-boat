@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 03 航道波 — line system: LAN transfer lanes as ordered waves in a circle -->
+  <defs>
+    <clipPath id="pb03-circle">
+      <circle cx="50" cy="50" r="32"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#pb03-circle)" stroke="currentColor" stroke-linecap="round" fill="none">
+    <path d="M 14 30 Q 32 24, 50 30 T 86 30" stroke-width="1.6" opacity="0.4"/>
+    <path d="M 14 38 Q 32 31, 50 38 T 86 38" stroke-width="2" opacity="0.55"/>
+    <path d="M 14 46 Q 32 38, 50 46 T 86 46" stroke-width="2.6" opacity="0.85"/>
+    <path d="M 14 54 Q 32 46, 50 54 T 86 54" stroke-width="3" opacity="1"/>
+    <path d="M 14 62 Q 32 54, 50 62 T 86 62" stroke-width="2.4" opacity="0.7"/>
+    <path d="M 14 70 Q 32 63, 50 70 T 86 70" stroke-width="1.8" opacity="0.45"/>
+  </g>
+  <!-- outer ring -->
+  <circle cx="50" cy="50" r="36" fill="none" stroke="currentColor" stroke-width="2.2" opacity="0.9"/>
+  <!-- arrival node -->
+  <circle cx="78" cy="50" r="4" fill="currentColor"/>
+  <!-- departure node -->
+  <circle cx="22" cy="50" r="3.2" fill="currentColor" opacity="0.55"/>
+</svg>

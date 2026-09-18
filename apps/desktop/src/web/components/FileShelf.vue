@@ -84,6 +84,7 @@ const emit = defineEmits<{
   align-items: center;
   gap: 12px;
 }
+.shelf-title svg { flex: none; display: block; }
 .section-index {
   flex: none;
   padding-right: 12px;

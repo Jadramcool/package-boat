@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RefreshCw, ShieldCheck } from '@lucide/vue'
+import BrandMark from '@/components/BrandMark.vue'
 import { computed, onUnmounted, shallowRef, watch } from 'vue'
 
 const props = defineProps<{
@@ -54,11 +55,11 @@ onUnmounted(() => clearInterval(cooldownTimer))
   <!-- 配对门：单屏只做一件事——输入配对码 -->
   <main class="pairing-page">
     <section class="gate" aria-labelledby="pairing-title">
-      <div class="gate-logo" aria-hidden="true"><span>L</span></div>
+      <div class="gate-logo" aria-hidden="true"><BrandMark :size="42" /></div>
       <h1 id="pairing-title">连接到 <em :title="props.serverName">{{ props.serverName }}</em></h1>
       <p class="gate-sub">
         <ShieldCheck :size="15" aria-hidden="true" />
-        输入主机屏幕上的六位配对码 · 文件只在当前局域网流动，不经云端
+        <span>输入主机屏幕上的六位配对码 · 文件只在当前局域网流动，不经云端</span>
       </p>
 
       <div v-if="props.offline" class="offline-panel" role="alert">
@@ -130,17 +131,15 @@ onUnmounted(() => clearInterval(cooldownTimer))
 .gate-logo {
   width: 76px; height: 76px; margin-bottom: 22px;
   display: grid; place-items: center;
-  border: 2px solid var(--acid); border-radius: 50% 50% 14px;
+  border: 2px solid var(--acid); border-radius: 20px;
   background: var(--ink); color: var(--acid);
-  font: 800 36px/1 var(--font-display);
-  transform: rotate(45deg);
   box-shadow: 0 12px 28px rgb(31 39 28 / 22%);
 }
-.gate-logo span { transform: rotate(-45deg); }
 .gate h1 { margin: 0; max-width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 8px; font: 720 27px/1.2 var(--font-display); letter-spacing: -.01em; }
 .gate h1 em { min-width: 0; max-width: 100%; overflow: hidden; font-style: normal; white-space: nowrap; text-overflow: ellipsis; color: var(--acid-deep); background: var(--acid-wash); padding: 1px 9px; border-radius: 7px; }
-.gate-sub { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 13px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.gate-sub svg { flex: none; color: var(--ok); }
+/* 多行说明：图标对齐首行，不用 flex 居中（会把盾牌钉在两行文字中间） */
+.gate-sub { display: flex; align-items: flex-start; justify-content: center; gap: 7px; margin: 13px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.gate-sub svg { flex: none; display: block; margin-top: 0.28em; color: var(--ok); }
 
 .pairing-form { width: 100%; margin-top: 30px; display: flex; flex-direction: column; }
 .otp { position: relative; display: flex; justify-content: center; gap: 9px; }
@@ -188,7 +187,8 @@ onUnmounted(() => clearInterval(cooldownTimer))
   background: var(--signal-soft); color: var(--signal-deep); text-align: left;
 }
 .offline-panel p { margin: 0 0 12px; font-size: 13px; line-height: 1.6; }
-.offline-panel button { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--signal-deep); cursor: pointer; font: 700 13px/1 var(--font-label); }
+.offline-panel button { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--signal-deep); cursor: pointer; font: 700 13px/1.2 var(--font-label); }
+.offline-panel button svg { flex: none; display: block; }
 .offline-panel button:hover { text-decoration: underline; }
 
 .gate-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: 26px 0 0; color: var(--muted); font-size: 12px; }

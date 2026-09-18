@@ -12,6 +12,8 @@ import {
   events,
   getState,
   getTransferProgress,
+  refreshAccessCode as refreshAccessCodeCommand,
+  rescanReceiveDir as rescanReceiveDirCommand,
   revealItem as revealItemCommand,
   setRequirePairing as setRequirePairingCommand,
   setShareReceiveDir as setShareReceiveDirCommand,
@@ -240,6 +242,39 @@ export function useDesktopHost() {
     await perform('share-receive-dir', () => setShareReceiveDirCommand(enabled))
   }
 
+  /** 独立刷新：重新扫描接收目录，恢复已移出清单的本地文件。 */
+  async function rescanReceiveDirectory() {
+    busy.value = 'rescan-inbox'
+    errorMessage.value = ''
+    try {
+      const restored = await rescanReceiveDirCommand()
+      await refresh()
+      showNotice(restored > 0 ? `已恢复 ${restored} 个接收目录条目` : '扫描完成：没有需要恢复的条目')
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+    finally {
+      busy.value = ''
+    }
+  }
+
+  /** 手动刷新配对码（不重启服务）。 */
+  async function refreshAccessCode() {
+    busy.value = 'access-code'
+    errorMessage.value = ''
+    try {
+      await refreshAccessCodeCommand()
+      await refresh()
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+    finally {
+      busy.value = ''
+    }
+  }
+
   async function revealItem(id: string) {
     await perform(`reveal:${id}`, () => revealItemCommand(id))
   }
@@ -371,6 +406,8 @@ export function useDesktopHost() {
     toggleServer,
     setPairingRequired,
     setShareReceiveDirEnabled,
+    rescanReceiveDirectory,
+    refreshAccessCode,
     revealItem,
     copyURL,
     openURL,

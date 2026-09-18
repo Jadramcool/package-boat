@@ -12,6 +12,7 @@ import DesktopFileList from "@/components/DesktopFileList.vue";
 import DesktopHeader from "@/components/DesktopHeader.vue";
 import StorageSettings from "@/components/StorageSettings.vue";
 import WindowTitleBar from "@/components/WindowTitleBar.vue";
+import BrandMark from "@/components/BrandMark.vue";
 import { useDesktopHost } from "@/composables/useDesktopHost";
 import { useUpdater } from "@/composables/useUpdater";
 
@@ -25,7 +26,7 @@ onMounted(() => {
 
 <template>
   <div v-if="desktop.loading.value" class="desktop-boot" aria-live="polite">
-    <div class="boot-symbol">L</div>
+    <div class="boot-symbol" aria-hidden="true"><BrandMark :size="40" /></div>
     <LoaderCircle class="spin" :size="21" />
     <span>正在启动本机服务</span>
   </div>
@@ -44,10 +45,12 @@ onMounted(() => {
       :active-address="desktop.activeAddress.value"
       :address-unreachable="desktop.addressUnreachable.value"
       :busy="desktop.busy.value === 'server'"
+      :refreshing-code="desktop.busy.value === 'access-code'"
       :copied="desktop.copied.value"
       @toggle="desktop.toggleServer"
       @copy="desktop.copyURL"
-      @open="desktop.openURL" />
+      @open="desktop.openURL"
+      @refresh-code="desktop.refreshAccessCode" />
 
     <div class="desktop-shell">
       <Transition name="toast">
@@ -75,11 +78,13 @@ onMounted(() => {
             class="update-install"
             :disabled="updater.status.value === 'downloading'"
             @click="updater.install">
-            {{
-              updater.status.value === "downloading"
-                ? `下载中 ${updater.progressPercent.value}%`
-                : "安装并重启"
-            }}
+            <span>
+              {{
+                updater.status.value === "downloading"
+                  ? `下载中 ${updater.progressPercent.value}%`
+                  : "安装并重启"
+              }}
+            </span>
           </button>
           <button
             v-if="updater.status.value === 'available'"
@@ -101,7 +106,7 @@ onMounted(() => {
             type="button"
             class="strip-retry"
             @click="updater.checkForUpdate(false)">
-            重试
+            <span>重试</span>
           </button>
           <button
             type="button"
@@ -163,8 +168,10 @@ onMounted(() => {
             <StorageSettings
               :settings="desktop.state.value.settings"
               :busy="desktop.busy.value === 'directory'"
+              :rescanning-inbox="desktop.busy.value === 'rescan-inbox'"
               @choose-directory="desktop.chooseReceiveDirectory"
-              @toggle-share-receive-dir="desktop.setShareReceiveDirEnabled" />
+              @toggle-share-receive-dir="desktop.setShareReceiveDirEnabled"
+              @rescan-receive-dir="desktop.rescanReceiveDirectory" />
           </aside>
         </div>
       </main>
@@ -215,13 +222,16 @@ onMounted(() => {
   padding: 14px 14px 0;
   overflow: hidden;
 }
+/* 内容区不整页滚动：提示条常驻，左右栏各自 overflow */
 .desktop-shell > main {
   width: 100%;
   max-width: 1480px;
   margin: 0 auto;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding-bottom: 14px;
 }
 /* 页脚方案 A：文案左成组，操作在列表同宽的右端 */
@@ -261,6 +271,7 @@ footer {
   flex: 1;
 }
 .error-strip {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -274,6 +285,15 @@ footer {
 }
 .error-strip span {
   margin-right: auto;
+}
+.error-strip > svg,
+.update-strip > svg,
+.notice-toast svg {
+  flex: none;
+  display: block;
+}
+.notice-toast svg {
+  color: var(--acid);
 }
 .strip-close {
   flex: none;
@@ -292,12 +312,16 @@ footer {
 }
 .strip-retry {
   flex: none;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 14px;
   border: 1px solid var(--signal-deep);
   border-radius: 6px;
   background: transparent;
   color: var(--signal-deep);
-  font: 700 13px/1 var(--font-label);
+  font: 700 13px/1.2 var(--font-label);
   cursor: pointer;
 }
 .strip-retry:hover:not(:disabled) {
@@ -308,6 +332,7 @@ footer {
   cursor: not-allowed;
 }
 .update-strip {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -324,12 +349,16 @@ footer {
 }
 .update-install {
   flex: none;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 7px 14px;
   border: 1px solid var(--ink);
   border-radius: 6px;
   background: var(--ink);
   color: var(--acid);
-  font: 700 13px/1 var(--font-label);
+  font: 700 13px/1.2 var(--font-label);
   letter-spacing: 0.02em;
   cursor: pointer;
 }
@@ -381,28 +410,33 @@ footer {
 /* 清单在上、设置常驻右列。宽度 PB-UI-03 定的 296px → 336px（用户反馈地址下拉
    与接收路径框被挤压截断）：+40px 后下拉能完整显示「局域网 · x.x.x.x (网卡 /掩码)」，
    1280 视口下主列仍有 902px，五列网格的 fr 份额全部高于下限，清单不受挤压。
-   侧栏 sticky 且自带 max-height + overflow：卡总高超过 main 可视高度（1280×764
-   时 588px）时兜底滚动，不会静默裁卡。 */
+   左右栏在网格内各自滚动：main 不滚，滚轮落在哪列就滚哪列。 */
 .main-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 .desktop-file-list {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 .side-panel {
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  position: sticky;
-  top: 0;
-  align-self: start;
-  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+/* 卡片保持自然高度：空间不够时整栏滚动，禁止 flex 把卡压扁 */
+.side-panel > * {
+  flex: none;
 }
 .side-panel::-webkit-scrollbar {
   width: 6px;
@@ -418,7 +452,7 @@ footer {
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font: 600 12px/1 var(--font-label);
+  font: 600 12px/1.2 var(--font-label);
   letter-spacing: 0.06em;
   cursor: pointer;
   transition:
@@ -450,8 +484,8 @@ footer {
   place-items: center;
   margin-bottom: 10px;
   border: 1px solid var(--acid);
+  border-radius: 14px;
   color: var(--acid);
-  font: 750 29px/1 var(--font-display);
 }
 .desktop-boot span {
   color: rgb(251 252 247 / 62%);

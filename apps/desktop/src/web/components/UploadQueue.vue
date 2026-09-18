@@ -166,9 +166,9 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .queue-header h2 { margin: 6px 0 0; font: 700 18px/1 var(--font-display); }
 .queue-actions { display: flex; align-items: center; gap: 14px; }
 .concurrency-field { display: flex; align-items: center; gap: 8px; color: var(--muted); font: 600 11px/1 var(--font-label); letter-spacing: .06em; }
-.concurrency-field select { height: 28px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--surface); font: 650 12px/1 var(--font-mono); cursor: pointer; }
+.concurrency-field select { height: 28px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: var(--surface); font: 650 12px/1.2 var(--font-mono); cursor: pointer; }
 .concurrency-field select:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
-.clear-button { padding: 7px 0; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink); background: transparent; cursor: pointer; font-size: 11px; }
+.clear-button { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; padding: 7px 0; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink); background: transparent; cursor: pointer; font-size: 11px; line-height: 1.2; }
 .clear-button:hover { color: var(--signal); border-color: var(--signal); }
 .queue-empty { margin: 0; padding: 18px 20px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
 .task-list { margin: 0; padding: 0; list-style: none; }
@@ -180,7 +180,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .task-state.error { border-color: var(--signal); color: var(--signal); }
 .task-state.paused { border-color: var(--info); color: var(--info); }
 .task-main { min-width: 0; }
-.task-line { display: flex; justify-content: space-between; gap: 18px; font-size: 12px; }
+.task-line { display: flex; align-items: center; justify-content: space-between; gap: 18px; font-size: 12px; line-height: 1.35; }
 .task-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 .task-size { flex: none; color: var(--muted); font-family: var(--font-mono); font-size: 10px; }
 .progress-track { height: 6px; margin-top: 9px; overflow: hidden; border-radius: 999px; background: var(--line); }
@@ -195,6 +195,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .history-block { border-top: 1px solid var(--line); background: color-mix(in srgb, var(--line) 28%, var(--surface)); }
 .history-header { min-height: 44px; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
 .history-heading { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.history-heading svg { flex: none; display: block; }
 .history-heading h3 { margin: 0; font: 700 13px/1 var(--font-display); }
 .history-count { color: var(--muted); font: 600 10px/1 var(--font-label); letter-spacing: .06em; }
 .history-list { margin: 0; padding: 0; list-style: none; max-height: 220px; overflow-y: auto; }
@@ -205,7 +206,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .history-status.error { border-color: var(--signal); color: var(--signal); }
 .history-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .history-meta { color: var(--muted); font: 600 10px/1 var(--font-mono); white-space: nowrap; }
-.history-result { min-width: 48px; text-align: right; color: var(--muted); font: 650 10px/1 var(--font-label); letter-spacing: .04em; white-space: nowrap; }
+.history-result { min-width: 48px; text-align: right; color: var(--muted); font: 650 10px/1.3 var(--font-label); letter-spacing: .04em; white-space: nowrap; }
 .history-result.complete { color: var(--acid-deep); }
 .history-result.error { color: var(--signal-deep); }
 @keyframes spin { to { transform: rotate(360deg); } }

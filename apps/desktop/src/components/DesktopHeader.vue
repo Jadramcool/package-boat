@@ -7,7 +7,9 @@ import {
   ExternalLink,
   LoaderCircle,
   Power,
+  RefreshCw,
 } from '@lucide/vue'
+import BrandMark from '@/components/BrandMark.vue'
 import type { DesktopHostState, LocalAddress } from '@/types'
 
 const props = defineProps<{
@@ -17,6 +19,7 @@ const props = defineProps<{
   activeAddress: LocalAddress | null
   addressUnreachable: boolean
   busy: boolean
+  refreshingCode: boolean
   copied: string
 }>()
 
@@ -24,6 +27,7 @@ const emit = defineEmits<{
   toggle: []
   copy: [url: string]
   open: [url: string]
+  refreshCode: []
 }>()
 </script>
 
@@ -31,7 +35,7 @@ const emit = defineEmits<{
   <!-- 命令条：把驾驶舱压成一行——常看的三件事（在跑吗 / 地址 / 配对码）留在面上，
        切换地址、扫码行为、接收目录等低频设置移到右侧边栏。 -->
   <header class="cmdbar" aria-label="服务命令条">
-    <span class="brand" aria-hidden="true">L</span>
+    <span class="brand" aria-hidden="true"><BrandMark :size="22" /></span>
 
     <div class="identity">
       <div class="identity-text">
@@ -40,7 +44,7 @@ const emit = defineEmits<{
       </div>
       <span class="state" :class="{ online: props.host.running }">
         <i aria-hidden="true" />
-        {{ props.host.running ? '运行中' : '已停止' }}
+        <span>{{ props.host.running ? '运行中' : '已停止' }}</span>
       </span>
     </div>
 
@@ -59,7 +63,7 @@ const emit = defineEmits<{
         >
           <Check v-if="props.copied === props.accessUrl" :size="13" />
           <Copy v-else :size="13" />
-          {{ props.copied === props.accessUrl ? '已复制' : '复制' }}
+          <span>{{ props.copied === props.accessUrl ? '已复制' : '复制' }}</span>
         </button>
         <button
           type="button"
@@ -72,8 +76,19 @@ const emit = defineEmits<{
         </button>
       </span>
 
-      <span class="code" :title="`配对码：${props.host.access_code}`">
+      <span class="code" :title="`配对码：${props.host.access_code}（已配对设备不受影响）`">
         <strong>{{ props.host.access_code }}</strong>
+        <button
+          type="button"
+          class="chip-action icon-only"
+          :disabled="props.refreshingCode || props.busy"
+          title="刷新配对码（不影响已连接设备）"
+          aria-label="刷新配对码"
+          @click="emit('refreshCode')"
+        >
+          <LoaderCircle v-if="props.refreshingCode" class="spin" :size="13" />
+          <RefreshCw v-else :size="13" />
+        </button>
       </span>
     </template>
 
@@ -91,7 +106,7 @@ const emit = defineEmits<{
       <LoaderCircle v-if="props.busy" class="spin" :size="16" />
       <CircleStop v-else-if="props.host.running" :size="16" />
       <Power v-else :size="16" />
-      {{ props.host.running ? '停止服务' : '启动服务' }}
+      <span>{{ props.host.running ? '停止服务' : '启动服务' }}</span>
     </button>
   </header>
 </template>
@@ -118,9 +133,9 @@ const emit = defineEmits<{
   display: grid;
   place-items: center;
   border: 1.5px solid var(--acid);
+  border-radius: 8px;
   color: var(--acid);
-  font: 800 15px/1 var(--font-display);
-  transform: rotate(-3deg);
+  background: rgb(215 249 84 / 6%);
 }
 .identity {
   min-width: 0;
@@ -157,7 +172,10 @@ const emit = defineEmits<{
   border-radius: 999px;
   background: rgb(255 255 255 / 8%);
   color: rgb(251 252 247 / 72%);
-  font: 650 11.5px/1 var(--font-label);
+  font: 650 11.5px/1.25 var(--font-label);
+}
+.state > span {
+  line-height: 1.25;
 }
 .state i {
   width: 7px;
@@ -179,19 +197,22 @@ const emit = defineEmits<{
 .url > code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 550 12.5px/1 var(--font-mono); }
 .url.warn { border-color: rgb(255 195 120 / 55%); background: rgb(255 170 90 / 12%); }
 
-.chip-action { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 0; border-radius: 6px; background: rgb(255 255 255 / 10%); color: var(--paper); cursor: pointer; font: 650 11px/1 var(--font-label); transition: background 140ms ease, color 140ms ease; }
+.chip-action { flex: none; height: 26px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 10px; border: 0; border-radius: 6px; background: rgb(255 255 255 / 10%); color: var(--paper); cursor: pointer; font: 650 11px/1.2 var(--font-label); transition: background 140ms ease, color 140ms ease; }
+.chip-action svg, .power svg, .state i { flex: none; display: block; }
 .chip-action:hover { background: rgb(215 249 84 / 20%); color: var(--acid); }
 .chip-action.ok { background: var(--acid); color: var(--ink); }
 .chip-action.icon-only { width: 26px; justify-content: center; padding: 0; }
 
-.code { flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 13px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 9px; background: rgb(215 249 84 / 8%); }
+.code { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 13px; border: 1px solid rgb(215 249 84 / 35%); border-radius: 9px; background: rgb(215 249 84 / 8%); }
 .code strong { color: var(--acid); font: 700 14.5px/1 var(--font-mono); letter-spacing: .14em; }
+.code .chip-action { margin-left: 0; }
+.code .chip-action:disabled { cursor: wait; opacity: .55; }
 
 .idle-hint { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: rgb(251 252 247 / 72%); font-size: 13.5px; text-overflow: ellipsis; white-space: nowrap; }
 .spacer { flex: 1; }
 
 /* 停止服务是危险操作，用中性描边降到与「选择文件」匹配的次级权重 */
-.power { flex: none; height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border: 1px solid rgb(251 252 247 / 32%); border-radius: 9px; background: transparent; color: var(--paper); cursor: pointer; font: 680 13.5px/1 var(--font-label); letter-spacing: .02em; transition: background 140ms ease, border-color 140ms ease; }
+.power { flex: none; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; border: 1px solid rgb(251 252 247 / 32%); border-radius: 9px; background: transparent; color: var(--paper); cursor: pointer; font: 680 13.5px/1.2 var(--font-label); letter-spacing: .02em; transition: background 140ms ease, border-color 140ms ease; }
 .power:hover:not(:disabled) { border-color: rgb(251 252 247 / 60%); background: rgb(255 255 255 / 8%); }
 /* 启动服务才是这一屏的主行动，独占 acid 实心 */
 .power:not(.is-running) { border-color: var(--acid); background: var(--acid); color: var(--ink); font-weight: 720; }

@@ -31,14 +31,14 @@ struct AuthInner {
 
 /// 认证管理器：持有当前配对码与会话表。
 pub struct AuthManager {
-    code: String,
+    code: std::sync::RwLock<String>,
     inner: Mutex<AuthInner>,
 }
 
 impl AuthManager {
     pub fn new() -> Self {
         AuthManager {
-            code: random_digits(CODE_LENGTH),
+            code: std::sync::RwLock::new(random_digits(CODE_LENGTH)),
             inner: Mutex::new(AuthInner {
                 sessions: HashMap::new(),
                 attempts: HashMap::new(),
@@ -47,13 +47,26 @@ impl AuthManager {
     }
 
     /// 当前配对码。
-    pub fn code(&self) -> &str {
-        &self.code
+    pub fn code(&self) -> String {
+        self.code.read().expect("auth code lock poisoned").clone()
+    }
+
+    /// 手动刷新配对码：生成新六位码并返回。已有会话不受影响；失败尝试计数清零。
+    pub fn rotate_code(&self) -> String {
+        let next = random_digits(CODE_LENGTH);
+        {
+            let mut code = self.code.write().expect("auth code lock poisoned");
+            *code = next.clone();
+        }
+        let mut inner = self.inner.lock().expect("auth lock poisoned");
+        inner.attempts.clear();
+        next
     }
 
     /// 尝试配对。成功时返回（令牌, 过期时间），失败返回错误信息。
     pub fn pair(&self, ip: &str, supplied: &str) -> Result<(String, DateTime<Utc>), String> {
         let now = Utc::now();
+        let current = self.code();
         let mut inner = self.inner.lock().expect("auth lock poisoned");
         // 清理过期尝试记录，防止 attempts map 无限增长
         inner.attempts.retain(|_, state| {
@@ -71,8 +84,8 @@ impl AuthManager {
             state.window_start = Some(now);
         }
 
-        let valid = supplied.len() == self.code.len()
-            && supplied.as_bytes().ct_eq(self.code.as_bytes()).into();
+        let valid =
+            supplied.len() == current.len() && supplied.as_bytes().ct_eq(current.as_bytes()).into();
         if !valid {
             state.count += 1;
             if state.count >= MAX_ATTEMPTS {
@@ -151,10 +164,31 @@ mod tests {
     }
 
     #[test]
+    fn rotate_code_issues_new_code_and_keeps_sessions() {
+        let manager = AuthManager::new();
+        let old = manager.code();
+        let (token, _) = manager.pair("127.0.0.1", &old).unwrap();
+        let next = manager.rotate_code();
+        assert_eq!(next.len(), 6);
+        // 概率极低但仍可能撞码；重试一次
+        let next = if next == old {
+            manager.rotate_code()
+        } else {
+            next
+        };
+        assert_ne!(next, old);
+        assert_eq!(manager.code(), next);
+        assert!(manager.pair("127.0.0.2", &old).is_err());
+        assert!(manager.pair("127.0.0.3", &next).is_ok());
+        assert!(manager.authenticated(Some(&token)), "已配对会话应保持有效");
+    }
+
+    #[test]
     fn pair_and_authenticate_roundtrip() {
         let manager = AuthManager::new();
         assert!(!manager.authenticated(None));
-        let (token, _) = manager.pair("127.0.0.1", manager.code()).unwrap();
+        let code = manager.code();
+        let (token, _) = manager.pair("127.0.0.1", &code).unwrap();
         assert!(manager.authenticated(Some(&token)));
         manager.sign_out(Some(&token));
         assert!(!manager.authenticated(Some(&token)));
@@ -168,10 +202,11 @@ mod tests {
         }
         // 第 8 次失败触发 2 分钟封禁
         assert!(manager.pair("10.0.0.1", "000000").is_err());
-        let err = manager.pair("10.0.0.1", manager.code()).unwrap_err();
+        let code = manager.code();
+        let err = manager.pair("10.0.0.1", &code).unwrap_err();
         assert!(err.contains("过多"));
         // 其它 IP 不受影响
-        assert!(manager.pair("10.0.0.2", manager.code()).is_ok());
+        assert!(manager.pair("10.0.0.2", &code).is_ok());
     }
 
     #[test]
@@ -180,7 +215,8 @@ mod tests {
         for _ in 0..5 {
             let _ = manager.pair("10.0.0.3", "111111");
         }
-        assert!(manager.pair("10.0.0.3", manager.code()).is_ok());
-        assert!(manager.pair("10.0.0.3", manager.code()).is_ok());
+        let code = manager.code();
+        assert!(manager.pair("10.0.0.3", &code).is_ok());
+        assert!(manager.pair("10.0.0.3", &code).is_ok());
     }
 }

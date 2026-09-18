@@ -1,6 +1,7 @@
 //! 桌面宿主管理：按设置启动/停止/重启局域网服务器，跟踪运行状态。
 //! 对应 Go 版 `internal/host`。
 
+use crate::auth::AuthManager;
 use crate::catalog::Catalog;
 use crate::network::{local_addresses, LocalAddress};
 use crate::progress::ProgressTracker;
@@ -37,6 +38,8 @@ struct HostHandle {
 struct HostInner {
     handle: Option<HostHandle>,
     state: HostState,
+    /// 运行中服务的认证句柄；用于热刷新配对码。
+    auth: Option<Arc<AuthManager>>,
 }
 
 /// 绑定监听端口：目标端口被占用时自动顺延（最多尝试 50 个），端口 0 由系统分配。
@@ -77,6 +80,7 @@ impl HostManager {
             inner: Mutex::new(HostInner {
                 handle: None,
                 state: HostState::default(),
+                auth: None,
             }),
             catalog,
             settings,
@@ -158,6 +162,7 @@ impl HostManager {
 
         let mut inner = self.inner.lock().expect("host lock poisoned");
         inner.handle = Some(HostHandle { token, task });
+        inner.auth = Some(app.auth_handle());
         let addresses = local_addresses(&settings.host, actual_port);
         inner.state = HostState {
             running: true,
@@ -167,6 +172,20 @@ impl HostManager {
             error: None,
         };
         Ok(())
+    }
+
+    /// 手动刷新配对码（服务未运行时返回错误）。已配对设备会话仍有效。
+    pub fn refresh_access_code(&self) -> Result<String, String> {
+        let mut inner = self.inner.lock().expect("host lock poisoned");
+        if !inner.state.running {
+            return Err("服务未运行，无法刷新配对码".to_string());
+        }
+        let Some(auth) = inner.auth.as_ref() else {
+            return Err("服务未运行，无法刷新配对码".to_string());
+        };
+        let code = auth.rotate_code();
+        inner.state.access_code = code.clone();
+        Ok(code)
     }
 
     /// 停止服务器并等待退出。
@@ -181,6 +200,7 @@ impl HostManager {
             inner.state.urls.clear();
             inner.state.addresses.clear();
             inner.state.access_code.clear();
+            inner.auth = None;
             inner.handle.take()
         };
         if let Some(handle) = handle {

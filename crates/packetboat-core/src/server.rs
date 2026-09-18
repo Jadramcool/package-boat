@@ -124,7 +124,17 @@ impl Server {
 
     /// 当前配对码。
     pub fn access_code(&self) -> String {
-        self.auth.code().to_string()
+        self.auth.code()
+    }
+
+    /// 手动刷新配对码（不重启服务）。已配对设备会话仍然有效。
+    pub fn refresh_access_code(&self) -> String {
+        self.auth.rotate_code()
+    }
+
+    /// 认证管理器句柄（宿主热刷新配对码时使用）。
+    pub fn auth_handle(&self) -> Arc<AuthManager> {
+        Arc::clone(&self.auth)
     }
 
     /// 构建 axum 路由（含中间件）。
@@ -906,21 +916,8 @@ async fn handle_delete(State(server): State<Arc<Server>>, Path(id): Path<String>
         None => return json_error(StatusCode::NOT_FOUND, "文件不存在"),
     };
 
-    if item.source_type == SourceType::Received || item.source_type == SourceType::Inbox {
-        let _guard = server.file_mu.lock().await;
-        if item.is_dir {
-            if let Err(err) = std::fs::remove_dir_all(&item.local_path) {
-                if err.kind() != std::io::ErrorKind::NotFound {
-                    return json_error(StatusCode::INTERNAL_SERVER_ERROR, "无法删除接收文件");
-                }
-            }
-        } else if let Err(err) = std::fs::remove_file(&item.local_path) {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                return json_error(StatusCode::INTERNAL_SERVER_ERROR, "无法删除接收文件");
-            }
-        }
-    }
-
+    // 当前版本安全边界：任何来源（linked / received / inbox）都只移出共享清单，
+    // 绝不删除磁盘文件。inbox 扫描条目由 catalog 隐藏名单处理。
     if let Err(err) = server.catalog.remove(&item.id) {
         warn!("无法更新共享目录: {err}");
         return json_error(StatusCode::INTERNAL_SERVER_ERROR, "无法更新共享目录");

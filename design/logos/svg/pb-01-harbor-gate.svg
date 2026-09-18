@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- 01 船坞闸门 — pure geometry: piers + docked package -->
+  <g fill="currentColor">
+    <rect x="24" y="28" width="8" height="50" rx="2"/>
+    <rect x="68" y="28" width="8" height="50" rx="2"/>
+    <rect x="24" y="28" width="52" height="7" rx="2"/>
+  </g>
+  <!-- package: rounded square docked between piers -->
+  <rect x="38" y="44" width="24" height="24" rx="4" fill="currentColor" opacity="0.92"/>
+  <!-- acid slot on package top (two-tone accent when parent sets color) -->
+  <rect x="44" y="44" width="12" height="4" rx="1.5" fill="currentColor" opacity="0.35"/>
+  <!-- waterline -->
+  <rect x="18" y="78" width="64" height="3.5" rx="1.75" fill="currentColor" opacity="0.28"/>
+</svg>

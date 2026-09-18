@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { formatBytes } from "@/utils/format";
+import BrandMark from "@/components/BrandMark.vue";
 import AppHeader from "./components/AppHeader.vue";
 import ConnectCard from "./components/ConnectCard.vue";
 import FileShelf from "./components/FileShelf.vue";
@@ -40,15 +41,19 @@ async function confirmDelete(id: string, name: string): Promise<void> {
       await share.deleteFile(id);
     return;
   }
-  const scope = file?.source_type === "inbox" ? "接收目录中的本地文件" : "接收目录中的上传文件";
-  if (window.confirm(`确定删除「${name}」吗？这会同时删除${scope}。`))
+  const label = file?.source_type === "inbox" ? "本地文件" : "接收文件";
+  if (
+    window.confirm(
+      `确定将${label}「${name}」移出共享清单吗？\n\n磁盘上的文件不会被删除。`,
+    )
+  )
     await share.deleteFile(id);
 }
 </script>
 
 <template>
   <div v-if="share.initializing.value" class="boot-screen" aria-live="polite">
-    <div class="boot-mark" aria-hidden="true"><span>L</span></div>
+    <div class="boot-mark" aria-hidden="true"><BrandMark :size="40" /></div>
     <p class="boot-label">正在接入局域网投递站</p>
     <div class="boot-line" />
   </div>
@@ -144,12 +149,8 @@ async function confirmDelete(id: string, name: string): Promise<void> {
   display: grid;
   place-items: center;
   border: 2px solid var(--acid);
-  border-radius: 50% 50% 8px;
-  transform: rotate(45deg);
-}
-.boot-mark span {
-  transform: rotate(-45deg);
-  font: 700 28px/1 var(--font-display);
+  border-radius: 18px;
+  color: var(--acid);
 }
 .boot-label {
   margin: 0;

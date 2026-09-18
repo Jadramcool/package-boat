@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PacketBoat · Logo 参考方案</title>
+<style>
+  :root {
+    --ink: #1f271c;
+    --ink-2: #2d3a28;
+    --muted: #646c57;
+    --acid: #d7f954;
+    --acid-deep: #4d6707;
+    --acid-wash: #eef9c8;
+    --dock: #fbfcf7;
+    --dock-0: #f2f4ec;
+    --line: #c9d0c0;
+    --signal: #ef5a32;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--dock-0);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 28px 80px; }
+  header { margin-bottom: 40px; }
+  header h1 {
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 300;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+  header .tag {
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  header .lead {
+    max-width: 640px;
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  header .lead b { color: var(--ink); font-weight: 600; }
+  .rule { width: 48px; height: 1px; background: var(--ink); opacity: 0.25; margin: 24px 0; }
+
+  /* Concept reference board */
+  .board {
+    background: var(--dock);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 48px;
+    overflow-x: auto;
+  }
+  .board h2, .section-h {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .board svg { width: 100%; min-width: 640px; height: auto; display: block; }
+
+  /* Palette chips */
+  .palette {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 14px;
+    margin-bottom: 48px;
+  }
+  .chip {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: var(--dock);
+  }
+  .chip .swatch { height: 56px; }
+  .chip .meta { padding: 10px 12px; }
+  .chip .name { font-size: 13px; font-weight: 600; }
+  .chip .hex {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* Logo grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 28px;
+    margin-bottom: 56px;
+  }
+  .card {
+    background: var(--dock);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: transform 0.45s cubic-bezier(0.16,1,0.3,1), box-shadow 0.45s;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(31,39,28,0.08);
+  }
+  .card .stage {
+    position: relative;
+    height: 200px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .tile svg { width: 72px; height: 72px; }
+  .tile.light { background: var(--dock); color: var(--ink); }
+  .tile.dark { background: var(--ink); color: var(--dock); }
+  .tile.accent { background: var(--acid); color: var(--ink); }
+  .tile .lbl {
+    position: absolute;
+    bottom: 8px;
+    left: 0; right: 0;
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    opacity: 0.45;
+  }
+  .card .body { padding: 20px 22px 22px; }
+  .card .id {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--acid-deep);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .card .sub {
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+  }
+  .card p {
+    font-size: 13.5px;
+    color: var(--ink-2);
+    opacity: 0.85;
+    margin-bottom: 14px;
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag-pill {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--dock-0);
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .tag-pill.ok {
+    background: var(--acid-wash);
+    border-color: color-mix(in srgb, var(--acid-deep) 30%, transparent);
+    color: var(--acid-deep);
+  }
+
+  /* Scale strip */
+  .scale {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    padding: 20px;
+    background: var(--dock);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin-bottom: 48px;
+    flex-wrap: wrap;
+  }
+  .scale .item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .scale .item svg { color: var(--ink); display: block; }
+  .scale .item span {
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* Source list */
+  .files {
+    background: var(--dock);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px 28px;
+  }
+  .files ul { list-style: none; }
+  .files li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .files li:last-child { border-bottom: 0; }
+  .files .desc { font-family: inherit; color: var(--muted); font-size: 13px; }
+
+  footer {
+    margin-top: 48px;
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+  }
+  .note {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .note code {
+    font-family: ui-monospace, monospace;
+    background: var(--dock);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="tag">PacketBoat · Logo Design Reference</div>
+  <h1>局域网投递站 · Logo 参考</h1>
+  <div class="rule"></div>
+  <p class="lead">
+    基于项目视觉系统 <b>深海墨 × 航速绿 × 船坞白</b>，以及核心隐喻
+    <b>「投递站，不是网盘」</b>，生成 8 个几何化 SVG 方向。
+    全部使用 <code>viewBox="0 0 100 100"</code> 与 <code>currentColor</code>，可直接换色嵌入桌面端 / 浏览器页。
+  </p>
+</header>
+
+<!-- 参考图板 -->
+<section class="board">
+  <h2>参考图板 · 概念 → 模式</h2>
+  <!-- inline brand board (simplified) -->
+  <svg viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+    <rect width="680" height="360" fill="#f2f4ec" rx="0"/>
+    <text x="24" y="28" font-size="12" font-weight="600" fill="#1f271c">产品概念 → 设计隐喻 → 几何模式</text>
+
+    <!-- Row 1 -->
+    <rect x="24" y="48" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="99" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">局域网投递</text>
+    <text x="99" y="86" text-anchor="middle" font-size="10" fill="#646c57">LAN 直达 · 无云端中转</text>
+
+    <path d="M178 74 H206" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="206,70 214,74 206,78" fill="#1f271c"/>
+
+    <rect x="218" y="48" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="293" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">船坞 / 航迹 / 灯塔</text>
+    <text x="293" y="86" text-anchor="middle" font-size="10" fill="#646c57">投递隐喻</text>
+
+    <path d="M372 74 H400" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="400,70 408,74 400,78" fill="#1f271c"/>
+
+    <rect x="412" y="48" width="180" height="52" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="1"/>
+    <text x="502" y="70" text-anchor="middle" font-size="12" font-weight="600" fill="#4d6707">几何 + 负空间</text>
+    <text x="502" y="86" text-anchor="middle" font-size="10" fill="#4d6707">极简 · 全尺寸可缩放</text>
+
+    <!-- Row 2 -->
+    <rect x="24" y="120" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="99" y="142" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">六位配对码</text>
+    <text x="99" y="158" text-anchor="middle" font-size="10" fill="#646c57">设备互联 · 门禁</text>
+
+    <path d="M178 146 H206" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="206,142 214,146 206,150" fill="#1f271c"/>
+
+    <rect x="218" y="120" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="293" y="142" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">节点 / 灯塔 / 点阵</text>
+    <text x="293" y="158" text-anchor="middle" font-size="10" fill="#646c57">配对与信号</text>
+
+    <path d="M372 146 H400" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="400,142 408,146 400,150" fill="#1f271c"/>
+
+    <rect x="412" y="120" width="180" height="52" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="1"/>
+    <text x="502" y="142" text-anchor="middle" font-size="12" font-weight="600" fill="#4d6707">点阵 + 信号弧</text>
+    <text x="502" y="158" text-anchor="middle" font-size="10" fill="#4d6707">可见的连接</text>
+
+    <!-- Row 3 -->
+    <rect x="24" y="192" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="99" y="214" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">分块校验 / 隐私</text>
+    <text x="99" y="230" text-anchor="middle" font-size="10" fill="#646c57">SHA-256 · 不出网</text>
+
+    <path d="M178 218 H206" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="206,214 214,218 206,222" fill="#1f271c"/>
+
+    <rect x="218" y="192" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="293" y="214" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">蜂窝 / 私域环</text>
+    <text x="293" y="230" text-anchor="middle" font-size="10" fill="#646c57">完整性 · 边界</text>
+
+    <path d="M372 218 H400" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="400,214 408,218 400,222" fill="#1f271c"/>
+
+    <rect x="412" y="192" width="180" height="52" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="1"/>
+    <text x="502" y="214" text-anchor="middle" font-size="12" font-weight="600" fill="#4d6707">线系统 + 封印形</text>
+    <text x="502" y="230" text-anchor="middle" font-size="10" fill="#4d6707">秩序与可靠</text>
+
+    <!-- Row 4 -->
+    <rect x="24" y="264" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="99" y="286" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">文件 / 包裹投递</text>
+    <text x="99" y="302" text-anchor="middle" font-size="10" fill="#646c57">共享清单 · 原位</text>
+
+    <path d="M178 290 H206" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="206,286 214,290 206,294" fill="#1f271c"/>
+
+    <rect x="218" y="264" width="150" height="52" rx="8" fill="#fbfcf7" stroke="#c9d0c0" stroke-width="1"/>
+    <text x="293" y="286" text-anchor="middle" font-size="12" font-weight="600" fill="#1f271c">包裹 + 船坞</text>
+    <text x="293" y="302" text-anchor="middle" font-size="10" fill="#646c57">落坞动作</text>
+
+    <path d="M372 290 H400" stroke="#1f271c" stroke-width="1.2" fill="none"/>
+    <polygon points="400,286 408,290 400,294" fill="#1f271c"/>
+
+    <rect x="412" y="264" width="180" height="52" rx="8" fill="#eef9c8" stroke="#4d6707" stroke-width="1"/>
+    <text x="502" y="286" text-anchor="middle" font-size="12" font-weight="600" fill="#4d6707">块状几何 + 落点</text>
+    <text x="502" y="302" text-anchor="middle" font-size="10" fill="#4d6707">产品动作可视化</text>
+  </svg>
+</section>
+
+<!-- Palette -->
+<section>
+  <h2 class="section-h">品牌色板 · 与现有 UI 一致</h2>
+  <div class="palette">
+    <div class="chip"><div class="swatch" style="background:#1f271c"></div><div class="meta"><div class="name">深海墨</div><div class="hex">#1f271c</div></div></div>
+    <div class="chip"><div class="swatch" style="background:#d7f954"></div><div class="meta"><div class="name">航速绿</div><div class="hex">#d7f954</div></div></div>
+    <div class="chip"><div class="swatch" style="background:#4d6707"></div><div class="meta"><div class="name">深酸绿</div><div class="hex">#4d6707</div></div></div>
+    <div class="chip"><div class="swatch" style="background:#fbfcf7;border-bottom:1px solid #c9d0c0"></div><div class="meta"><div class="name">船坞白</div><div class="hex">#fbfcf7</div></div></div>
+    <div class="chip"><div class="swatch" style="background:#f2f4ec;border-bottom:1px solid #c9d0c0"></div><div class="meta"><div class="name">船坞灰</div><div class="hex">#f2f4ec</div></div></div>
+    <div class="chip"><div class="swatch" style="background:#ef5a32"></div><div class="meta"><div class="name">信号橙</div><div class="hex">#ef5a32</div></div></div>
+  </div>
+</section>
+
+<!-- 8 variants -->
+<section>
+  <h2 class="section-h">Logo 变体 · 8 个方向</h2>
+  <div class="grid" id="logo-grid"></div>
+</section>
+
+<!-- Scale check -->
+<section>
+  <h2 class="section-h">缩放自检 · 16 / 32 / 64 / 96 px</h2>
+  <div class="scale" id="scale-strip"></div>
+  <p class="note">推荐主方向在小尺寸仍保持轮廓清晰；复杂波形在 favicon 级会糊，适合桌面端标题栏 / 站点 hero，不宜作 16px 图标。</p>
+</section>
+
+<!-- Files -->
+<section class="files">
+  <h2 class="section-h">源文件位置</h2>
+  <ul>
+    <li><span>design/logos/svg/pb-01-harbor-gate.svg</span><span class="desc">船坞闸门</span></li>
+    <li><span>design/logos/svg/pb-02-packet-orbit.svg</span><span class="desc">环绕投递</span></li>
+    <li><span>design/logos/svg/pb-03-lane-wave.svg</span><span class="desc">航道波</span></li>
+    <li><span>design/logos/svg/pb-04-pair-beacon.svg</span><span class="desc">配对灯塔</span></li>
+    <li><span>design/logos/svg/pb-05-private-wake.svg</span><span class="desc">私域航迹</span></li>
+    <li><span>design/logos/svg/pb-06-chunk-seal.svg</span><span class="desc">分块封印</span></li>
+    <li><span>design/logos/svg/pb-07-dock-drop.svg</span><span class="desc">投递落坞</span></li>
+    <li><span>design/logos/svg/pb-08-lane-mono.svg</span><span class="desc">航标字标</span></li>
+    <li><span>design/logos/brand-reference-board.svg</span><span class="desc">品牌参考图板（可单独打开）</span></li>
+  </ul>
+  <p class="note">父级容器设置 <code>color</code> 即可换色；深色底用船坞白/航速绿，浅色底用深海墨。</p>
+</section>
+
+<footer>
+  PACKETBOAT · LOGO REFERENCE · LAN DELIVERY STATION
+</footer>
+</div>
+
+<script>
+/* ---- inline SVG mark library (currentColor) ---- */
+const marks = {
+  harborGate: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none"><g fill="currentColor"><rect x="24" y="28" width="8" height="50" rx="2"/><rect x="68" y="28" width="8" height="50" rx="2"/><rect x="24" y="28" width="52" height="7" rx="2"/></g><rect x="38" y="44" width="24" height="24" rx="4" fill="currentColor" opacity="0.92"/><rect x="44" y="44" width="12" height="4" rx="1.5" fill="currentColor" opacity="0.35"/><rect x="18" y="78" width="64" height="3.5" rx="1.75" fill="currentColor" opacity="0.28"/></svg>`,
+  packetOrbit: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="currentColor"><rect x="42" y="42" width="16" height="16" rx="3.5"/><circle cx="50" cy="30" r="3"/><circle cx="67.3" cy="34" r="3"/><circle cx="71" cy="51" r="3"/><circle cx="58.6" cy="66" r="3"/><circle cx="41.4" cy="66" r="3"/><circle cx="29" cy="51" r="3"/></g><path d="M28 42 A24 24 0 1 1 72 42" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="0.45"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.35"><line x1="50" y1="34" x2="50" y2="40"/><line x1="63" y1="38" x2="58" y2="44"/><line x1="66" y1="50" x2="60" y2="50"/></g></svg>`,
+  laneWave: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="c3"><circle cx="50" cy="50" r="32"/></clipPath></defs><g clip-path="url(#c3)" stroke="currentColor" stroke-linecap="round" fill="none"><path d="M14 30 Q32 24 50 30 T86 30" stroke-width="1.6" opacity="0.4"/><path d="M14 38 Q32 31 50 38 T86 38" stroke-width="2" opacity="0.55"/><path d="M14 46 Q32 38 50 46 T86 46" stroke-width="2.6" opacity="0.85"/><path d="M14 54 Q32 46 50 54 T86 54" stroke-width="3"/><path d="M14 62 Q32 54 50 62 T86 62" stroke-width="2.4" opacity="0.7"/><path d="M14 70 Q32 63 50 70 T86 70" stroke-width="1.8" opacity="0.45"/></g><circle cx="50" cy="50" r="36" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="78" cy="50" r="4" fill="currentColor"/><circle cx="22" cy="50" r="3.2" fill="currentColor" opacity="0.55"/></svg>`,
+  pairBeacon: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="currentColor"><path d="M38 34 L62 34 L58 68 L42 68 Z"/><rect x="42" y="26" width="16" height="8" rx="2.5"/><rect x="30" y="68" width="40" height="6" rx="2"/><path d="M50 74 L56 84 L44 84 Z"/></g><g fill="currentColor" opacity="0.55"><path d="M50 22 L46 8 L50 12 L54 8 Z"/><path d="M42 24 L30 12 L34 18 L36 14 Z"/><path d="M58 24 L70 12 L66 18 L64 14 Z"/></g><g fill="currentColor"><circle cx="24" cy="40" r="3"/><circle cx="76" cy="40" r="3"/></g></svg>`,
+  privateWake: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-linecap="round"><path d="M28 62 C38 62 42 38 50 38 C58 38 62 62 72 62" stroke-width="3.2"/><path d="M32 70 C40 70 44 48 50 48 C56 48 60 70 68 70" stroke-width="1.6" opacity="0.35"/><path d="M36 76 C42 76 46 58 50 58 C54 58 58 76 64 76" stroke-width="1.2" opacity="0.2"/></g><circle cx="28" cy="62" r="6.5" fill="currentColor"/><circle cx="72" cy="62" r="5" fill="currentColor"/><path d="M50 30 L55 38 L50 46 L45 38 Z" fill="currentColor"/><circle cx="50" cy="52" r="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.28"/></svg>`,
+  chunkSeal: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><polygon id="hx" points="0,-4.2 3.64,-2.1 3.64,2.1 0,4.2 -3.64,2.1 -3.64,-2.1"/></defs><polygon points="50,18 77.7,34 77.7,66 50,82 22.3,66 22.3,34" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><g fill="currentColor"><use href="#hx" x="50" y="42"/><use href="#hx" x="42" y="46.2"/><use href="#hx" x="58" y="46.2"/><use href="#hx" x="42" y="54.2"/><use href="#hx" x="58" y="54.2"/><use href="#hx" x="50" y="58.4"/><use href="#hx" x="50" y="50.2" opacity="0.35"/><circle cx="50" cy="50.2" r="3.2"/></g><g fill="currentColor" opacity="0.4"><rect x="24" y="30" width="4" height="4" rx="1"/><rect x="72" y="30" width="4" height="4" rx="1"/><rect x="24" y="66" width="4" height="4" rx="1"/><rect x="72" y="66" width="4" height="4" rx="1"/></g></svg>`,
+  dockDrop: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="currentColor"><rect x="32" y="28" width="36" height="30" rx="4"/><rect x="32" y="40" width="36" height="5" opacity="0.35"/><rect x="47" y="28" width="6" height="30" opacity="0.35"/></g><path d="M50 62 L50 74" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="0.5"/><path d="M28 76 L72 76 L66 86 L34 86 Z" fill="currentColor"/><g fill="currentColor" opacity="0.45"><rect x="20" y="52" width="6" height="34" rx="1.5"/><rect x="74" y="52" width="6" height="34" rx="1.5"/></g><g fill="currentColor" opacity="0.25"><circle cx="36" cy="92" r="1.6"/><circle cx="50" cy="92" r="1.6"/><circle cx="64" cy="92" r="1.6"/></g></svg>`,
+  laneMono: `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M34 22 L34 78"/><path d="M34 22 L52 22 A14 14 0 0 1 52 50 L34 50"/></g><path d="M38 36 L60 36 L54 46 L44 46 Z" fill="currentColor" opacity="0.9"/><rect x="47.5" y="28" width="3" height="8" rx="1" fill="currentColor"/><path d="M24 82 Q38 76 50 82 T76 82" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="0.45"/><circle cx="78" cy="82" r="3.2" fill="currentColor"/></svg>`
+};
+
+const logos = [
+  {
+    id: "01",
+    key: "harborGate",
+    title: "船坞闸门",
+    sub: "HARBOR GATE · PURE GEOMETRY",
+    pattern: "纯几何",
+    philosophy: "两根船坞立柱 + 横梁围合出投递位，包裹停在闸门中央。表达「投递站」的物理隐喻：有人接收、有位可停，而不是网盘的无边无际。轮廓厚重，16px 下仍可辨。",
+    tags: ["投递站", "几何", "小尺寸友好", "推荐主方向"]
+  },
+  {
+    id: "02",
+    key: "packetOrbit",
+    title: "环绕投递",
+    sub: "PACKET ORBIT · DOT MATRIX",
+    pattern: "点阵",
+    philosophy: "中心是主机包裹，周围 6 个设备点环绕——对应局域网内配对设备。外圈断口象征港口开口，数据在环内流动、不出网。点阵节奏呼应六位配对码。",
+    tags: ["局域网", "配对设备", "点阵"]
+  },
+  {
+    id: "03",
+    key: "laneWave",
+    title: "航道波",
+    sub: "LANE WAVE · LINE SYSTEM",
+    pattern: "线系统",
+    philosophy: "圆形容器内六条平行航道，中部加粗表示传输主航道；两端节点是发送与接收。强调「同 Wi-Fi 直达、吃满路由器带宽」的速度感与秩序感。",
+    tags: ["传输", "带宽", "线系统"]
+  },
+  {
+    id: "04",
+    key: "pairBeacon",
+    title: "配对灯塔",
+    sub: "PAIR BEACON · GEOMETRY + SIGNAL",
+    pattern: "几何 + 信号",
+    philosophy: "灯塔是港口导航隐喻，顶部射线是配对信号，两侧小点是待接入设备。与项目已有的 harbor-beacon 探索同族，但几何化、去掉拟物，更适合产品图标。",
+    tags: ["配对", "灯塔", "导航"]
+  },
+  {
+    id: "05",
+    key: "privateWake",
+    title: "私域航迹",
+    sub: "PRIVATE WAKE · NODE NETWORK",
+    pattern: "节点网络",
+    philosophy: "左右两个端点 + 中间弧线 = 主机与浏览器直达；下方渐淡尾迹表示传输过程。虚线私域环强调「数据不经公网」，刻意不画云朵——对齐「不是网盘」原则。",
+    tags: ["隐私", "P2P 感", "无云端"]
+  },
+  {
+    id: "06",
+    key: "chunkSeal",
+    title: "分块封印",
+    sub: "CHUNK SEAL · HEX + MATRIX",
+    pattern: "混合：几何 + 点阵",
+    philosophy: "外六边形 = 协议边界，内蜂窝 7 块 = 分块上传与 SHA-256 校验；中心加重表示原子提交完成。角标是「登记 / 完成」记号。技术向，适合开发者文档与 GitHub 头图。",
+    tags: ["分块上传", "完整性", "技术感"]
+  },
+  {
+    id: "07",
+    key: "dockDrop",
+    title: "投递落坞",
+    sub: "DOCK DROP · PRODUCT ACTION",
+    pattern: "混合：动作几何",
+    philosophy: "直接描绘核心动作：包裹沿路径落入船坞泊位，两侧立柱是码头。最贴近「投递站」产品叙事，适合官网 hero、空状态插画；细节偏多，需简化后再作 favicon。",
+    tags: ["产品动作", "叙事强", "hero 友好"]
+  },
+  {
+    id: "08",
+    key: "laneMono",
+    title: "航标字标",
+    sub: "LANE MONO · LETTER MARK",
+    pattern: "字母 + 几何",
+    philosophy: "几何化字母 P（Packet），碗部负空间嵌入船体与桅杆，下方水线与到达点。可单独作图标，也可与「PacketBoat」字标横排。字标路线适合品牌识别延伸。",
+    tags: ["字标", "Packet", "可组合"]
+  }
+];
+
+/* render grid */
+const grid = document.getElementById("logo-grid");
+grid.innerHTML = logos.map(l => `
+  <article class="card">
+    <div class="stage">
+      <div class="tile light"><div style="width:72px;height:72px;color:#1f271c">${marks[l.key]}</div><span class="lbl">INK</span></div>
+      <div class="tile dark"><div style="width:72px;height:72px;color:#fbfcf7">${marks[l.key]}</div><span class="lbl">DOCK</span></div>
+      <div class="tile accent"><div style="width:72px;height:72px;color:#1f271c">${marks[l.key]}</div><span class="lbl">ACID</span></div>
+    </div>
+    <div class="body">
+      <div class="id">PB-${l.id} · ${l.pattern}</div>
+      <h3>${l.title}</h3>
+      <div class="sub">${l.sub}</div>
+      <p>${l.philosophy}</p>
+      <div class="tags">
+        ${l.tags.map((t,i)=>`<span class="tag-pill ${i===l.tags.length-1 && t.includes("推荐")?"ok":""}">${t}</span>`).join("")}
+      </div>
+    </div>
+  </article>
+`).join("");
+
+/* scale strip — show harborGate + privateWake + laneMono at multiple sizes */
+const scaleDefs = [
+  { key: "harborGate", name: "01 闸门" },
+  { key: "privateWake", name: "05 航迹" },
+  { key: "laneMono", name: "08 字标" },
+  { key: "packetOrbit", name: "02 环绕" }
+];
+const sizes = [16, 32, 64, 96];
+const strip = document.getElementById("scale-strip");
+strip.innerHTML = scaleDefs.map(sd => `
+  <div style="display:flex;gap:14px;align-items:flex-end;margin-right:12px">
+    ${sizes.map(sz => `
+      <div class="item">
+        <div style="width:${sz}px;height:${sz}px;color:#1f271c">${marks[sd.key]}</div>
+        <span>${sz}px</span>
+      </div>
+    `).join("")}
+  </div>
+  <div style="font-size:12px;color:#646c57;margin-right:28px;align-self:center">${sd.name}</div>
+`).join("");
+</script>
+</body>
+</html>

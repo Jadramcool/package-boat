@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 08 航标字标 — geometric P + boat hull negative (letter/mark hybrid) -->
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- P stem -->
+    <path d="M 34 22 L 34 78"/>
+    <!-- P bowl (open bottom = harbor mouth) -->
+    <path d="M 34 22 L 52 22 A 14 14 0 0 1 52 50 L 34 50"/>
+  </g>
+  <!-- boat hull nested in bowl negative space -->
+  <path d="M 38 36 L 60 36 L 54 46 L 44 46 Z"
+        fill="currentColor" opacity="0.9"/>
+  <!-- mast / antenna -->
+  <rect x="47.5" y="28" width="3" height="8" rx="1" fill="currentColor"/>
+  <!-- waterline under P -->
+  <path d="M 24 82 Q 38 76, 50 82 T 76 82"
+        fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="0.45"/>
+  <!-- arrival dot -->
+  <circle cx="78" cy="82" r="3.2" fill="currentColor"/>
+</svg>

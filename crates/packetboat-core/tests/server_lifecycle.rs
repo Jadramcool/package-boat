@@ -133,7 +133,7 @@ async fn file_lifecycle() {
         .unwrap();
     assert_eq!(body, "hello over lan");
 
-    // 删除 → 204，随后下载 → 404
+    // 移出清单 → 204；磁盘文件保留，但不再出现在共享下载路径
     let status = client
         .delete(format!("{url}/api/files/{id}"))
         .send()
@@ -141,6 +141,10 @@ async fn file_lifecycle() {
         .unwrap()
         .status();
     assert_eq!(status, reqwest::StatusCode::NO_CONTENT);
+    assert!(
+        storage.join("hello.txt").exists(),
+        "删除共享条目不得删除接收目录中的磁盘文件"
+    );
     let status = client
         .get(format!("{url}/api/files/{id}/download"))
         .send()

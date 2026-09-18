@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 05 私域航迹 — two peers + curved LAN path + wake (no cloud middle) -->
+  <g fill="none" stroke="currentColor" stroke-linecap="round">
+    <!-- primary transfer arc -->
+    <path d="M 28 62 C 38 62, 42 38, 50 38 C 58 38, 62 62, 72 62"
+          stroke-width="3.2"/>
+    <!-- secondary wake trails -->
+    <path d="M 32 70 C 40 70, 44 48, 50 48 C 56 48, 60 70, 68 70"
+          stroke-width="1.6" opacity="0.35"/>
+    <path d="M 36 76 C 42 76, 46 58, 50 58 C 54 58, 58 76, 64 76"
+          stroke-width="1.2" opacity="0.2"/>
+  </g>
+  <!-- host node (left, larger) -->
+  <circle cx="28" cy="62" r="6.5" fill="currentColor"/>
+  <!-- client node (right) -->
+  <circle cx="72" cy="62" r="5" fill="currentColor"/>
+  <!-- payload diamond on the path -->
+  <path d="M 50 30 L 55 38 L 50 46 L 45 38 Z" fill="currentColor"/>
+  <!-- privacy ring: open circle around the path, never a cloud -->
+  <circle cx="50" cy="52" r="28" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-dasharray="5 4" opacity="0.28"/>
+</svg>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { LogOut, Radio } from '@lucide/vue'
+import BrandMark from '@/components/BrandMark.vue'
 
 defineProps<{
   deviceName: string
@@ -16,13 +17,14 @@ const emit = defineEmits<{
   <header class="app-header">
     <div class="header-inner">
       <a class="brand" href="/" aria-label="PacketBoat 首页">
-        <span class="brand-glyph" aria-hidden="true">L</span>
+        <span class="brand-glyph" aria-hidden="true"><BrandMark :size="20" /></span>
         <span class="brand-word">PacketBoat</span>
         <span class="brand-sub">局域网投递站</span>
       </a>
       <div class="device-status">
         <span class="status-pill" :class="{ offline: !online }">
-          <Radio :size="13" aria-hidden="true" /> {{ online ? '在线' : '重连中' }}
+          <Radio :size="13" aria-hidden="true" />
+          <span>{{ online ? '在线' : '重连中' }}</span>
         </span>
         <span class="device-name" :title="deviceName">{{ deviceName }}</span>
         <span v-if="version" class="version">v{{ version }}</span>
@@ -66,8 +68,7 @@ const emit = defineEmits<{
   border: 1px solid var(--ink);
   border-radius: 8px;
   background: var(--acid);
-  font: 750 15px/1 var(--font-display);
-  transform: rotate(-3deg);
+  color: var(--ink);
 }
 .brand-word {
   margin-left: 10px;
@@ -97,8 +98,12 @@ const emit = defineEmits<{
   border-radius: 999px;
   color: var(--info);
   background: var(--info-wash);
-  font: 650 11px/1 var(--font-label);
+  font: 650 11px/1.2 var(--font-label);
   letter-spacing: .08em;
+}
+.status-pill svg {
+  flex: none;
+  display: block;
 }
 .status-pill.offline {
   color: var(--signal-deep);

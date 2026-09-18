@@ -139,8 +139,8 @@ function handlePairingChange(event: Event) {
 .field-label { display: block; margin-bottom: 5px; color: var(--muted); font: 600 11.5px/1 var(--font-label); }
 .picker { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
 .picker.warn { border-color: var(--signal); background: var(--signal-soft); }
-.picker > svg { flex: none; color: var(--muted); }
-.picker select { flex: 1; min-width: 0; height: 100%; border: 0; appearance: none; background: transparent; color: var(--ink); cursor: pointer; font: 550 11.5px/1 var(--font-mono); text-overflow: ellipsis; }
+.picker > svg { flex: none; display: block; color: var(--muted); }
+.picker select { flex: 1; min-width: 0; height: 100%; border: 0; appearance: none; background: transparent; color: var(--ink); cursor: pointer; font: 550 11.5px/1.2 var(--font-mono); text-overflow: ellipsis; }
 .picker select:disabled { cursor: default; color: var(--muted); }
 .picker select:focus-visible { outline: 2px solid var(--info); outline-offset: -2px; }
 .note { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }

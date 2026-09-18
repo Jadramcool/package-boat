@@ -20,8 +20,8 @@ const actionTitle = computed(() => {
   if (isLinked.value)
     return '取消共享（不会删除原文件）'
   if (props.item.source_type === 'inbox')
-    return '从清单移除并删除接收目录中的本地文件'
-  return '删除（从共享清单与磁盘移除）'
+    return '从共享清单移除本地文件（不删除磁盘文件）'
+  return '从共享清单移除（不删除磁盘文件）'
 })
 </script>
 
@@ -87,8 +87,8 @@ const actionTitle = computed(() => {
 .file-main { min-width: 0; }
 .name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .name-line strong { overflow: hidden; font: 680 14px/1.2 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
-.source-badge, .missing-badge { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font: 650 11px/1.4 var(--font-label); }
-.source-badge::before { content: ''; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
+.source-badge, .missing-badge { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font: 650 11px/1.35 var(--font-label); }
+.source-badge::before { content: ''; width: 5px; height: 5px; flex: none; display: block; border-radius: 50%; background: currentColor; }
 .source-badge.linked { background: var(--acid-wash); color: var(--acid-deep); }
 .source-badge.received { background: var(--info-wash); color: #23559e; }
 .source-badge.inbox { background: var(--paper-deep, #e9ebe2); color: var(--ink-2, #39432f); }
@@ -96,9 +96,9 @@ const actionTitle = computed(() => {
 .missing-badge { background: var(--signal-soft); color: var(--signal-deep); }
 .file-main p { overflow: hidden; margin: 5px 0 0; color: var(--muted); font: 500 11.5px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .row-meta { display: none; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; color: var(--muted); font: 550 12px/1.3 var(--font-mono); }
-.row-meta .source-badge { font: 650 11px/1 var(--font-label); }
+.row-meta .source-badge { font: 650 11px/1.35 var(--font-label); }
 .file-size, .file-date { overflow: hidden; color: var(--muted); font: 550 13.5px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .row-actions button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; color: var(--ink); cursor: pointer; }
 .row-actions button:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .row-actions .unshare:hover:not(:disabled) { border-color: var(--signal); background: var(--signal); }
