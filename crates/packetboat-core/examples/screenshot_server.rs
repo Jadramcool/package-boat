@@ -71,7 +71,7 @@ async fn main() {
 
     // Received files under receive dir
     write_sized(
-        &receive.join("安装包-PacketBoat-0.2.0.exe"),
+        &receive.join("安装包-PacketBoat-0.3.0.exe"),
         23_068_672,
         b"MZ",
     );

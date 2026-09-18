@@ -3223,7 +3223,7 @@ checksum = "13c45bb4a6ae1280ec0803b1ef9d3455eb50f01efbbe1447ab020f1d54fba9d8"
 
 [[package]]
 name = "packetboat-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-stream",
  "async_zip",
@@ -3260,7 +3260,7 @@ dependencies = [
 
 [[package]]
 name = "packetboat-desktop"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "packetboat-core",
  "serde",

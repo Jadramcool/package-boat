@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
 ### Added
 
 - 品牌标 **PB-05 私域航迹**：共享 `BrandMark` 组件、应用图标（Tauri/托盘/favicon）与 `docs/images` 品牌资产；README 配图已同步重拍。
@@ -75,6 +77,7 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Jadramcool/package-boat/releases/tag/v0.1.0
