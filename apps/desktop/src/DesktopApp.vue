@@ -53,6 +53,18 @@ onMounted(() => {
       @refresh-code="desktop.refreshAccessCode" />
 
     <div class="desktop-shell">
+      <div class="toast-stack">
+      <Transition name="toast">
+        <div
+          v-if="updater.message.value"
+          class="notice-toast"
+          :class="{ warn: updater.status.value === 'error' }"
+          role="status">
+          <CheckCircle2 v-if="updater.status.value !== 'error'" :size="17" />
+          <AlertTriangle v-else :size="17" />
+          <span>{{ updater.message.value }}</span>
+        </div>
+      </Transition>
       <Transition name="toast">
         <div
           v-if="desktop.noticeMessage.value"
@@ -62,6 +74,7 @@ onMounted(() => {
           <span>{{ desktop.noticeMessage.value }}</span>
         </div>
       </Transition>
+      </div>
 
       <main>
         <div
@@ -101,7 +114,7 @@ onMounted(() => {
           class="error-strip"
           role="alert">
           <AlertTriangle :size="16" />
-          <span>自动更新检查失败，可稍后重试</span>
+          <span>{{ updater.message.value || "更新检查失败，可稍后重试" }}</span>
           <button
             type="button"
             class="strip-retry"
@@ -366,11 +379,19 @@ footer {
   opacity: 0.6;
   cursor: default;
 }
-.notice-toast {
+.toast-stack {
   position: fixed;
   right: 18px;
   bottom: 74px;
   z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+.notice-toast {
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -382,6 +403,12 @@ footer {
   color: var(--paper);
   box-shadow: 0 12px 32px rgb(31 39 28 / 35%);
   font-size: 14px;
+}
+.notice-toast.warn {
+  border-color: rgb(239 90 50 / 45%);
+}
+.notice-toast.warn svg {
+  color: var(--signal);
 }
 .notice-toast svg {
   flex: none;

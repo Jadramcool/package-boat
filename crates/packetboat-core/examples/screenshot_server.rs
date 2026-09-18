@@ -54,11 +54,7 @@ async fn main() {
         1_887_437,
         b"PK\x03\x04",
     );
-    write_sized(
-        &shared.join("客户回访录音-0908.mp3"),
-        12_582_912,
-        b"ID3",
-    );
+    write_sized(&shared.join("客户回访录音-0908.mp3"), 12_582_912, b"ID3");
     write_sized(
         &shared.join("室内平面图/一层平面.dwg"),
         6_710_886,
@@ -104,12 +100,8 @@ async fn main() {
     catalog
         .add_received(receive.join("安装包-PacketBoat-0.2.0.exe"))
         .ok();
-    catalog
-        .add_received(receive.join("背景音乐清单.csv"))
-        .ok();
-    catalog
-        .add_received(receive.join("会议录屏_0912.mp4"))
-        .ok();
+    catalog.add_received(receive.join("背景音乐清单.csv")).ok();
+    catalog.add_received(receive.join("会议录屏_0912.mp4")).ok();
 
     // After catalog registration, move one linked file away → unavailable badge
     let archived = shared.join("_archived");
@@ -130,7 +122,9 @@ async fn main() {
     })
     .expect("server");
 
-    let listener = TcpListener::bind(("127.0.0.1", 18991)).await.expect("bind 18991");
+    let listener = TcpListener::bind(("127.0.0.1", 18991))
+        .await
+        .expect("bind 18991");
     let port = listener.local_addr().unwrap().port();
     let code = server.access_code();
     let meta = serde_json::json!({
@@ -140,8 +134,8 @@ async fn main() {
         "version": env!("CARGO_PKG_VERSION"),
         "receive_dir": receive.to_string_lossy(),
     });
-    let meta_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/screenshot-server.json");
+    let meta_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/screenshot-server.json");
     if let Some(parent) = meta_path.parent() {
         std::fs::create_dir_all(parent).ok();
     }
