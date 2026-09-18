@@ -170,18 +170,24 @@ onMounted(() => {
       </main>
 
       <footer>
-        <span>PacketBoat 桌面端 · v{{ desktop.state.value.version }}</span>
-        <span class="footer-note">文件通过本机局域网直达 · 无云端中转</span>
-        <button
-          type="button"
-          class="footer-action"
-          :disabled="
-            updater.status.value === 'checking' ||
-            updater.status.value === 'downloading'
-          "
-          @click="updater.checkForUpdate(false)">
-          {{ updater.status.value === "checking" ? "正在检查…" : "检查更新" }}
-        </button>
+        <div class="footer-inner">
+          <span class="footer-product"
+            >PacketBoat 桌面端 · v{{ desktop.state.value.version }}</span
+          >
+          <span class="footer-dot" aria-hidden="true" />
+          <span class="footer-note">文件通过本机局域网直达 · 无云端中转</span>
+          <span class="footer-spacer" />
+          <button
+            type="button"
+            class="footer-action"
+            :disabled="
+              updater.status.value === 'checking' ||
+              updater.status.value === 'downloading'
+            "
+            @click="updater.checkForUpdate(false)">
+            {{ updater.status.value === "checking" ? "正在检查…" : "检查更新" }}
+          </button>
+        </div>
       </footer>
     </div>
   </div>
@@ -200,12 +206,13 @@ onMounted(() => {
   flex-direction: column;
 }
 /* 命令条通栏后，shell 只需承担内容区的呼吸感——14px 与列间距、卡内边距同一节奏 */
+/* shell 不给 bottom padding：页脚必须贴窗口底边，否则会被垫高 */
 .desktop-shell {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 14px;
+  padding: 14px 14px 0;
   overflow: hidden;
 }
 .desktop-shell > main {
@@ -215,13 +222,43 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding-bottom: 14px;
 }
+/* 页脚方案 A：文案左成组，操作在列表同宽的右端 */
 footer {
   width: 100%;
-  max-width: 1480px;
-  margin-right: auto;
-  margin-left: auto;
   flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--dock-0);
+}
+.footer-inner {
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font: 600 12.5px/1.45 var(--font-label);
+  letter-spacing: 0.06em;
+}
+.footer-product,
+.footer-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.footer-dot {
+  width: 3px;
+  height: 3px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+.footer-spacer {
+  flex: 1;
 }
 .error-strip {
   display: flex;
@@ -370,23 +407,19 @@ footer {
 .side-panel::-webkit-scrollbar {
   width: 6px;
 }
-footer {
-  display: flex;
-  justify-content: space-between;
-  flex: none;
-  padding: 14px 4px 0;
-  color: var(--muted);
-  font: 600 12.5px/1 var(--font-label);
-  letter-spacing: 0.08em;
-}
 .footer-action {
+  flex: none;
+  min-height: 30px;
   padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font: 600 12px/1 var(--font-label);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition:
     color 0.15s,
@@ -457,11 +490,12 @@ footer {
 }
 @media (max-width: 900px) {
   .desktop-shell {
-    padding: 12px;
+    padding: 12px 12px 0;
   }
-  footer {
+  .footer-inner {
     gap: 20px;
     line-height: 1.4;
+    padding: 12px 12px 18px;
   }
 }
 @media (max-width: 780px) {
@@ -471,12 +505,19 @@ footer {
   .side-panel {
     gap: 12px;
   }
-  footer {
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 10px;
+  .footer-inner {
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 11.5px;
+  }
+  .footer-dot {
+    display: none;
+  }
+  .footer-spacer {
+    display: none;
+  }
+  .footer-action {
+    margin-left: auto;
   }
   .error-strip {
     font-size: 13px;

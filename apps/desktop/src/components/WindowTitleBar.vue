@@ -41,8 +41,7 @@ function closeWindow() {
 <template>
   <div class="window-titlebar" data-tauri-drag-region="deep">
     <div class="titlebar-brand" aria-hidden="true">
-      <span class="titlebar-mark">L</span>
-      <span class="titlebar-title">PacketBoat · 局域网投递站</span>
+      <span class="titlebar-title">PacketBoat</span>
     </div>
     <div class="titlebar-actions">
       <button
@@ -74,29 +73,80 @@ function closeWindow() {
 </template>
 
 <style scoped>
-/* 44px：38px 在 1280 宽窗口下框不住右侧三枚 46px 宽的系统按钮，
-   品牌标识也被压到 20px（比正文还小）。放宽后 mark 26px、标题 13px，
-   与命令条的 64px 形成「框架三层、逐层加重」的节奏。 */
+/* 方案 A：标题栏只做系统 chrome，去掉品牌 L 标；
+   品牌与产品信息只出现在下方命令条，避免同一窗口重复两次品牌。 */
 .window-titlebar {
   flex: none;
-  height: 44px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--ink);
+  background: #161c14;
   color: var(--paper);
   user-select: none;
+  border-bottom: 1px solid rgb(251 252 247 / 8%);
 }
-.titlebar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 16px; }
-.titlebar-mark { width: 26px; height: 26px; display: grid; place-items: center; flex: none; border: 1px solid var(--acid); color: var(--acid); font: 800 13px/1 var(--font-display); transform: rotate(-3deg); }
-.titlebar-title { overflow: hidden; color: rgb(251 252 247 / 72%); font: 600 13px/1 var(--font-label); letter-spacing: .13em; text-overflow: ellipsis; white-space: nowrap; }
-.titlebar-actions { display: flex; align-items: stretch; height: 100%; }
-.titlebar-pin { width: 44px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(251 252 247 / 72%); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
-.titlebar-pin:hover:not(.active) { background: rgb(255 255 255 / 10%); color: var(--paper); }
-.titlebar-pin.active { background: var(--acid); color: var(--ink); }
-.titlebar-pin.active:hover { background: #e4ff7c; }
-.window-controls { display: flex; align-items: stretch; height: 100%; }
-.window-controls button { width: 46px; display: grid; place-items: center; border: 0; background: transparent; color: rgb(251 252 247 / 72%); cursor: default; transition: background 120ms ease, color 120ms ease; }
-.window-controls button:hover { background: rgb(255 255 255 / 10%); color: var(--paper); }
-.window-controls button.close:hover { background: var(--signal); color: #fff; }
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 16px;
+}
+.titlebar-title {
+  overflow: hidden;
+  color: rgb(251 252 247 / 48%);
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar-actions {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+.titlebar-pin {
+  width: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(251 252 247 / 62%);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.titlebar-pin:hover:not(.active) {
+  background: rgb(255 255 255 / 8%);
+  color: var(--paper);
+}
+.titlebar-pin.active {
+  background: var(--acid);
+  color: var(--ink);
+}
+.titlebar-pin.active:hover {
+  background: #e4ff7c;
+}
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+.window-controls button {
+  width: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(251 252 247 / 62%);
+  cursor: default;
+  transition: background 120ms ease, color 120ms ease;
+}
+.window-controls button:hover {
+  background: rgb(255 255 255 / 8%);
+  color: var(--paper);
+}
+.window-controls button.close:hover {
+  background: var(--signal);
+  color: #fff;
+}
 </style>

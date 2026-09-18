@@ -33,13 +33,16 @@ const emit = defineEmits<{
   <header class="cmdbar" aria-label="服务命令条">
     <span class="brand" aria-hidden="true">L</span>
 
-    <span class="identity">
-      <strong class="device" :title="props.deviceName">{{ props.deviceName }}</strong>
+    <div class="identity">
+      <div class="identity-text">
+        <strong class="device" :title="props.deviceName">{{ props.deviceName }}</strong>
+        <span class="product">局域网投递站</span>
+      </div>
       <span class="state" :class="{ online: props.host.running }">
         <i aria-hidden="true" />
         {{ props.host.running ? '运行中' : '已停止' }}
       </span>
-    </span>
+    </div>
 
     <template v-if="props.host.running && props.accessUrl">
       <span class="url" :class="{ warn: props.addressUnreachable }">
@@ -98,15 +101,78 @@ const emit = defineEmits<{
    两侧各留 16px 后视觉重心贴边。放宽到 64px 后 gap 14px、内边距 20px，
    控件与带边的关系恢复「有呼吸的容器」而不是「刚好塞下」。
    代价：首屏可见行数 9 → 8（这是明知的取舍）。 */
-.cmdbar { display: flex; align-items: center; gap: 14px; height: 64px; padding: 0 20px; background: var(--ink); color: var(--paper); }
-.brand { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--acid); color: var(--acid); font: 800 15px/1 var(--font-display); transform: rotate(-3deg); }
-.identity { min-width: 0; display: flex; align-items: center; gap: 9px; }
-.device { max-width: 170px; overflow: hidden; font: 700 15.5px/1 var(--font-display); text-overflow: ellipsis; white-space: nowrap; }
-.state { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 4px 10px; border-radius: 999px; background: rgb(255 255 255 / 8%); color: rgb(251 252 247 / 72%); font: 650 11.5px/1 var(--font-label); }
-.state i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #79826f; }
-/* 在线状态用 info 蓝：acid 绿专供「品牌 / 主行动」，不兼任状态灯 */
-.state.online { background: rgb(120 182 255 / 16%); color: var(--info-lit); }
-.state.online i { background: var(--info-lit); }
+.cmdbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 64px;
+  padding: 0 20px;
+  background: var(--ink);
+  color: var(--paper);
+  border-top: 1px solid rgb(251 252 247 / 10%);
+}
+.brand {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--acid);
+  color: var(--acid);
+  font: 800 15px/1 var(--font-display);
+  transform: rotate(-3deg);
+}
+.identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.identity-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.device {
+  max-width: 170px;
+  overflow: hidden;
+  font: 700 15.5px/1 var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product {
+  color: rgb(251 252 247 / 48%);
+  font: 600 10px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: rgb(251 252 247 / 72%);
+  font: 650 11.5px/1 var(--font-label);
+}
+.state i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #79826f;
+}
+.state.online {
+  background: rgb(120 182 255 / 16%);
+  color: var(--info-lit);
+}
+.state.online i {
+  background: var(--info-lit);
+}
 
 .url { flex: 1; min-width: 0; max-width: 340px; display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 5px 0 12px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 9px; background: rgb(255 255 255 / 5%); }
 .url > svg { flex: none; color: #ffd6a8; }
@@ -141,7 +207,7 @@ const emit = defineEmits<{
 }
 @media (max-width: 780px) {
   .cmdbar { gap: 10px; padding: 0 14px; }
-  .device { display: none; }
+  .device, .product { display: none; }
   .power { padding: 0 12px; }
 }
 @media (prefers-reduced-motion: reduce) {

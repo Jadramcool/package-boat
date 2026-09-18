@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PacketBoat · 桌面头部样式方案 PB-HEAD-01</title>
+<style>
+:root {
+  --dock-0: #f2f4ec;  --surface: #fbfcf7;  --paper: #fbfcf7;
+  --ink: #1f271c;  --muted: #646c57;
+  --line: #dfe2d2;  --line-strong: #b9bfa6;
+  --acid: #d7f954;  --acid-deep: #4d6707;  --acid-wash: #eef9c8;
+  --signal: #ef5a32;  --signal-deep: #b23a1c;  --signal-soft: #fde9e0;
+  --info: #2f6fd3;  --info-wash: #e4edfb;  --info-lit: #78b6ff;
+  --f-display: "Bahnschrift", "DIN Alternate", "Noto Sans SC", sans-serif;
+  --f-label: "Bahnschrift SemiCondensed", "Noto Sans SC", sans-serif;
+  --f-mono: "Cascadia Mono", Consolas, monospace;
+  --f-sans: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html { background: #e9ebe2; }
+body {
+  font-family: var(--f-sans); color: var(--ink); line-height: 1.6;
+  background:
+    linear-gradient(rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(31 39 28 / 3.5%) 1px, transparent 1px),
+    #e9ebe2;
+  background-size: 28px 28px, 28px 28px, auto;
+  padding-bottom: 64px;
+}
+::selection { background: var(--acid); color: var(--ink); }
+.board-top, main.board { max-width: 1120px; margin: 0 auto; padding-left: 28px; padding-right: 28px; }
+.board-top { padding-top: 36px; }
+.board-title { margin: 0 0 8px; font: 720 clamp(26px, 4vw, 38px)/1.15 var(--f-display); letter-spacing: -.02em; }
+.board-title em { font-style: normal; background: var(--acid); padding: 0 8px; box-shadow: 3px 3px 0 var(--ink); }
+.board-sub { max-width: 880px; color: var(--muted); font-size: 14.5px; }
+.board-sub b { color: var(--ink); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip { padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--paper); font: 600 11px/1 var(--f-label); letter-spacing: .06em; }
+.chip.bad { border-color: var(--signal); background: var(--signal-soft); color: var(--signal-deep); }
+.chip.ok { border-color: var(--acid-deep); background: var(--acid-wash); color: var(--acid-deep); }
+.chip.info { border-color: var(--info); background: var(--info-wash); color: var(--info); }
+.sec { margin-top: 36px; }
+.sec-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.sec-h h2 { font: 720 20px/1.2 var(--f-display); }
+.sec-h span { color: var(--muted); font: 600 11px/1 var(--f-label); letter-spacing: .1em; }
+.sec-lead { max-width: 880px; margin: 0 0 16px; color: var(--muted); font-size: 13.5px; line-height: 1.75; }
+.sec-lead b { color: var(--ink); }
+
+.frame { overflow: hidden; border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 12px 32px rgb(31 39 28 / 8%); margin-top: 12px; }
+.frame-cap { padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--paper); font: 650 11px/1.3 var(--f-label); letter-spacing: .06em; color: var(--muted); }
+.frame-cap b { color: var(--ink); }
+.demo { background: var(--dock-0); }
+
+/* —— 公共原子 —— */
+.mark {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border: 1px solid var(--ink); border-radius: 6px;
+  background: var(--acid); color: var(--ink);
+  font: 750 13px/1 var(--f-display); flex: none;
+}
+.mark.sm { width: 20px; height: 20px; font-size: 10px; border-radius: 4px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px; border-radius: 999px;
+  font: 650 10.5px/1 var(--f-label); letter-spacing: .08em;
+}
+.pill.on { background: var(--info-wash); color: var(--info); }
+.pill.on i { width: 6px; height: 6px; border-radius: 50%; background: var(--info); }
+.pill.off { background: var(--signal-soft); color: var(--signal-deep); }
+.pill.off i { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
+.code-chip {
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--ink); background: var(--acid);
+  font: 700 14px/1 var(--f-mono); letter-spacing: .12em;
+}
+.url-box {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 32px; padding: 0 8px 0 10px;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--paper); font: 600 12px/1 var(--f-mono);
+}
+.url-box .acts { display: flex; gap: 4px; }
+.url-box .acts span {
+  padding: 4px 7px; border-radius: 6px; border: 1px solid var(--line-strong);
+  font: 600 10px/1 var(--f-label); color: var(--muted); background: #fff;
+}
+.btn-power {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid rgb(251 252 247 / 28%);
+  background: transparent; color: var(--paper);
+  font: 650 12.5px/1 var(--f-label); letter-spacing: .04em;
+}
+.btn-power.solid { border-color: var(--ink); background: var(--acid); color: var(--ink); }
+.win-btns { display: flex; align-items: stretch; height: 100%; margin-left: auto; }
+.win-btns span {
+  width: 42px; display: grid; place-items: center;
+  color: var(--paper); font-size: 12px; opacity: .72;
+}
+.win-btns span.close { width: 46px; opacity: 1; }
+
+/* ========= 现状 ========= */
+.now-title {
+  height: 44px; display: flex; align-items: center; gap: 10px;
+  padding-left: 14px; background: var(--ink); color: var(--paper);
+}
+.now-title .t { font: 650 13px/1 var(--f-label); letter-spacing: .06em; opacity: .88; }
+.now-cmd {
+  height: 64px; display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; background: var(--ink); color: var(--paper);
+  border-top: 1px solid rgb(251 252 247 / 8%);
+}
+.now-cmd .device { font: 700 14px/1 var(--f-display); }
+.now-cmd .url-box { background: rgb(251 252 247 / 8%); border-color: rgb(251 252 247 / 16%); color: var(--paper); }
+.now-cmd .url-box .acts span { background: transparent; border-color: rgb(251 252 247 / 18%); color: rgb(251 252 247 / 70%); }
+
+/* ========= 方案 A ========= */
+.a-title {
+  height: 40px; display: flex; align-items: center; gap: 10px;
+  padding-left: 14px; background: var(--ink); color: var(--paper);
+}
+.a-title .t { font: 650 12.5px/1 var(--f-label); letter-spacing: .08em; opacity: .72; }
+.a-title .win-btns { height: 40px; }
+.a-cmd {
+  height: 64px; display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; background: var(--ink); color: var(--paper);
+  border-top: 1px solid rgb(251 252 247 / 10%);
+}
+.a-cmd .left {
+  display: flex; align-items: baseline; gap: 10px; min-width: 0;
+}
+.a-cmd .device { font: 700 15px/1 var(--f-display); }
+.a-cmd .sub { font: 600 10.5px/1 var(--f-label); letter-spacing: .1em; color: rgb(251 252 247 / 55%); }
+
+/* ========= 方案 B ========= */
+.b-merge {
+  min-height: 56px; display: flex; align-items: center; gap: 12px;
+  padding-left: 14px; background: var(--ink); color: var(--paper);
+}
+.b-merge .wordmark {
+  font: 750 14px/1 var(--f-display); letter-spacing: .08em;
+  padding-right: 12px; border-right: 1px solid rgb(251 252 247 / 16%);
+}
+.b-merge .device { font: 700 13.5px/1 var(--f-display); }
+.b-merge .win-btns { height: 56px; }
+
+/* ========= 方案 C ========= */
+.c-title {
+  height: 36px; display: flex; align-items: center; gap: 8px;
+  padding-left: 14px; background: #161c14; color: var(--paper);
+}
+.c-title .t { font: 600 11.5px/1 var(--f-label); letter-spacing: .1em; opacity: .55; }
+.c-title .win-btns { height: 36px; }
+.c-title .win-btns span { width: 38px; }
+.c-cmd {
+  height: 64px; display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; background: var(--ink); color: var(--paper);
+}
+.c-tabs {
+  display: flex; gap: 2px; padding: 3px; border-radius: 9px;
+  background: rgb(251 252 247 / 8%);
+}
+.c-tabs span {
+  padding: 6px 10px; border-radius: 7px;
+  font: 650 11px/1 var(--f-label); letter-spacing: .04em;
+  color: rgb(251 252 247 / 55%);
+}
+.c-tabs span.active { background: var(--acid); color: var(--ink); }
+
+table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; margin-top: 12px; }
+table.cmp th, table.cmp td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.cmp th { background: var(--dock-0); color: var(--muted); font: 650 11px/1 var(--f-label); letter-spacing: .08em; }
+table.cmp tr:last-child td { border-bottom: 0; }
+.yes { color: var(--ok, #35874a); font-weight: 700; }
+.no { color: var(--signal-deep); font-weight: 700; }
+.note-box { margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--info); background: var(--info-wash); font-size: 13px; line-height: 1.7; }
+.note-box b { color: var(--info); }
+.opt { margin-top: 22px; }
+.opt h3 { margin: 0 0 6px; font: 700 16px/1.2 var(--f-display); }
+.opt h3 .tag { display: inline-block; margin-left: 8px; padding: 3px 8px; border-radius: 999px; font: 650 10px/1 var(--f-label); letter-spacing: .08em; vertical-align: middle; }
+.tag.rec { background: var(--acid-wash); color: var(--acid-deep); border: 1px solid var(--acid-deep); }
+.tag.alt { background: var(--info-wash); color: var(--info); border: 1px solid var(--info); }
+.opt p { margin: 0 0 8px; color: var(--muted); font-size: 13px; max-width: 880px; }
+footer.board-foot { max-width: 1120px; margin: 32px auto 0; padding: 16px 28px 0; border-top: 1px solid var(--line-strong); color: var(--muted); font: 600 11px/1.6 var(--f-label); letter-spacing: .06em; }
+</style>
+</head>
+<body>
+
+<header class="board-top">
+  <h1 class="board-title">桌面头部样式方案 <em>PB-HEAD-01</em></h1>
+  <p class="board-sub">
+    现状问题：窗口标题栏与下方命令条各有一枚 <b>「L」品牌标</b>，
+    同一窗口里重复两次，像是两个产品的 chrome 叠在一起。
+    标题栏职责应是「系统窗口 chrome」，命令条才是「产品工作条」——
+    品牌只出现一次，放在工作条一侧。
+  </p>
+  <div class="chip-row">
+    <span class="chip bad">现状：双 L 重复</span>
+    <span class="chip info">品牌只留一处</span>
+    <span class="chip">标题栏 / 工作条 分工</span>
+    <span class="chip ok">推荐方案 A</span>
+  </div>
+</header>
+
+<main class="board">
+
+  <!-- 现状 -->
+  <section class="sec">
+    <div class="sec-h"><h2>1 · 现状</h2><span>CURRENT</span></div>
+    <div class="frame">
+      <div class="frame-cap"><b>标题栏 + 命令条</b> — 两处 L 标，视觉重复</div>
+      <div class="demo">
+        <div class="now-title">
+          <span class="mark sm">L</span>
+          <span class="t">PacketBoat · 局域网投递站</span>
+          <div class="win-btns"><span>⌖</span><span>—</span><span>▢</span><span class="close">✕</span></div>
+        </div>
+        <div class="now-cmd">
+          <span class="mark">L</span>
+          <span class="device">JAY</span>
+          <span class="pill on"><i></i>运行中</span>
+          <span class="url-box">http://10.80.40.166:8081<span class="acts"><span>复制</span><span>↗</span></span></span>
+          <span class="code-chip">664664</span>
+          <span style="flex:1"></span>
+          <span class="btn-power">◉ 停止服务</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 方案 A -->
+  <section class="sec opt">
+    <div class="sec-h"><h2>2 · 方案 A：窗口 chrome / 工作条 分离</h2><span>RECOMMENDED</span></div>
+    <h3><span class="tag rec">推荐</span></h3>
+    <p>
+      标题栏去掉品牌标与产品长标题，只保留可拖拽空白 + 系统按钮（可加轻量文字「PacketBoat」）。
+      命令条成为唯一品牌位：L 标 + 设备名 + 状态，信息结构不变。
+      两层深色带用边框/明度微差区分，不再是「两个同样的产品栏」。
+    </p>
+    <div class="frame">
+      <div class="frame-cap"><b>A · 纯 chrome 标题栏</b>（推荐）— L 只在工作条</div>
+      <div class="demo">
+        <div class="a-title">
+          <span class="t">PacketBoat</span>
+          <div class="win-btns"><span>⌖</span><span>—</span><span>▢</span><span class="close">✕</span></div>
+        </div>
+        <div class="a-cmd">
+          <span class="mark">L</span>
+          <div class="left">
+            <span class="device">JAY</span>
+            <span class="sub">局域网投递站</span>
+            <span class="pill on"><i></i>运行中</span>
+          </div>
+          <span class="url-box">http://10.80.40.166:8081<span class="acts"><span>复制</span><span>↗</span></span></span>
+          <span class="code-chip">664664</span>
+          <span style="flex:1"></span>
+          <span class="btn-power">◉ 停止服务</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 方案 B -->
+  <section class="sec opt">
+    <div class="sec-h"><h2>3 · 方案 B：合并为一条系统+命令条</h2><span>MERGED</span></div>
+    <h3><span class="tag alt">备选 · 更省纵向空间</span></h3>
+    <p>
+      标题栏与命令条合成一条：左 = 字标 PacketBoat + 设备 + 状态，
+      中 = 地址/配对码，右 = 电源 + 窗口控件。高度约 56px，首屏多出约 40px。
+      代价：拖拽区与业务按钮同条，需仔细划分可拖拽空白；窗口控件与「停止服务」距离要拉开。
+    </p>
+    <div class="frame">
+      <div class="frame-cap"><b>B · 单条合并</b> — 无重复标，最省高度</div>
+      <div class="demo">
+        <div class="b-merge">
+          <span class="wordmark">PacketBoat</span>
+          <span class="device">JAY</span>
+          <span class="pill on"><i></i>运行中</span>
+          <span class="url-box">http://10.80.40.166:8081<span class="acts"><span>复制</span><span>↗</span></span></span>
+          <span class="code-chip">664664</span>
+          <span style="flex:1"></span>
+          <span class="btn-power solid">◉ 停止服务</span>
+          <div class="win-btns"><span>⌖</span><span>—</span><span>▢</span><span class="close">✕</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 方案 C -->
+  <section class="sec opt">
+    <div class="sec-h"><h2>4 · 方案 C：弱化标题栏 + 命令条改「工作台」</h2><span>WORKBENCH</span></div>
+    <h3><span class="tag alt">备选 · 产品感更强</span></h3>
+    <p>
+      标题栏压到 36px、更暗、仅系统字与控件。命令条左侧增加轻量分段
+      （共享清单 / 连接——目前单页可只作状态区，预留多视图）。
+      适合以后有「传输历史」等分页时；现阶段可能略重。
+    </p>
+    <div class="frame">
+      <div class="frame-cap"><b>C · 弱 chrome + 工作台条</b></div>
+      <div class="demo">
+        <div class="c-title">
+          <span class="t">PacketBoat</span>
+          <div class="win-btns"><span>⌖</span><span>—</span><span>▢</span><span class="close">✕</span></div>
+        </div>
+        <div class="c-cmd">
+          <span class="mark">L</span>
+          <div class="c-tabs">
+            <span class="active">共享清单</span>
+            <span>连接</span>
+          </div>
+          <span class="device">JAY</span>
+          <span class="pill on"><i></i>运行中</span>
+          <span class="url-box">10.80.40.166:8081<span class="acts"><span>复制</span></span></span>
+          <span class="code-chip">664664</span>
+          <span style="flex:1"></span>
+          <span class="btn-power">◉ 停止服务</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 对比 -->
+  <section class="sec">
+    <div class="sec-h"><h2>5 · 对比</h2><span>SPEC</span></div>
+    <table class="cmp">
+      <thead>
+        <tr><th>项</th><th>A 分离 chrome</th><th>B 单条合并</th><th>C 工作台</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>品牌标重复</b></td><td class="yes">解决</td><td class="yes">解决</td><td class="yes">解决</td></tr>
+        <tr><td><b>改动范围</b></td><td>标题栏文案/图标 + 命令条左侧</td><td>两组件合并重构</td><td>标题栏 + 命令条信息架构</td></tr>
+        <tr><td><b>纵向占用</b></td><td>40+64 = 104px</td><td class="yes">约 56px</td><td>36+64 = 100px</td></tr>
+        <tr><td><b>拖拽区</b></td><td class="yes">标题栏整条安全</td><td class="no">需与按钮分区</td><td class="yes">标题栏整条</td></tr>
+        <tr><td><b>与系统窗口习惯</b></td><td class="yes">接近常见桌面应用</td><td>少见，偏工具条</td><td>接近 VS Code 类</td></tr>
+        <tr><td><b>后续扩展</b></td><td>一般</td><td>差（一条已满）</td><td class="yes">分段可扩传输历史等</td></tr>
+      </tbody>
+    </table>
+    <div class="note-box">
+      <b>推荐 A：</b>改动小、分工清晰、拖拽与误点风险最低。
+      标题栏只留轻量字标（可选去掉 L）；命令条保留 L + 设备名 +「局域网投递站」副标。
+      若你更在意首屏行数，再选 B；若明确要做多视图，选 C。
+    </div>
+  </section>
+
+</main>
+
+<footer class="board-foot">
+  PB-HEAD-01 · 设计方案阶段 · 确认后改 WindowTitleBar.vue / DesktopHeader.vue
+</footer>
+
+</body>
+</html>
