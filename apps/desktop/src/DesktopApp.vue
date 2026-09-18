@@ -18,6 +18,19 @@ import { useUpdater } from "@/composables/useUpdater";
 
 const desktop = useDesktopHost();
 const updater = useUpdater();
+
+function formatUpdateDate(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 onMounted(() => {
   desktop.initialize();
   updater.checkForUpdate();
@@ -79,38 +92,8 @@ onMounted(() => {
       <main>
         <div
           v-if="
-            updater.status.value === 'available' ||
-            updater.status.value === 'downloading'
+            updater.status.value === 'error'
           "
-          class="update-strip"
-          role="status">
-          <Download :size="16" />
-          <span>发现新版本 v{{ updater.updateVersion.value }}</span>
-          <button
-            type="button"
-            class="update-install"
-            :disabled="updater.status.value === 'downloading'"
-            @click="updater.install">
-            <span>
-              {{
-                updater.status.value === "downloading"
-                  ? `下载中 ${updater.progressPercent.value}%`
-                  : "安装并重启"
-              }}
-            </span>
-          </button>
-          <button
-            v-if="updater.status.value === 'available'"
-            type="button"
-            class="strip-close"
-            aria-label="忽略此更新"
-            @click="updater.dismiss">
-            <X :size="14" />
-          </button>
-        </div>
-
-        <div
-          v-else-if="updater.status.value === 'error'"
           class="error-strip"
           role="alert">
           <AlertTriangle :size="16" />
@@ -198,6 +181,13 @@ onMounted(() => {
           <span class="footer-note">文件通过本机局域网直达 · 无云端中转</span>
           <span class="footer-spacer" />
           <button
+            v-if="updater.status.value === 'available'"
+            type="button"
+            class="footer-action"
+            @click="updater.openDialog">
+            可更新至 v{{ updater.updateVersion.value }}
+          </button>
+          <button
             type="button"
             class="footer-action"
             :disabled="
@@ -209,6 +199,95 @@ onMounted(() => {
           </button>
         </div>
       </footer>
+    </div>
+
+    <!-- 更新信息弹窗：展示版本号 / 更新说明 / 下载进度 -->
+    <div
+      v-if="updater.dialogOpen.value"
+      class="update-dialog-backdrop"
+      role="presentation"
+      @click.self="updater.dismissDialog">
+      <section
+        class="update-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="update-dialog-title">
+        <header class="update-dialog-head">
+          <div class="update-dialog-icon" aria-hidden="true">
+            <Download :size="20" />
+          </div>
+          <div class="update-dialog-titles">
+            <h2 id="update-dialog-title">
+              发现新版本 v{{ updater.updateVersion.value }}
+            </h2>
+            <p class="update-dialog-meta">
+              <span v-if="updater.currentVersion.value">
+                当前 v{{ updater.currentVersion.value }}
+              </span>
+              <span
+                v-if="updater.currentVersion.value && updater.updateDate.value"
+                aria-hidden="true"
+                >·</span
+              >
+              <span v-if="updater.updateDate.value">{{
+                formatUpdateDate(updater.updateDate.value)
+              }}</span>
+            </p>
+          </div>
+          <button
+            v-if="updater.status.value === 'available'"
+            type="button"
+            class="update-dialog-close"
+            aria-label="稍后再说"
+            @click="updater.dismissDialog">
+            <X :size="16" />
+          </button>
+        </header>
+
+        <div class="update-dialog-body">
+          <p v-if="!updater.hasNotes.value" class="update-notes-empty">
+            安装包已就绪，可立即下载并重启应用完成更新。
+          </p>
+          <div v-else class="update-notes" role="region" aria-label="更新说明">
+            <div class="update-notes-label">更新说明</div>
+            <div class="update-notes-content">
+              {{ updater.updateNotes.value }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="updater.status.value === 'downloading'" class="update-progress">
+          <div class="update-progress-track">
+            <div
+              class="update-progress-bar"
+              :style="{ width: `${updater.progressPercent.value}%` }" />
+          </div>
+          <span class="update-progress-text"
+            >下载中 {{ updater.progressPercent.value }}%</span
+          >
+        </div>
+
+        <footer class="update-dialog-foot">
+          <button
+            v-if="updater.status.value === 'available'"
+            type="button"
+            class="update-later"
+            @click="updater.dismissDialog">
+            稍后再说
+          </button>
+          <button
+            type="button"
+            class="update-install"
+            :disabled="updater.status.value === 'downloading'"
+            @click="updater.install">
+            {{
+              updater.status.value === "downloading"
+                ? `下载中 ${updater.progressPercent.value}%`
+                : "安装并重启"
+            }}
+          </button>
+        </footer>
+      </section>
     </div>
   </div>
 
@@ -423,6 +502,183 @@ footer {
   transition:
     opacity 0.25s ease,
     transform 0.25s ease;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* —— 更新信息弹窗 —— */
+.update-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(22 28 20 / 48%);
+  backdrop-filter: blur(3px);
+}
+.update-dialog {
+  width: min(480px, 100%);
+  max-height: min(560px, calc(100dvh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--dock);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgb(22 28 20 / 35%);
+}
+.update-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--dock-0);
+}
+.update-dialog-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--acid);
+  color: var(--ink);
+}
+.update-dialog-titles {
+  min-width: 0;
+  flex: 1;
+}
+.update-dialog-titles h2 {
+  margin: 0;
+  font: 700 17px/1.25 var(--font-display);
+  letter-spacing: 0.01em;
+}
+.update-dialog-meta {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font: 550 12px/1.4 var(--font-mono);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.update-dialog-close {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.update-dialog-close:hover {
+  background: rgb(31 39 28 / 8%);
+  color: var(--ink);
+}
+.update-dialog-body {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  padding: 14px 18px 8px;
+}
+.update-notes-empty {
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.update-notes {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.update-notes-label {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--dock-0);
+  color: var(--muted);
+  font: 650 11px/1 var(--font-label);
+  letter-spacing: 0.1em;
+}
+.update-notes-content {
+  padding: 12px 14px 14px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink-2);
+}
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 4px;
+}
+.update-progress-track {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(31 39 28 / 10%);
+}
+.update-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--acid-deep);
+  transition: width 0.2s ease;
+}
+.update-progress-text {
+  flex: none;
+  color: var(--muted);
+  font: 600 12px/1 var(--font-mono);
+}
+.update-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--dock-0);
+}
+.update-later {
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: 650 13px/1 var(--font-label);
+}
+.update-later:hover {
+  background: rgb(31 39 28 / 5%);
+}
+.update-dialog .update-install {
+  min-height: 38px;
+  margin: 0;
+  padding: 0 18px;
+  border: 1px solid var(--ink);
+  border-radius: 9px;
+  background: var(--acid);
+  color: var(--ink);
+  cursor: pointer;
+  font: 700 13.5px/1 var(--font-label);
+  letter-spacing: 0.02em;
+}
+.update-dialog .update-install:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.update-dialog .update-install:not(:disabled):hover {
+  background: var(--acid-hi, #e6ff85);
 }
 .toast-leave-active {
   transition:

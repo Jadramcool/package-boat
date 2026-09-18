@@ -66,9 +66,24 @@ jobs:
           $exe = $assets[0]
           $signature = (Get-Content "$($exe.FullName).sig" -Raw).Trim()
           $downloadUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:GITHUB_REF_NAME/$($exe.Name)"
+
+          # 从 CHANGELOG.md 提取该版本的更新说明，供桌面端更新弹窗展示
+          $notes = "PacketBoat $version"
+          $changelogPath = "CHANGELOG.md"
+          if (Test-Path $changelogPath) {
+            $changelog = Get-Content $changelogPath -Raw -Encoding utf8
+            $pattern = "(?ms)^## \[" + [regex]::Escape($version) + "\][^\n]*\n(.*?)(?=^## \[|\z)"
+            if ($changelog -match $pattern) {
+              $section = $Matches[1].Trim()
+              if ($section.Length -gt 0) {
+                $notes = $section
+              }
+            }
+          }
+
           $manifest = [ordered]@{
             version = $version
-            notes = "PacketBoat $version"
+            notes = $notes
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
