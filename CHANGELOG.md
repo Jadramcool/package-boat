@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-18
+
 ### Added
 
 - 桌面端「共享目录内全部文件」开关：开启后接收目录顶层文件与文件夹会出现在共享清单，便于整夹共享；默认关闭。
@@ -61,5 +63,6 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Jadramcool/package-boat/releases/tag/v0.1.0
