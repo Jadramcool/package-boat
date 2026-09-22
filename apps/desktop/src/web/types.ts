@@ -5,6 +5,8 @@ export interface ServiceInfo {
   requires_auth: boolean
   max_upload_bytes: number
   version: string
+  /** 下载专用端口；存在时下载 URL 使用该端口，与页面连接池分离。 */
+  download_port?: number | null
 }
 
 export interface SessionStatus {
@@ -19,6 +21,22 @@ export interface SharedFile {
   source_type: SourceType
   available: boolean
   is_dir: boolean
+  download_count?: number
+}
+
+export type FileSortKey =
+  | 'name'
+  | 'size'
+  | 'type'
+  | 'source'
+  | 'modified'
+  | 'downloads'
+
+export type FileSortDirection = 'asc' | 'desc'
+
+export interface FileSortState {
+  key: FileSortKey
+  direction: FileSortDirection
 }
 
 export interface FileListResponse {

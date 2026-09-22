@@ -6,6 +6,16 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	getState: () => __TAURI_INVOKE<StatePayload_Serialize>("get_state"),
+	/**  当前已连接/已配对设备（服务未运行时返回空列表）。 */
+	getConnectedDevices: () => __TAURI_INVOKE<ConnectedDevice[]>("get_connected_devices"),
+	/**  当前活跃传输任务（桌面端「传输中」实时监控）。 */
+	getActiveTransfers: () => __TAURI_INVOKE<ActiveTransfer[]>("get_active_transfers"),
+	/**  主动停止一个传输任务（从列表移除，并中止对应下载流）。 */
+	cancelTransfer: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cancel_transfer", { id })),
+	/**  暂停传输任务。 */
+	pauseTransfer: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("pause_transfer", { id })),
+	/**  继续传输任务。 */
+	resumeTransfer: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("resume_transfer", { id })),
 	/**  原位共享一批文件（来自拖拽或选择），返回本次新增的条目。 */
 	addLinkedFiles: (paths: string[]) => typedError<Item[], AppError>(__TAURI_INVOKE("add_linked_files", { paths })),
 	/**  弹出文件选择对话框并原位共享所选文件。 */
@@ -46,11 +56,55 @@ export const events = {
 };
 
 /* Types */
+/**  桌面端「传输中」一条任务。 */
+export type ActiveTransfer = {
+	id: string,
+	name: string,
+	kind: TransferKind,
+	/**  来源设备 IP（未知时为空字符串）。 */
+	peer_ip: string,
+	done: number,
+	total: number | null,
+	/**  估算速度（字节/秒）。 */
+	speed_bps: number,
+	/**  进度百分比 0–100；总大小未知时为 `None`。 */
+	progress: number | null,
+	/**  是否处于暂停（流挂起，未取消）。 */
+	paused: boolean,
+	started_at: string,
+	updated_at: string,
+};
+
 /**
  *  桌面端命令错误。
  *  `Serialize` 输出纯字符串；`specta(transparent)` 让生成的 TS 类型同为 `string`。
  */
 export type AppError = string;
+
+/**  桌面端展示的已连接设备。 */
+export type ConnectedDevice = {
+	/**  展示用短 ID（不暴露完整会话令牌）。 */
+	id: string,
+	ip: string,
+	user_agent: string,
+	device_label: string,
+	auth_mode: DeviceAuthMode,
+	paired_at: string,
+	last_seen: string,
+	/**  会话过期时间；免配对 peer 为最近活动 + PEER_TTL。 */
+	expires_at: string,
+	/**  当前仍算「已连接」（本列表只返回 true 的条目）。 */
+	online: boolean,
+	/**  是否仍有活跃长连接（SSE 等）。 */
+	connected: boolean,
+};
+
+/**  设备接入方式。 */
+export type DeviceAuthMode = 
+/**  使用六位配对码建立的会话。 */
+"paired" | 
+/**  免配对模式下的匿名访问。 */
+"anonymous";
 
 /**  服务端错误提示（设置、目录表或服务生命周期失败时）。 */
 export type ErrorNotice = string;
@@ -66,6 +120,8 @@ export type HostState_Deserialize = {
 	/**  带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。 */
 	addresses: LocalAddress[],
 	access_code: string,
+	/**  下载专用端口（与浏览端口分离，浏览器连接池互不挤占）。 */
+	download_port: number | null,
 	error: string | null,
 };
 
@@ -77,6 +133,8 @@ export type HostState_Serialize = {
 	/**  带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。 */
 	addresses: LocalAddress[],
 	access_code: string,
+	/**  下载专用端口（与浏览端口分离，浏览器连接池互不挤占）。 */
+	download_port: number | null,
 	error?: string | null,
 };
 
@@ -93,6 +151,8 @@ export type Item = {
 	available: boolean,
 	/**  是否为文件夹（共享文件夹时下载打包为 zip）。旧数据无此字段，默认 false。 */
 	is_dir?: boolean,
+	/**  下载次数；由 catalog 路径计数表注入，默认 0。 */
+	download_count?: number,
 };
 
 /**  单个候选访问地址及其可达性元信息。 */
@@ -181,6 +241,8 @@ export type StatePayload_Deserialize = {
 	settings: Settings_Deserialize,
 	items: Item[],
 	version: string,
+	/**  已连接/已配对设备（服务未运行时为空）。 */
+	devices: ConnectedDevice[],
 };
 
 /**  返回给前端的完整状态快照（与 Go 版 `DesktopState` 字段一致）。 */
@@ -189,18 +251,27 @@ export type StatePayload_Serialize = {
 	settings: Settings_Serialize,
 	items: Item[],
 	version: string,
+	/**  已连接/已配对设备（服务未运行时为空）。 */
+	devices: ConnectedDevice[],
 };
 
 /**  操作成功提示（共享文件、清空清单等）。 */
 export type SuccessNotice = string;
 
-/**  传输进度快照（桌面端序列化为 JSON）。 */
+/**  传输方向。 */
+export type TransferKind = 
+/**  远程设备上传到本机。 */
+"upload" | 
+/**  远程设备从本机下载。 */
+"download";
+
+/**  传输进度快照（桌面端序列化为 JSON，任务栏进度条）。 */
 export type TransferProgress = {
 	/**  是否有传输正在进行。 */
 	active: boolean,
-	/**  已完成字节数。 */
+	/**  已完成字节数（所有活跃任务之和）。 */
 	done: number,
-	/**  总字节数（`None` 表示未知，如 multipart 上传无明确总大小）。 */
+	/**  总字节数（任一任务未知时为 `None`）。 */
 	total: number | null,
 };
 

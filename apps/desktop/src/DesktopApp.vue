@@ -6,8 +6,10 @@ import {
   LoaderCircle,
   X,
 } from "@lucide/vue";
-import { onMounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import ConnectionSettings from "@/components/ConnectionSettings.vue";
+import ConnectedDevices from "@/components/ConnectedDevices.vue";
+import ActiveTransfers from "@/components/ActiveTransfers.vue";
 import DesktopFileList from "@/components/DesktopFileList.vue";
 import DesktopHeader from "@/components/DesktopHeader.vue";
 import StorageSettings from "@/components/StorageSettings.vue";
@@ -31,9 +33,43 @@ function formatUpdateDate(value: string): string {
   });
 }
 
+/** 桌面端：锁定页面级滚动，仅内容区内部滚动（顶栏/页脚固定）。 */
+function lockPageScroll(): void {
+  const html = document.documentElement
+  const body = document.body
+  html.style.overflow = 'hidden'
+  html.style.height = '100%'
+  body.style.overflow = 'hidden'
+  body.style.height = '100%'
+  const app = document.getElementById('app')
+  if (app) {
+    app.style.height = '100%'
+    app.style.overflow = 'hidden'
+  }
+}
+
+function unlockPageScroll(): void {
+  const html = document.documentElement
+  const body = document.body
+  html.style.overflow = ''
+  html.style.height = ''
+  body.style.overflow = ''
+  body.style.height = ''
+  const app = document.getElementById('app')
+  if (app) {
+    app.style.height = ''
+    app.style.overflow = ''
+  }
+}
+
 onMounted(() => {
+  lockPageScroll();
   desktop.initialize();
   updater.checkForUpdate();
+});
+
+onUnmounted(() => {
+  unlockPageScroll();
 });
 </script>
 
@@ -90,28 +126,7 @@ onMounted(() => {
       </div>
 
       <main>
-        <div
-          v-if="
-            updater.status.value === 'error'
-          "
-          class="error-strip"
-          role="alert">
-          <AlertTriangle :size="16" />
-          <span>{{ updater.message.value || "更新检查失败，可稍后重试" }}</span>
-          <button
-            type="button"
-            class="strip-retry"
-            @click="updater.checkForUpdate(false)">
-            <span>重试</span>
-          </button>
-          <button
-            type="button"
-            class="strip-close"
-            aria-label="关闭更新提示"
-            @click="updater.dismiss">
-            <X :size="14" />
-          </button>
-        </div>
+        <!-- 更新检查/安装失败：仅 toast（见 toast-stack），不占用内容区横幅 -->
 
         <div
           v-if="desktop.errorMessage.value || desktop.state.value.host.error"
@@ -161,6 +176,16 @@ onMounted(() => {
               @select-address="desktop.selectAccessURL"
               @toggle-auto-pair="desktop.setAutoPairByQR"
               @toggle-pairing="desktop.setPairingRequired" />
+            <ActiveTransfers
+              :transfers="desktop.transfers.value"
+              :devices="desktop.devices.value"
+              :running="desktop.state.value.host.running"
+              @cancel="desktop.cancelTransfer"
+              @pause="desktop.pauseTransfer"
+              @resume="desktop.resumeTransfer" />
+            <ConnectedDevices
+              :devices="desktop.devices.value"
+              :running="desktop.state.value.host.running" />
             <StorageSettings
               :settings="desktop.state.value.settings"
               :busy="desktop.busy.value === 'directory'"
@@ -301,8 +326,10 @@ onMounted(() => {
 <style scoped>
 .desktop-app {
   height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 /* 命令条通栏后，shell 只需承担内容区的呼吸感——14px 与列间距、卡内边距同一节奏 */
 /* shell 不给 bottom padding：页脚必须贴窗口底边，否则会被垫高 */
@@ -701,16 +728,20 @@ footer {
   grid-template-columns: minmax(0, 1fr) 336px;
   gap: 14px;
   align-items: stretch;
+  overflow: hidden;
 }
 .desktop-file-list {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 .side-panel {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;

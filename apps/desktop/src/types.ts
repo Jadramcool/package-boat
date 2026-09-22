@@ -4,7 +4,14 @@
 //    故 urls/items 以 readonly 数组声明（可变 → 只读天然兼容）。
 // 2) 序列化/反序列化 union（*_Serialize | *_Deserialize）会让可选字段
 //    泄漏到读取侧，桌面端展示统一使用 Serialize 变体。
-import type { Item, LocalAddress, Settings_Serialize, StatePayload_Serialize } from './bindings'
+import type {
+  ActiveTransfer,
+  ConnectedDevice,
+  Item,
+  LocalAddress,
+  Settings_Serialize,
+  StatePayload_Serialize,
+} from './bindings'
 
 export type {
   SourceType,
@@ -17,9 +24,15 @@ export type {
   AppError,
   ErrorNotice,
   SuccessNotice,
+  ConnectedDevice,
+  DeviceAuthMode,
+  ActiveTransfer,
+  TransferKind,
 } from './bindings'
 
 export type DesktopItem = Item
+export type DesktopDevice = ConnectedDevice
+export type DesktopTransfer = ActiveTransfer
 
 export type DesktopHostState = Omit<StatePayload_Serialize['host'], 'urls' | 'addresses'> & {
   urls: readonly string[]
@@ -33,4 +46,5 @@ export type DesktopState = {
   settings: DesktopSettings
   items: readonly DesktopItem[]
   version: string
+  devices: readonly DesktopDevice[]
 }

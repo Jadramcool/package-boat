@@ -44,6 +44,11 @@ mod tests {
         let builder = Builder::<tauri::Wry>::new()
             .commands(collect_commands![
                 commands::get_state,
+                commands::get_connected_devices,
+                commands::get_active_transfers,
+                commands::cancel_transfer,
+                commands::pause_transfer,
+                commands::resume_transfer,
                 commands::add_linked_files,
                 commands::choose_linked_files,
                 commands::unshare,
@@ -109,6 +114,11 @@ pub fn run() {
     let builder = Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             commands::get_state,
+            commands::get_connected_devices,
+            commands::get_active_transfers,
+            commands::cancel_transfer,
+            commands::pause_transfer,
+            commands::resume_transfer,
             commands::add_linked_files,
             commands::choose_linked_files,
             commands::unshare,

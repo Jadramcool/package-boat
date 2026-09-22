@@ -11,7 +11,7 @@ use crate::CATALOG_VERSION;
 use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
@@ -53,6 +53,10 @@ pub struct Item {
     /// 是否为文件夹（共享文件夹时下载打包为 zip）。旧数据无此字段，默认 false。
     #[serde(default)]
     pub is_dir: bool,
+    /// 下载次数；由 catalog 路径计数表注入，默认 0。
+    #[serde(default)]
+    #[cfg_attr(feature = "specta", specta(type = u32))]
+    pub download_count: u32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,6 +66,9 @@ struct PersistedCatalog {
     /// 用户从清单移除过的接收目录路径（规范化 key）。只隐藏，不删盘。
     #[serde(default)]
     hidden_inbox: Vec<String>,
+    /// 下载次数：规范化路径 key → 累计次数（覆盖 catalog 与 inbox 条目）。
+    #[serde(default)]
+    download_counts: HashMap<String, u32>,
 }
 
 /// 共享目录表存储。`path` 为空时仅内存操作（测试用）。
@@ -74,6 +81,8 @@ pub struct Catalog {
     inbox_dir: RwLock<Option<PathBuf>>,
     /// 已从清单移除、但仍在磁盘上的接收目录路径 key。
     hidden_inbox: RwLock<HashSet<String>>,
+    /// 下载次数（规范化路径 key → 次数），随 catalog.json 持久化。
+    download_counts: RwLock<HashMap<String, u32>>,
 }
 
 impl Catalog {
@@ -85,6 +94,7 @@ impl Catalog {
             list_cache: Mutex::new(None),
             inbox_dir: RwLock::new(None),
             hidden_inbox: RwLock::new(HashSet::new()),
+            download_counts: RwLock::new(HashMap::new()),
         };
         if !catalog.path.as_os_str().is_empty() {
             catalog.load()?;
@@ -150,7 +160,11 @@ impl Catalog {
 
     fn persist_hidden_snapshot(&self) {
         let items = self.inner.read().expect("catalog lock poisoned").clone();
-        if let Err(err) = self.save_locked(&items, &self.hidden_snapshot()) {
+        if let Err(err) = self.save_locked(
+            &items,
+            &self.hidden_snapshot(),
+            &self.download_counts_snapshot(),
+        ) {
             eprintln!("保存共享目录隐藏名单失败: {err}");
         }
     }
@@ -176,7 +190,11 @@ impl Catalog {
             }
         }
         let items = self.inner.read().expect("catalog lock poisoned").clone();
-        if let Err(err) = self.save_locked(&items, &self.hidden_snapshot()) {
+        if let Err(err) = self.save_locked(
+            &items,
+            &self.hidden_snapshot(),
+            &self.download_counts_snapshot(),
+        ) {
             self.hidden_inbox
                 .write()
                 .expect("hidden inbox lock poisoned")
@@ -228,6 +246,7 @@ impl Catalog {
                 added_at: Utc::now(),
                 available: true,
                 is_dir,
+                download_count: self.download_count_for_path(&absolute.to_string_lossy()),
             });
         }
 
@@ -244,7 +263,11 @@ impl Catalog {
             added.push(candidate);
         }
         if !added.is_empty() {
-            if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
+            if let Err(err) = self.save_locked(
+                &guard,
+                &self.hidden_snapshot(),
+                &self.download_counts_snapshot(),
+            ) {
                 guard.truncate(start_len);
                 return Err(err);
             }
@@ -287,9 +310,14 @@ impl Catalog {
             added_at: Utc::now(),
             available: true,
             is_dir: false,
+            download_count: self.download_count_for_path(&absolute.to_string_lossy()),
         };
         guard.push(item.clone());
-        if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
+        if let Err(err) = self.save_locked(
+            &guard,
+            &self.hidden_snapshot(),
+            &self.download_counts_snapshot(),
+        ) {
             guard.pop();
             return Err(err);
         }
@@ -326,8 +354,11 @@ impl Catalog {
                 .read()
                 .expect("hidden inbox lock poisoned")
                 .clone();
-            append_inbox_items(&mut result, &dir, &hidden);
+            let counts = self.download_counts_snapshot();
+            append_inbox_items(&mut result, &dir, &hidden, &counts);
         }
+        let counts = self.download_counts_snapshot();
+        apply_download_counts(&mut result, &counts);
         result.sort_by_key(|item| std::cmp::Reverse(item.added_at));
         *self.list_cache.lock().expect("list cache poisoned") =
             Some((Instant::now(), result.clone()));
@@ -375,9 +406,69 @@ impl Catalog {
             }
         }
         if changed_any {
+            apply_download_counts(items, &self.download_counts_snapshot());
             *cache = Some((Instant::now(), items.clone()));
         }
         changed_any
+    }
+
+    /// 记录一次成功下载，返回累计次数；条目不存在时返回 `None`。
+    pub fn record_download(&self, id: &str) -> Option<u32> {
+        let item = self.get(id)?;
+        let key = normalize_path_key(&item.local_path);
+        let next = {
+            let mut counts = self
+                .download_counts
+                .write()
+                .expect("download counts lock poisoned");
+            let entry = counts.entry(key.clone()).or_insert(0);
+            *entry = entry.saturating_add(1);
+            *entry
+        };
+        let counts_snapshot = self.download_counts_snapshot();
+        let mut items = self.inner.read().expect("catalog lock poisoned").clone();
+        apply_download_counts(&mut items, &counts_snapshot);
+        if let Err(err) = self.save_locked(&items, &self.hidden_snapshot(), &counts_snapshot) {
+            let mut counts = self
+                .download_counts
+                .write()
+                .expect("download counts lock poisoned");
+            if let Some(value) = counts.get_mut(&key) {
+                *value = value.saturating_sub(1);
+            }
+            eprintln!("保存下载次数失败: {err}");
+            return None;
+        }
+        // 同步列表缓存中的展示次数，避免 TTL 窗口内界面滞后。
+        {
+            let mut cache = self.list_cache.lock().expect("list cache poisoned");
+            if let Some((_, cached)) = cache.as_mut() {
+                apply_download_counts(cached, &counts_snapshot);
+            }
+        }
+        Some(next)
+    }
+
+    fn download_count_for_path(&self, path: &str) -> u32 {
+        let key = normalize_path_key(path);
+        self.download_counts
+            .read()
+            .expect("download counts lock poisoned")
+            .get(&key)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    fn download_counts_snapshot(&self) -> HashMap<String, u32> {
+        self.download_counts
+            .read()
+            .expect("download counts lock poisoned")
+            .clone()
+    }
+
+    fn inject_download_count(&self, mut item: Item) -> Item {
+        item.download_count = self.download_count_for_path(&item.local_path);
+        item
     }
 
     /// 强制下次 `list` 全量重建（周期性兜底或监听失败时）。
@@ -428,7 +519,7 @@ impl Catalog {
                         "not found",
                     ));
                 }
-                return Ok((item, metadata));
+                return Ok((self.inject_download_count(item), metadata));
             }
         }
         let guard = self.inner.read().expect("catalog lock poisoned");
@@ -444,7 +535,7 @@ impl Catalog {
                     "target unavailable",
                 ));
             }
-            return Ok((item.clone(), metadata));
+            return Ok((self.inject_download_count(item.clone()), metadata));
         }
         Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -459,11 +550,14 @@ impl Catalog {
                 if self.is_hidden_inbox(&item.local_path) {
                     return None;
                 }
-                return Some(item);
+                return Some(self.inject_download_count(item));
             }
         }
         let guard = self.inner.read().expect("catalog lock poisoned");
-        guard.iter().find(|item| item.id == id).cloned()
+        guard
+            .iter()
+            .find(|item| item.id == id)
+            .map(|item| self.inject_download_count(item.clone()))
     }
 
     /// 移除条目：只移出共享清单，**绝不删除磁盘文件**。
@@ -498,7 +592,11 @@ impl Catalog {
                 restored_hidden = true;
             }
         }
-        if let Err(err) = self.save_locked(&guard, &self.hidden_snapshot()) {
+        if let Err(err) = self.save_locked(
+            &guard,
+            &self.hidden_snapshot(),
+            &self.download_counts_snapshot(),
+        ) {
             guard.insert(index, removed.clone());
             if restored_hidden {
                 self.hidden_inbox
@@ -509,7 +607,7 @@ impl Catalog {
             return Err(err);
         }
         self.invalidate_list_cache();
-        Ok(removed)
+        Ok(self.inject_download_count(removed))
     }
 
     /// 接收目录内的条目（含远程上传）移出清单后必须进隐藏名单，否则开启目录扫描时会再次出现。
@@ -567,7 +665,7 @@ impl Catalog {
 
             let previous = std::mem::take(&mut *guard);
             cleared = previous.len();
-            if let Err(err) = self.save_locked(&[], &hidden) {
+            if let Err(err) = self.save_locked(&[], &hidden, &self.download_counts_snapshot()) {
                 *guard = previous;
                 for key in hidden_before {
                     hidden.remove(&key);
@@ -590,6 +688,7 @@ impl Catalog {
         let stored: PersistedCatalog =
             serde_json::from_slice(&content).map_err(|err| format!("解析共享目录表: {err}"))?;
         let hidden: HashSet<String> = stored.hidden_inbox.into_iter().collect();
+        let download_counts: HashMap<String, u32> = stored.download_counts;
         let mut items = match stored.version {
             CATALOG_VERSION => stored.items,
             1 => {
@@ -597,31 +696,44 @@ impl Catalog {
                 // 为避免升级后继续意外暴露整个目录，只迁移原位共享条目；磁盘文件不删除。
                 let mut items = stored.items;
                 items.retain(|item| item.source_type != SourceType::Received);
-                self.save_locked(&items, &hidden)?;
+                self.save_locked(&items, &hidden, &download_counts)?;
                 items
             }
             version => return Err(format!("不支持的共享目录表版本: {version}")),
         };
+        apply_download_counts(&mut items, &download_counts);
         *self.inner.write().expect("catalog lock poisoned") = std::mem::take(&mut items);
         *self
             .hidden_inbox
             .write()
             .expect("hidden inbox lock poisoned") = hidden;
+        *self
+            .download_counts
+            .write()
+            .expect("download counts lock poisoned") = download_counts;
         self.invalidate_list_cache();
         Ok(())
     }
 
-    /// 持久化目录表与 inbox 隐藏名单。调用方需自行持有/传入 hidden 快照，避免锁重入。
-    fn save_locked(&self, items: &[Item], hidden: &HashSet<String>) -> Result<(), String> {
+    /// 持久化目录表、inbox 隐藏名单与下载次数。调用方需自行持有/传入快照，避免锁重入。
+    fn save_locked(
+        &self,
+        items: &[Item],
+        hidden: &HashSet<String>,
+        download_counts: &HashMap<String, u32>,
+    ) -> Result<(), String> {
         if self.path.as_os_str().is_empty() {
             return Ok(());
         }
         let mut hidden_vec: Vec<String> = hidden.iter().cloned().collect();
         hidden_vec.sort();
+        let mut items = items.to_vec();
+        apply_download_counts(&mut items, download_counts);
         let persisted = PersistedCatalog {
             version: CATALOG_VERSION,
-            items: items.to_vec(),
+            items,
             hidden_inbox: hidden_vec,
+            download_counts: download_counts.clone(),
         };
         crate::settings::atomic_write_json(&self.path, &persisted)
     }
@@ -740,7 +852,19 @@ fn is_inbox_temp_name(name: &str) -> bool {
     name.starts_with('.') || name.starts_with(".packetboat-") || name.ends_with(".part")
 }
 
-fn append_inbox_items(result: &mut Vec<Item>, dir: &Path, hidden: &HashSet<String>) {
+fn apply_download_counts(items: &mut [Item], counts: &HashMap<String, u32>) {
+    for item in items.iter_mut() {
+        let key = normalize_path_key(&item.local_path);
+        item.download_count = counts.get(&key).copied().unwrap_or(0);
+    }
+}
+
+fn append_inbox_items(
+    result: &mut Vec<Item>,
+    dir: &Path,
+    hidden: &HashSet<String>,
+    download_counts: &HashMap<String, u32>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -785,6 +909,7 @@ fn append_inbox_items(result: &mut Vec<Item>, dir: &Path, hidden: &HashSet<Strin
             added_at: now,
             available: true,
             is_dir: file_type.is_dir(),
+            download_count: download_counts.get(&key).copied().unwrap_or(0),
         });
     }
 }
@@ -824,6 +949,7 @@ fn resolve_inbox_item(id: &str, receive_dir: &Path) -> Option<(Item, std::fs::Me
             added_at: Utc::now(),
             available: true,
             is_dir: file_type.is_dir(),
+            download_count: 0,
         },
         metadata,
     ))
@@ -1170,6 +1296,50 @@ mod tests {
             .list()
             .iter()
             .any(|entry| entry.local_path == item.local_path));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn download_counts_persist_for_linked_files() {
+        let root = temp_dir("download-count");
+        let file = root.join("share.bin");
+        std::fs::write(&file, b"payload").unwrap();
+        let catalog_path = root.join("catalog.json");
+        let catalog = Catalog::open(catalog_path.clone()).unwrap();
+        let added = catalog
+            .add_linked(&[file.to_string_lossy().into_owned()])
+            .unwrap();
+        assert_eq!(added[0].download_count, 0);
+        assert_eq!(catalog.record_download(&added[0].id), Some(1));
+        assert_eq!(catalog.record_download(&added[0].id), Some(2));
+        assert_eq!(catalog.list()[0].download_count, 2);
+
+        let reloaded = Catalog::open(catalog_path).unwrap();
+        assert_eq!(reloaded.list()[0].download_count, 2);
+        assert_eq!(reloaded.record_download(&added[0].id), Some(3));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn download_counts_cover_inbox_items() {
+        let root = temp_dir("download-count-inbox");
+        let file = root.join("local.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let catalog = Catalog::open(PathBuf::new()).unwrap();
+        catalog.set_inbox_dir(Some(root.clone()));
+        let item = catalog
+            .list()
+            .into_iter()
+            .find(|item| item.name == "local.txt")
+            .unwrap();
+        assert_eq!(item.download_count, 0);
+        assert_eq!(catalog.record_download(&item.id), Some(1));
+        let listed = catalog
+            .list()
+            .into_iter()
+            .find(|item| item.name == "local.txt")
+            .unwrap();
+        assert_eq!(listed.download_count, 1);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

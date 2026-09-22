@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
+  ArrowDown,
+  ArrowUp,
   FilePlus2,
   FolderUp,
   Inbox,
@@ -12,6 +14,13 @@ import {
 import DesktopFileRow from "@/components/DesktopFileRow.vue";
 import type { DesktopItem } from "@/types";
 import { formatBytes } from "@/utils/format";
+import {
+  DEFAULT_FILE_SORT,
+  type FileSortKey,
+  type FileSortState,
+  nextSortState,
+  sortFiles,
+} from "@/utils/fileSort";
 
 const props = defineProps<{
   items: readonly DesktopItem[];
@@ -31,9 +40,26 @@ const emit = defineEmits<{
   clear: [];
 }>();
 
+const sortState = ref<FileSortState>({ ...DEFAULT_FILE_SORT });
+
+const sortedItems = computed(() => sortFiles(props.items, sortState.value));
+
 const totalSize = computed(() =>
   formatBytes(props.items.reduce((total, item) => total + item.size, 0)),
 );
+
+const totalDownloads = computed(() =>
+  props.items.reduce((total, item) => total + (item.download_count ?? 0), 0),
+);
+
+function toggleSort(key: FileSortKey) {
+  sortState.value = nextSortState(sortState.value, key);
+}
+
+function sortIcon(key: FileSortKey) {
+  if (sortState.value.key !== key) return null;
+  return sortState.value.direction === "asc" ? ArrowUp : ArrowDown;
+}
 </script>
 
 <template>
@@ -65,7 +91,7 @@ const totalSize = computed(() =>
           {{ props.linkedCount }} · 远程接收 {{ props.receivedCount
           }}<template v-if="props.inboxCount">
             · 本地文件 {{ props.inboxCount }}</template
-          >
+          > · 下载 {{ totalDownloads }} 次
         </p>
       </div>
       <div class="list-tools">
@@ -108,16 +134,64 @@ const totalSize = computed(() =>
         <p>添加后，手机连上同一局域网即可下载。</p>
       </div>
       <template v-else>
-        <div class="table-header" aria-hidden="true">
-          <span>文件名</span>
-          <span class="size-column">大小</span>
-          <span class="date-column">修改时间</span>
-          <span class="source-column">来源</span>
-          <span>操作</span>
+        <div
+          class="table-header"
+          role="row"
+          aria-label="文件列表列头，点击可排序">
+          <button
+            type="button"
+            class="sort-header"
+            :class="{ active: sortState.key === 'name' }"
+            @click="toggleSort('name')">
+            <span>文件名</span>
+            <component :is="sortIcon('name')" v-if="sortIcon('name')" :size="12" />
+          </button>
+          <button
+            type="button"
+            class="sort-header size-column"
+            :class="{ active: sortState.key === 'size' }"
+            @click="toggleSort('size')">
+            <span>大小</span>
+            <component :is="sortIcon('size')" v-if="sortIcon('size')" :size="12" />
+          </button>
+          <button
+            type="button"
+            class="sort-header date-column"
+            :class="{ active: sortState.key === 'modified' }"
+            @click="toggleSort('modified')">
+            <span>修改时间</span>
+            <component :is="sortIcon('modified')" v-if="sortIcon('modified')" :size="12" />
+          </button>
+          <button
+            type="button"
+            class="sort-header source-column"
+            :class="{ active: sortState.key === 'source' }"
+            @click="toggleSort('source')">
+            <span>来源</span>
+            <component :is="sortIcon('source')" v-if="sortIcon('source')" :size="12" />
+          </button>
+          <button
+            type="button"
+            class="sort-header type-column"
+            :class="{ active: sortState.key === 'type' }"
+            title="按类型排序"
+            @click="toggleSort('type')">
+            <span>类型</span>
+            <component :is="sortIcon('type')" v-if="sortIcon('type')" :size="12" />
+          </button>
+          <button
+            type="button"
+            class="sort-header download-column"
+            :class="{ active: sortState.key === 'downloads' }"
+            @click="toggleSort('downloads')">
+            <span>下载</span>
+            <component :is="sortIcon('downloads')" v-if="sortIcon('downloads')" :size="12" />
+          </button>
+          <span class="actions-column">操作</span>
         </div>
         <ul class="file-list">
           <DesktopFileRow
-            v-for="item in props.items"
+            v-for="item in sortedItems"
             :key="item.id"
             :item="item"
             :busy="props.busy"
@@ -281,6 +355,8 @@ const totalSize = computed(() =>
    危险色只在 hover 悬停、即用户真的准备点下去时才出现。
    inline-flex 会覆盖基按钮的 grid/place-items，必须补 align/justify。 */
 .list-tools .clear-button {
+  /* 固定最小宽度 + 禁止换行：避免工具区变窄时「一键清空」折行撑高 */
+  min-width: 96px;
   width: auto;
   display: inline-flex;
   align-items: center;
@@ -288,7 +364,12 @@ const totalSize = computed(() =>
   gap: 7px;
   padding: 0 11px;
   color: var(--muted);
-  font: 650 12.5px var(--font-label);
+  font: 650 12.5px/1 var(--font-label);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.list-tools .clear-button span {
+  white-space: nowrap;
 }
 .list-tools .clear-button svg {
   flex: none;
@@ -340,19 +421,46 @@ const totalSize = computed(() =>
   z-index: 1;
   display: grid;
   grid-template-columns:
-    minmax(260px, 1.5fr) minmax(82px, 0.42fr) 152px minmax(100px, 0.48fr)
-    68px;
+    minmax(220px, 1.35fr) minmax(72px, 0.38fr) 132px minmax(88px, 0.42fr)
+    minmax(64px, 0.32fr) 64px 68px;
   align-items: center;
-  gap: 16px;
-  padding: 11px 16px;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.3;
 }
-.table-header span:last-child {
-  text-align: right;
+.sort-header,
+.actions-column {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.actions-column {
+  justify-content: flex-end;
+  cursor: default;
+}
+.sort-header svg {
+  flex: none;
+  display: block;
+}
+.sort-header:hover,
+.sort-header.active {
+  color: var(--ink);
+}
+.table-header .size-column,
+.table-header .download-column {
+  justify-content: flex-start;
 }
 .file-list {
   margin: 0;
@@ -388,8 +496,8 @@ const totalSize = computed(() =>
 
 @media (max-width: 1200px) {
   .table-header {
-    grid-template-columns: minmax(250px, 1fr) 90px 100px 68px;
-    gap: 16px;
+    grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 68px;
+    gap: 12px;
   }
   .date-column {
     display: none;
@@ -407,12 +515,13 @@ const totalSize = computed(() =>
     display: none;
   }
   .table-header {
-    grid-template-columns: minmax(250px, 1fr) 90px 68px;
+    grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 68px;
     gap: 12px;
     padding-right: 14px;
     padding-left: 14px;
   }
-  .source-column {
+  .source-column,
+  .type-column {
     display: none;
   }
 }
@@ -472,4 +581,3 @@ const totalSize = computed(() =>
   }
 }
 </style>
-

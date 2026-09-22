@@ -6,21 +6,26 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
   addLinkedFiles,
+  cancelTransfer as cancelTransferCommand,
   clearSharedFiles as clearSharedFilesCommand,
   chooseLinkedFiles,
   chooseReceiveDirectory as chooseReceiveDirectoryCommand,
   events,
+  getActiveTransfers,
+  getConnectedDevices,
   getState,
   getTransferProgress,
+  pauseTransfer as pauseTransferCommand,
   refreshAccessCode as refreshAccessCodeCommand,
   rescanReceiveDir as rescanReceiveDirCommand,
+  resumeTransfer as resumeTransferCommand,
   revealItem as revealItemCommand,
   setRequirePairing as setRequirePairingCommand,
   setShareReceiveDir as setShareReceiveDirCommand,
   toggleServer as toggleServerCommand,
   unshare as unshareCommand,
 } from '@/api'
-import type { DesktopState, LocalAddress } from '@/types'
+import type { DesktopDevice, DesktopState, DesktopTransfer, LocalAddress } from '@/types'
 
 const autoPairPreferenceKey = 'packetboat:auto-pair-by-qr'
 const alwaysOnTopPreferenceKey = 'packetboat:always-on-top'
@@ -45,6 +50,10 @@ function addressMetaOf(state: DesktopState | null): readonly LocalAddress[] {
 
 export function useDesktopHost() {
   const state = shallowRef<DesktopState | null>(null)
+  /** 已连接设备：独立轮询，保证关闭网页后能及时从列表消失。 */
+  const devices = shallowRef<readonly DesktopDevice[]>([])
+  /** 活跃传输任务：约 1 秒刷新，便于观察进度与速度。 */
+  const transfers = shallowRef<readonly DesktopTransfer[]>([])
   const loading = shallowRef(true)
   const busy = shallowRef('')
   const errorMessage = shallowRef('')
@@ -61,10 +70,74 @@ export function useDesktopHost() {
   let copyTimer = 0
   let noticeTimer = 0
   let progressTimer = 0
+  let pollTimer = 0
+  let stateTimer = 0
+
+  async function syncDevices() {
+    try {
+      devices.value = await getConnectedDevices()
+    }
+    catch {
+      // 服务未运行或瞬时失败时保留上一次快照
+    }
+  }
+
+  async function syncTransfers() {
+    try {
+      transfers.value = await getActiveTransfers()
+    }
+    catch {
+      // 服务未运行时保留上一次快照
+    }
+  }
+
+  /** 停止一个传输任务（下载流中止并从列表移除）。 */
+  async function cancelTransfer(id: string) {
+    // 乐观更新：先从列表拿掉，避免命令返回前看起来“没停掉”
+    transfers.value = transfers.value.filter(item => item.id !== id)
+    try {
+      await cancelTransferCommand(id)
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+    finally {
+      await syncTransfers()
+    }
+  }
+
+  async function pauseTransfer(id: string) {
+    try {
+      await pauseTransferCommand(id)
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+    finally {
+      await syncTransfers()
+    }
+  }
+
+  async function resumeTransfer(id: string) {
+    try {
+      await resumeTransferCommand(id)
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+    finally {
+      await syncTransfers()
+    }
+  }
+
+  async function refresh() {
+    state.value = await getState()
+  }
 
   const linkedCount = computed(() => state.value?.items.filter(item => item.source_type === 'linked').length ?? 0)
   const receivedCount = computed(() => state.value?.items.filter(item => item.source_type === 'received').length ?? 0)
   const inboxCount = computed(() => state.value?.items.filter(item => item.source_type === 'inbox').length ?? 0)
+  /** 已连接设备（来自专用轮询；服务未运行时为空）。 */
 
   /** 候选地址（带可达性元信息），已由后端按可达性排序。 */
   const addresses = computed<readonly LocalAddress[]>(() => addressMetaOf(state.value))
@@ -116,10 +189,28 @@ export function useDesktopHost() {
     void syncAlwaysOnTop()
     // 任务栏进度轮询：独立启动，确保即使事件监听失败也不会停摆
     progressTimer = window.setInterval(() => void syncTaskbarProgress(), 500)
+    // 设备列表每 2 秒刷新：页面关闭后 SSE 断开，应在数秒内从列表移除
+    pollTimer = window.setInterval(() => {
+      if (!loading.value) {
+        void syncDevices()
+        void syncTransfers()
+      }
+    }, 1000)
     try {
       await refresh()
+      await syncDevices()
+      await syncTransfers()
+      // 状态事件 + 轻量轮询：下载次数等不总会触发 Tauri 事件
+      stateTimer = window.setInterval(() => {
+        if (!loading.value)
+          void refresh()
+      }, 5000)
       // tauri-specta 类型安全事件：事件名与载荷由 Rust 侧 bindings 同步
-      cancelStateEvent = await events.stateChanged.listen(() => void refresh())
+      cancelStateEvent = await events.stateChanged.listen(() => {
+        void refresh()
+        void syncDevices()
+        void syncTransfers()
+      })
       cancelErrorEvent = await events.errorNotice.listen((event) => {
         errorMessage.value = typeof event.payload === 'string' ? event.payload : '服务端发生错误，请查看日志'
         void refresh()
@@ -173,10 +264,6 @@ export function useDesktopHost() {
     catch {
       // 轮询失败忽略（窗口可能已关闭）
     }
-  }
-
-  async function refresh() {
-    state.value = await getState()
   }
 
   async function chooseFiles() {
@@ -370,10 +457,14 @@ export function useDesktopHost() {
     window.clearTimeout(copyTimer)
     window.clearTimeout(noticeTimer)
     window.clearInterval(progressTimer)
+    window.clearInterval(pollTimer)
+    window.clearInterval(stateTimer)
   })
 
   return {
     state: readonly(state),
+    devices: readonly(devices),
+    transfers: readonly(transfers),
     loading: readonly(loading),
     busy: readonly(busy),
     errorMessage: readonly(errorMessage),
@@ -398,6 +489,9 @@ export function useDesktopHost() {
     shareReceiveDir,
     initialize,
     refresh,
+    cancelTransfer,
+    pauseTransfer,
+    resumeTransfer,
     chooseFiles,
     addDroppedFiles,
     unshare,

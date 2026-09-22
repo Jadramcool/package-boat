@@ -6,7 +6,7 @@ use crate::state::{
     build_state, emit_error, emit_notice, emit_state_changed, Desktop, StatePayload,
 };
 use packetboat_core::catalog::Item;
-use packetboat_core::progress::TransferProgress;
+use packetboat_core::progress::{ActiveTransfer, TransferProgress};
 use packetboat_core::settings::Settings;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
@@ -16,6 +16,15 @@ use tauri_plugin_dialog::DialogExt;
 #[specta::specta]
 pub fn get_state(state: State<'_, Desktop>) -> StatePayload {
     build_state(&state)
+}
+
+/// 当前已连接/已配对设备（服务未运行时返回空列表）。
+#[tauri::command]
+#[specta::specta]
+pub fn get_connected_devices(
+    state: State<'_, Desktop>,
+) -> Vec<packetboat_core::auth::ConnectedDevice> {
+    state.host.connected_devices()
 }
 
 /// 原位共享一批文件（来自拖拽或选择），返回本次新增的条目。
@@ -259,6 +268,34 @@ pub fn reveal_item(state: State<'_, Desktop>, id: String) -> Result<(), AppError
 #[specta::specta]
 pub fn get_transfer_progress(state: State<'_, Desktop>) -> TransferProgress {
     state.host.progress().snapshot()
+}
+
+/// 当前活跃传输任务（桌面端「传输中」实时监控）。
+#[tauri::command]
+#[specta::specta]
+pub fn get_active_transfers(state: State<'_, Desktop>) -> Vec<ActiveTransfer> {
+    state.host.active_transfers()
+}
+
+/// 主动停止一个传输任务（从列表移除，并中止对应下载流）。
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_transfer(state: State<'_, Desktop>, id: String) -> Result<bool, AppError> {
+    Ok(state.host.cancel_transfer(&id))
+}
+
+/// 暂停传输任务。
+#[tauri::command]
+#[specta::specta]
+pub fn pause_transfer(state: State<'_, Desktop>, id: String) -> Result<bool, AppError> {
+    Ok(state.host.pause_transfer(&id))
+}
+
+/// 继续传输任务。
+#[tauri::command]
+#[specta::specta]
+pub fn resume_transfer(state: State<'_, Desktop>, id: String) -> Result<bool, AppError> {
+    Ok(state.host.resume_transfer(&id))
 }
 
 /// 从任务栏拖入文件：直接把路径加入原位共享（非命令，供窗口事件调用）。

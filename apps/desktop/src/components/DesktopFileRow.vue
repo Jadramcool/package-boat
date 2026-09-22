@@ -42,6 +42,7 @@ const actionTitle = computed(() => {
         <div class="row-meta">
           <span>{{ props.item.is_dir ? '文件夹' : formatBytes(props.item.size) }}</span>
           <span>{{ formatDate(props.item.modified_at) }}</span>
+          <span>下载 {{ props.item.download_count ?? 0 }} 次</span>
           <span v-if="!props.item.available" class="source-badge missing">文件缺失</span>
           <span v-else class="source-badge" :class="props.item.source_type">{{ sourceLabel }}</span>
         </div>
@@ -55,6 +56,10 @@ const actionTitle = computed(() => {
       <span v-else class="source-badge" :class="props.item.source_type">
         {{ sourceLabel }}
       </span>
+    </div>
+    <div class="type-cell">{{ props.item.is_dir ? '文件夹' : fileExtension(props.item.name) }}</div>
+    <div class="download-cell" :title="`已下载 ${props.item.download_count ?? 0} 次`">
+      {{ props.item.download_count ?? 0 }}
     </div>
     <div class="row-actions">
       <button type="button" :disabled="!props.item.available || isBusy" title="在文件夹中查看" @click="emit('reveal', props.item.id)">
@@ -76,7 +81,7 @@ const actionTitle = computed(() => {
    单行再高会明显减少首屏行数。 */
 /* 日期列固定 152px 而非 fr 份额：日期文案长度固定（`2025年8月31日 23:33`），
    13.5px 等宽下约 130px，给 22px 余量。用 .55fr 会被文件名列抢走份额而截断。 */
-.desktop-file-row { display: grid; grid-template-columns: minmax(260px, 1.5fr) minmax(82px, .42fr) 152px minmax(100px, .48fr) 68px; align-items: center; gap: 16px; min-height: 54px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); transition: background 120ms ease; }
+.desktop-file-row { display: grid; grid-template-columns: minmax(220px, 1.35fr) minmax(72px, .38fr) 132px minmax(88px, .42fr) minmax(64px, .32fr) 64px 68px; align-items: center; gap: 12px; min-height: 54px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); transition: background 120ms ease; }
 .desktop-file-row:last-child { border-bottom: 0; }
 .desktop-file-row:hover { background: rgb(215 249 84 / 12%); }
 .desktop-file-row.missing { opacity: .72; }
@@ -97,7 +102,8 @@ const actionTitle = computed(() => {
 .file-main p { overflow: hidden; margin: 5px 0 0; color: var(--muted); font: 500 11.5px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .row-meta { display: none; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; color: var(--muted); font: 550 12px/1.3 var(--font-mono); }
 .row-meta .source-badge { font: 650 11px/1.35 var(--font-label); }
-.file-size, .file-date { overflow: hidden; color: var(--muted); font: 550 13.5px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.file-size, .file-date, .type-cell, .download-cell { overflow: hidden; color: var(--muted); font: 550 13.5px/1.35 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.download-cell { color: var(--ink); font-variant-numeric: tabular-nums; }
 .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .row-actions button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 7px; background: #fff; color: var(--ink); cursor: pointer; }
 .row-actions button:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
@@ -107,16 +113,16 @@ const actionTitle = computed(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1200px) {
-  .desktop-file-row { grid-template-columns: minmax(250px, 1fr) 90px 100px 68px; }
+  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 68px; }
   .file-date { display: none; }
 }
 @media (max-width: 900px) {
-  .desktop-file-row { grid-template-columns: minmax(250px, 1fr) 90px 68px; gap: 12px; padding: 8px 14px; }
-  .source-cell { display: none; }
+  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 68px; gap: 12px; padding: 8px 14px; }
+  .source-cell, .type-cell { display: none; }
 }
 @media (max-width: 640px) {
   .desktop-file-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 10px 13px; }
-  .file-size, .file-date, .source-cell { display: none; }
+  .file-size, .file-date, .source-cell, .type-cell, .download-cell { display: none; }
   .file-main { display: flex; flex-direction: column; min-width: 0; }
   .row-meta { display: flex; order: 2; }
   .file-main p { order: 3; margin-top: 5px; }

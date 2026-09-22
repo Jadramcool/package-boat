@@ -18,6 +18,8 @@ import type { SharedFile } from '../types'
 const props = defineProps<{
   file: SharedFile
   deleting: boolean
+  /** 下载基址，如 http://192.168.1.2:8082；空则用当前页面 origin。 */
+  downloadOrigin?: string
 }>()
 
 const emit = defineEmits<{
@@ -48,7 +50,10 @@ const sourceLabel = computed(() => {
     return '本地文件'
   return '远程接收'
 })
-const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.id)}/download`)
+const downloadURL = computed(() => {
+  // 同源下载（方案 C）：相对路径即可，避免跨端口
+  return `/api/files/${encodeURIComponent(props.file.id)}/download`
+})
 </script>
 
 <template>
@@ -65,10 +70,22 @@ const downloadURL = computed(() => `/api/files/${encodeURIComponent(props.file.i
         </span>
         <span v-if="!file.available" class="missing-label"><span>原文件已移动</span></span>
       </div>
-      <div class="file-meta"><span>{{ formatBytes(file.size) }}</span><span>{{ formatDate(file.modified) }}</span></div>
+      <div class="file-meta">
+        <span>{{ formatBytes(file.size) }}</span>
+        <span>{{ formatDate(file.modified) }}</span>
+        <span title="下载次数">下载 {{ file.download_count ?? 0 }} 次</span>
+      </div>
     </div>
     <div class="file-actions">
-      <a v-if="file.available" class="download-button" :href="downloadURL" :download="file.name" title="下载文件" aria-label="下载文件">
+      <!-- 直接用 <a> 指向下载端口：跨端口导航下载不受页面 CSP frame-src 限制 -->
+      <a
+        v-if="file.available"
+        class="download-button"
+        :href="downloadURL"
+        :download="file.name"
+        title="下载文件"
+        aria-label="下载文件"
+      >
         <Download :size="17" aria-hidden="true" /><span>下载</span>
       </a>
       <span v-else class="unavailable-button" aria-label="文件不可用">不可用</span>

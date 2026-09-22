@@ -119,6 +119,7 @@ async fn main() {
         catalog: Some(catalog.clone()),
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .expect("server");
 

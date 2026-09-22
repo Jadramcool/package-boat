@@ -8,6 +8,7 @@ pub mod appdata;
 pub mod assets;
 pub mod auth;
 pub mod catalog;
+pub mod download_slots;
 pub mod files;
 pub mod host;
 pub mod hub;

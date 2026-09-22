@@ -4,10 +4,34 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-20
+
+### Added
+
+- **文件列表多维排序**：桌面端共享清单与浏览器接收页文件架均可按文件名、大小、类型、来源、修改时间、下载次数排序；桌面列头可点切换升降序，网页端提供排序下拉与方向切换。
+- **已连接设备监控**：配对会话与免配对访问登记 IP、User-Agent、最近活动与长连接状态；设备名优先从 UA 提取 Android 机型（如 `PJZ110`），否则显示「系统 + 浏览器」；SSE 打开算「连接中」，页面关闭后自动从列表移除。
+- **下载次数**：仅在**完整下载完成后**累计并写入 `catalog.json`（路径键，含 inbox 本地扫描条目）；同一传输会话内并发 Range / 重复结束回调只计 **1 次**；中断、取消、HEAD、304 不计；列表展示「下载 N 次」，可按次数排序。
+- **桌面端实时传输监控**：侧栏「传输中」两行布局（标题 + 状态/操作），展示文件名、方向、进度、速度、设备名/IP；支持**暂停 / 继续 / 停止**；约 1 秒轮询 `get_active_transfers`。
+- **传输注册表 `TransferRegistry`**：多任务并行不互相覆盖；任务栏总进度仍由 `get_transfer_progress` 提供。
+- **下载并发保护（同端口）**：恢复 HTTP Range（可续传）；同一 IP 并发下载流上限（默认 3），超出返回 429；停止传输后约 20 秒冷却，避免浏览器 Range 重试把任务“复活”。
+- **API / 命令**：`GET /api/devices`、`GET /api/transfers`；Tauri 命令 `get_connected_devices`、`get_active_transfers`、`pause_transfer`、`resume_transfer`、`cancel_transfer`。
+
 ### Changed
 
-- 桌面端「检查更新」无论成功、无新版本或失败，都会给出可见提示。
-- 更新提示改为信息弹窗：展示新版本号、当前版本、发布日期与更新说明（来自 `latest.json` 的 notes，发布工作流会从 CHANGELOG 注入）。
+- 接收页下载链接与页面**同源同端口**（不使用下载专用端口），浏览器连接池策略更简单，防火墙只需放行主端口。
+- 「检查更新」失败改为 **toast** 提示，不再占用内容区横幅；约 4 秒自动消失。
+- 桌面布局：窗口非全屏时**禁止整页滚动**；顶栏与页脚固定，左侧清单与右侧设置栏各自内部滚动。
+- 传输中 / 已连接设备等长文案自动换行，不再被省略号截断。
+- 「一键清空」按钮固定最小宽度，避免文案折行。
+- 浏览器接收页对瞬时网络失败更宽容：中文提示、自动重连，降低大文件下载时的「Failed to fetch」干扰。
+- 设备列表与传输列表由桌面端低频轮询刷新，无需手动刷新网页。
+
+### Fixed
+
+- 大文件并行 Range 挤占同源连接导致接收页断线/报错的问题（限并发 + 同端口策略）。
+- 同一次下载被重复计入下载次数的问题。
+- 桌面端停止传输首次可能无效的问题（取消冷却 + 流内 `finished` 标志）。
+- 窗口缩小后整页连同页眉页脚一起滚动的问题。
 
 ## [0.3.0] - 2026-09-18
 
@@ -82,7 +106,8 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Jadramcool/package-boat/releases/tag/v0.1.0

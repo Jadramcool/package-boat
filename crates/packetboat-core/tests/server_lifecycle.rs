@@ -55,7 +55,10 @@ struct FilesResponse {
 async fn pair(client: &reqwest::Client, url: &str, code: &str) -> reqwest::Response {
     client
         .post(format!("{url}/api/session"))
-        .json(&serde_json::json!({ "code": code }))
+        .json(&serde_json::json!({
+            "code": code,
+            "device_label": "测试设备"
+        }))
         .send()
         .await
         .expect("pair request")
@@ -72,6 +75,7 @@ async fn file_lifecycle() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -169,6 +173,7 @@ async fn existing_receive_files_are_not_shared_on_startup() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -203,6 +208,7 @@ async fn static_app_and_security_headers() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
 
@@ -233,6 +239,7 @@ async fn static_asset_compression_and_caching() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
 
@@ -310,6 +317,7 @@ async fn linked_file_download_and_unshare_preserves_original() {
         catalog: Some(file_catalog.clone()),
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -346,6 +354,76 @@ async fn linked_file_download_and_unshare_preserves_original() {
 }
 
 #[tokio::test]
+async fn download_count_and_connected_devices_are_tracked() {
+    let receive_dir = temp_dir("devices-count");
+    let file_catalog =
+        Arc::new(Catalog::open(temp_dir("devices-count-catalog").join("catalog.json")).unwrap());
+    let original = receive_dir.join("note.txt");
+    std::fs::write(&original, "hello").unwrap();
+    let linked = file_catalog
+        .add_linked(&[original.to_string_lossy().into_owned()])
+        .unwrap();
+
+    let (url, code, server) = spawn(Config {
+        device_name: "test-station".into(),
+        storage_dir: receive_dir.clone(),
+        max_upload_bytes: 1024 * 1024,
+        version: "test".into(),
+        catalog: Some(file_catalog.clone()),
+        progress: None,
+        require_pairing: true,
+        download_port: None,
+    })
+    .await;
+    let client = cookie_client();
+    assert_eq!(
+        pair(&client, &url, &code).await.status(),
+        reqwest::StatusCode::NO_CONTENT
+    );
+
+    let devices = client
+        .get(format!("{url}/api/devices"))
+        .send()
+        .await
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap();
+    assert_eq!(devices["devices"][0]["auth_mode"], "paired");
+    // 设备名由 UA 推导（测试客户端无 Android 机型时显示 HTTP 客户端标识）
+    let label = devices["devices"][0]["device_label"].as_str().unwrap_or("");
+    assert!(!label.is_empty());
+    assert_eq!(devices["devices"][0]["online"], true);
+
+    let before = file_catalog.list()[0].download_count;
+    let body = client
+        .get(format!("{url}/api/files/{}/download", linked[0].id))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert_eq!(body, "hello");
+
+    let files = client
+        .get(format!("{url}/api/files"))
+        .send()
+        .await
+        .unwrap()
+        .json::<serde_json::Value>()
+        .await
+        .unwrap();
+    assert_eq!(
+        files["files"][0]["download_count"].as_u64().unwrap(),
+        u64::from(before) + 1
+    );
+
+    server.abort();
+    let _ = std::fs::remove_dir_all(&receive_dir);
+}
+
+#[tokio::test]
 async fn empty_file_downloads_with_zero_length() {
     let storage = temp_dir("empty-file");
     let (url, code, server) = spawn(Config {
@@ -356,6 +434,7 @@ async fn empty_file_downloads_with_zero_length() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -404,6 +483,7 @@ async fn conditional_and_range_requests() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -521,6 +601,7 @@ async fn folder_share_downloads_as_zip() {
         catalog: Some(file_catalog.clone()),
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -590,6 +671,7 @@ async fn save_upload_uses_unique_name_and_size_limit() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();
@@ -644,6 +726,7 @@ async fn chunk_upload_resumes_validates_and_cleans_up() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();

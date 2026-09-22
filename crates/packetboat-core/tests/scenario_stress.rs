@@ -103,6 +103,7 @@ async fn scenario_end_to_end_and_stress() {
         catalog: Some(catalog.clone()),
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
 
@@ -210,14 +211,22 @@ async fn scenario_end_to_end_and_stress() {
         let start_b = i * chunk;
         let end_b = start_b + chunk - 1;
         parts.push(tokio::spawn(async move {
-            let resp = client
-                .get(format!("{url}/api/files/{id}/download"))
-                .header("Range", format!("bytes={start_b}-{end_b}"))
-                .send()
-                .await
-                .unwrap();
-            assert_eq!(resp.status(), reqwest::StatusCode::PARTIAL_CONTENT);
-            resp.bytes().await.unwrap()
+            // 每 IP 并发下载限流：429 时退避重试，语义与浏览器续传一致
+            for attempt in 0..40 {
+                let resp = client
+                    .get(format!("{url}/api/files/{id}/download"))
+                    .header("Range", format!("bytes={start_b}-{end_b}"))
+                    .send()
+                    .await
+                    .unwrap();
+                if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    tokio::time::sleep(std::time::Duration::from_millis(25 + attempt * 5)).await;
+                    continue;
+                }
+                assert_eq!(resp.status(), reqwest::StatusCode::PARTIAL_CONTENT);
+                return resp.bytes().await.unwrap();
+            }
+            panic!("Range 下载重试后仍被限流");
         }));
     }
     let mut joined = Vec::with_capacity(large.len());
@@ -470,20 +479,27 @@ async fn scenario_end_to_end_and_stress() {
         "S9 列表压力: {count} 条，首次 {list_ms} ms，缓存后 {cached_ms} ms — PASS"
     ));
 
-    // —— 场景 10：并行下载压力（8 路同文件）——
+    // —— 场景 10：并行下载压力（8 路同文件；遇 429 限流则退避重试）——
     let mut downloads = Vec::new();
     for _ in 0..8 {
         let client = client.clone();
         let url = url.clone();
         let id = large_id.clone();
         downloads.push(tokio::spawn(async move {
-            let resp = client
-                .get(format!("{url}/api/files/{id}/download"))
-                .send()
-                .await
-                .unwrap();
-            assert_eq!(resp.status(), reqwest::StatusCode::OK);
-            resp.bytes().await.unwrap()
+            for attempt in 0..60 {
+                let resp = client
+                    .get(format!("{url}/api/files/{id}/download"))
+                    .send()
+                    .await
+                    .unwrap();
+                if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    tokio::time::sleep(std::time::Duration::from_millis(20 + attempt * 5)).await;
+                    continue;
+                }
+                assert_eq!(resp.status(), reqwest::StatusCode::OK);
+                return resp.bytes().await.unwrap();
+            }
+            panic!("并行下载重试后仍被限流");
         }));
     }
     let start = Instant::now();
@@ -540,6 +556,7 @@ async fn scenario_pairing_disabled_anonymous() {
         catalog: None,
         progress: None,
         require_pairing: false,
+        download_port: None,
     })
     .await;
     let client = reqwest::Client::new();
@@ -575,6 +592,7 @@ async fn scenario_disk_precheck_rejects_oversized() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        download_port: None,
     })
     .await;
     let client = cookie_client();

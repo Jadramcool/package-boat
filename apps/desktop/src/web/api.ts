@@ -36,6 +36,51 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+/** 从 UA 提取设备名：Android 优先机型（如 PJZ110），否则「系统 + 浏览器」。 */
+export function describeBrowserDevice(): string {
+  const ua = navigator.userAgent
+  const androidModel = extractAndroidModel(ua)
+  if (androidModel)
+    return androidModel
+  const os = /iPad/i.test(ua)
+    ? 'iPad'
+    : /iPhone|iPod/i.test(ua)
+      ? 'iPhone'
+      : /Android/i.test(ua)
+        ? 'Android'
+        : /Mac OS|Macintosh/i.test(ua)
+          ? 'macOS'
+          : /Windows/i.test(ua)
+            ? 'Windows'
+            : /Linux/i.test(ua)
+              ? 'Linux'
+              : ''
+  const browser = /Edg\//i.test(ua)
+    ? 'Edge'
+    : /Chrome/i.test(ua) && !/Chromium/i.test(ua)
+      ? 'Chrome'
+      : /Safari/i.test(ua) && !/Chrome/i.test(ua)
+        ? 'Safari'
+        : /Firefox/i.test(ua)
+          ? 'Firefox'
+          : ''
+  return [os, browser].filter(Boolean).join(' ') || '浏览器设备'
+}
+
+function extractAndroidModel(ua: string): string | null {
+  const start = ua.indexOf('Android ')
+  if (start < 0)
+    return null
+  const rest = ua.slice(start + 'Android '.length)
+  const segment = rest.split(';')[1]
+  if (!segment)
+    return null
+  const model = segment.trim().split(' Build/')[0]?.trim().replace(/\)+$/, '') ?? ''
+  if (!model || /^(wv|u)$/i.test(model) || model.length < 2)
+    return null
+  return model
+}
+
 export function getServiceInfo(): Promise<ServiceInfo> {
   return request('/api/info')
 }
@@ -47,7 +92,10 @@ export function getSession(): Promise<SessionStatus> {
 export function pairDevice(code: string): Promise<void> {
   return request('/api/session', {
     method: 'POST',
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({
+      code,
+      device_label: describeBrowserDevice(),
+    }),
   })
 }
 

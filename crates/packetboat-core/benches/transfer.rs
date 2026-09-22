@@ -243,6 +243,7 @@ impl BenchServer {
             catalog: None,
             progress: None,
             require_pairing: true,
+            download_port: None,
         })
         .map_err(failure)?;
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?;

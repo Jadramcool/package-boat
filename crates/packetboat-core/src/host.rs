@@ -1,10 +1,10 @@
 //! 桌面宿主管理：按设置启动/停止/重启局域网服务器，跟踪运行状态。
 //! 对应 Go 版 `internal/host`。
 
-use crate::auth::AuthManager;
+use crate::auth::{AuthManager, ConnectedDevice};
 use crate::catalog::Catalog;
 use crate::network::{local_addresses, LocalAddress};
-use crate::progress::ProgressTracker;
+use crate::progress::{ActiveTransfer, TransferRegistry};
 use crate::server::{Config, Server};
 use crate::settings::Store as SettingsStore;
 use serde::Serialize;
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// 宿主运行状态（桌面 UI 直接序列化为 JSON）。
 #[derive(Debug, Clone, Default, Serialize)]
@@ -26,6 +26,8 @@ pub struct HostState {
     /// 带适配器名、掩码、虚拟网卡标记与可达性分级的地址列表，供 UI 分组展示。
     pub addresses: Vec<LocalAddress>,
     pub access_code: String,
+    /// 下载专用端口（与浏览端口分离，浏览器连接池互不挤占）。
+    pub download_port: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -69,7 +71,7 @@ pub struct HostManager {
     catalog: Arc<Catalog>,
     settings: Arc<SettingsStore>,
     version: String,
-    progress: Arc<ProgressTracker>,
+    progress: Arc<TransferRegistry>,
     /// 串行化 start/stop/restart，防止并发调用双起服务器（TOCTOU 竞态）。
     lifecycle: tokio::sync::Mutex<()>,
 }
@@ -85,14 +87,34 @@ impl HostManager {
             catalog,
             settings,
             version: version.to_string(),
-            progress: ProgressTracker::new(),
+            progress: TransferRegistry::new(),
             lifecycle: tokio::sync::Mutex::new(()),
         }
     }
 
     /// 传输进度跟踪器（桌面端任务栏进度读取；与服务器共享同一实例）。
-    pub fn progress(&self) -> Arc<ProgressTracker> {
+    pub fn progress(&self) -> Arc<TransferRegistry> {
         Arc::clone(&self.progress)
+    }
+
+    /// 当前活跃传输任务（桌面端「传输中」列表）。
+    pub fn active_transfers(&self) -> Vec<ActiveTransfer> {
+        self.progress.list()
+    }
+
+    /// 主动停止传输：标记取消，下载流在下一次读时结束并移出列表。
+    pub fn cancel_transfer(&self, id: &str) -> bool {
+        self.progress.cancel(id)
+    }
+
+    /// 暂停传输（挂起下载流）。
+    pub fn pause_transfer(&self, id: &str) -> bool {
+        self.progress.pause(id)
+    }
+
+    /// 继续传输。
+    pub fn resume_transfer(&self, id: &str) -> bool {
+        self.progress.resume(id)
     }
 
     /// 启动服务器（已在运行时则直接返回）。
@@ -121,6 +143,7 @@ impl HostManager {
             catalog: Some(self.catalog.clone()),
             progress: Some(Arc::clone(&self.progress)),
             require_pairing: settings.require_pairing,
+            download_port: None,
         })
         .inspect_err(|err| {
             let mut inner = self.inner.lock().expect("host lock poisoned");
@@ -145,6 +168,7 @@ impl HostManager {
             }
         }
 
+        // 方案 C：单端口同源下载；并发 Range 由 DownloadSlots 限制
         let router = app.router();
         let token = CancellationToken::new();
         let shutdown_token = token.clone();
@@ -160,6 +184,7 @@ impl HostManager {
             }
         });
 
+        info!(port = actual_port, "局域网服务已启动");
         let mut inner = self.inner.lock().expect("host lock poisoned");
         inner.handle = Some(HostHandle { token, task });
         inner.auth = Some(app.auth_handle());
@@ -169,6 +194,7 @@ impl HostManager {
             urls: addresses.iter().map(|a| a.url.clone()).collect(),
             addresses,
             access_code: app.access_code(),
+            download_port: None,
             error: None,
         };
         Ok(())
@@ -188,6 +214,16 @@ impl HostManager {
         Ok(code)
     }
 
+    /// 当前已连接设备（服务未运行时返回空列表）。
+    pub fn connected_devices(&self) -> Vec<ConnectedDevice> {
+        let inner = self.inner.lock().expect("host lock poisoned");
+        inner
+            .auth
+            .as_ref()
+            .map(|auth| auth.devices())
+            .unwrap_or_default()
+    }
+
     /// 停止服务器并等待退出。
     pub async fn stop(&self) {
         let _lifecycle = self.lifecycle.lock().await;
@@ -200,6 +236,7 @@ impl HostManager {
             inner.state.urls.clear();
             inner.state.addresses.clear();
             inner.state.access_code.clear();
+            inner.state.download_port = None;
             inner.auth = None;
             inner.handle.take()
         };

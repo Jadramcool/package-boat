@@ -29,8 +29,12 @@ export function useUpdater() {
     }
     if (text && !sticky) {
       messageTimer = window.setTimeout(() => {
-        if (status.value !== 'checking' && status.value !== 'downloading')
+        if (status.value !== 'checking' && status.value !== 'downloading') {
           message.value = ''
+          // toast 消失后错误态复位，避免页脚按钮状态粘住
+          if (status.value === 'error')
+            status.value = 'idle'
+        }
       }, 4200)
     }
   }
@@ -70,9 +74,10 @@ export function useUpdater() {
     catch (error) {
       status.value = 'error'
       dialogOpen.value = false
-      setMessage(silent ? '' : '检查更新失败，请检查网络后重试', true)
+      // 失败只走 toast，不占用页面横幅；自动消失
+      setMessage('检查更新失败，请检查网络后重试', false)
       if (silent)
-        console.warn('检查更新失败（静默模式已忽略）', error)
+        console.warn('检查更新失败（静默模式）', error)
       else
         console.warn('检查更新失败', error)
     }
@@ -105,7 +110,7 @@ export function useUpdater() {
     catch (error) {
       console.error('更新安装失败', error)
       status.value = 'error'
-      setMessage('更新安装失败，请稍后重试', true)
+      setMessage('更新安装失败，请稍后重试', false)
     }
   }
 

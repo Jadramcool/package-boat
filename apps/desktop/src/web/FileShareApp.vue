@@ -77,8 +77,21 @@ async function confirmDelete(id: string, name: string): Promise<void> {
       <h1 class="visually-hidden">PacketBoat 局域网文件接收页</h1>
 
       <div class="main-col">
-        <p v-if="share.error.value" class="error-banner" role="alert">
+        <p
+          v-if="share.error.value"
+          class="error-banner"
+          :class="{ network: share.isNetworkError.value }"
+          role="alert"
+        >
           {{ share.error.value }}
+          <button
+            v-if="!share.online.value"
+            type="button"
+            class="banner-retry"
+            @click="share.initialize"
+          >
+            立即重试
+          </button>
         </p>
         <UploadDropzone
           :disabled="!share.online.value"
@@ -107,6 +120,7 @@ async function confirmDelete(id: string, name: string): Promise<void> {
           :received-count="receivedCount"
           :inbox-count="inboxCount"
           :total-size-label="totalSize"
+          :download-origin="share.downloadOrigin.value"
           @refresh="share.loadFiles"
           @delete="confirmDelete" />
       </div>
@@ -211,6 +225,27 @@ async function confirmDelete(id: string, name: string): Promise<void> {
   color: var(--signal-deep);
   background: var(--signal-soft);
   font-size: 13px;
+  line-height: 1.55;
+}
+.error-banner.network {
+  border-color: color-mix(in srgb, var(--acid-deep) 35%, var(--line-strong));
+  background: var(--acid-wash);
+  color: var(--ink);
+}
+.banner-retry {
+  margin-left: 10px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  font: 650 12px/1 var(--font-label);
+  vertical-align: middle;
+}
+.banner-retry:hover {
+  opacity: 0.9;
 }
 .app-footer {
   width: 100%;

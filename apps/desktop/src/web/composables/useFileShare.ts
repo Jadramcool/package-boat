@@ -33,6 +33,25 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '发生未知错误'
 }
 
+/** 把浏览器网络错误映射为可读中文提示。 */
+function friendlyNetworkMessage(): string {
+  return '无法连接主机服务。请确认：1）电脑上 PacketBoat 仍在运行；2）手机与电脑在同一局域网；3）访问地址与端口未变。恢复后页面会自动重连。'
+}
+
+/** 大文件下载占满浏览器连接、或主机暂时不可达时，fetch 抛出的网络类错误。 */
+function isTransientNetworkError(cause: unknown): boolean {
+  if (cause instanceof TypeError)
+    return true
+  if (cause instanceof Error) {
+    const message = cause.message.toLowerCase()
+    return message.includes('failed to fetch')
+      || message.includes('networkerror')
+      || message.includes('load failed')
+      || message.includes('network request failed')
+  }
+  return false
+}
+
 function pairingCodeFromHash(): string {
   const hash = window.location.hash.startsWith('#')
     ? window.location.hash.slice(1)
@@ -90,6 +109,12 @@ export function useFileShare() {
   const uploadControllers = new Map<string, AbortController>()
   const abortIntents = new Map<string, 'pause' | 'cancel'>()
   let events: EventSource | null = null
+  let heartbeatTimer = 0
+  let loadFilesTimer = 0
+  let reconnectTimer = 0
+  let offlineGraceTimer = 0
+  /** 连续网络失败次数；达到阈值才标离线（点下载瞬间的瞬时失败会忽略）。 */
+  let networkFailCount = 0
 
   const completedUploads = computed(() =>
     uploads.value.filter(task => task.status === 'complete').length,
@@ -98,21 +123,85 @@ export function useFileShare() {
     files.value.reduce((total, file) => total + file.size, 0),
   )
 
+  /** 方案 C：下载与页面同源同端口；连接池由服务端每 IP 限并发保护。 */
+  const downloadOrigin = computed(() => window.location.origin)
+
+  const isNetworkBanner = computed(() => error.value === friendlyNetworkMessage())
+
   watch(uploadConcurrency, (value) => {
     persistConcurrency(value)
     scheduleUploads()
   })
 
+  watch(online, (value) => {
+    if (value) {
+      stopReconnectRetry()
+      if (isNetworkBanner.value)
+        error.value = ''
+    }
+    else {
+      startReconnectRetry()
+    }
+  })
+
+  /** 一次网络失败：首次 blip 不切换「重连中」。 */
+  function noteNetworkFailure(showBanner: boolean): void {
+    networkFailCount += 1
+    if (networkFailCount < 2)
+      return
+    online.value = false
+    if (showBanner)
+      error.value = friendlyNetworkMessage()
+    startReconnectRetry()
+  }
+
+  function noteNetworkSuccess(): void {
+    networkFailCount = 0
+    online.value = true
+  }
+
+  function startReconnectRetry(): void {
+    if (reconnectTimer)
+      return
+    reconnectTimer = window.setInterval(() => {
+      void tryReconnect()
+    }, 4000)
+  }
+
+  function stopReconnectRetry(): void {
+    if (reconnectTimer) {
+      window.clearInterval(reconnectTimer)
+      reconnectTimer = 0
+    }
+  }
+
+  async function tryReconnect(): Promise<void> {
+    try {
+      const [info, session] = await Promise.all([getServiceInfo(), getSession()])
+      serviceInfo.value = info
+      authenticated.value = session.authenticated
+      noteNetworkSuccess()
+      if (authenticated.value) {
+        await loadFiles()
+        connectEvents()
+      }
+    }
+    catch {
+      noteNetworkFailure(true)
+    }
+  }
+
   async function initialize(): Promise<void> {
     initializing.value = true
     error.value = ''
+    networkFailCount = 0
     const code = pairingCodeFromHash()
 
     try {
       const [info, session] = await Promise.all([getServiceInfo(), getSession()])
       serviceInfo.value = info
       authenticated.value = session.authenticated
-      online.value = true
+      noteNetworkSuccess()
 
       if (authenticated.value) {
         await loadFiles()
@@ -128,8 +217,12 @@ export function useFileShare() {
       }
     }
     catch (cause) {
+      networkFailCount = 2
       online.value = false
-      error.value = errorMessage(cause)
+      error.value = isTransientNetworkError(cause)
+        ? friendlyNetworkMessage()
+        : errorMessage(cause)
+      startReconnectRetry()
     }
     finally {
       initializing.value = false
@@ -415,35 +508,98 @@ export function useFileShare() {
     disconnectEvents()
     events = new EventSource('/api/events')
     events.addEventListener('ready', () => {
-      online.value = true
-      // 服务端在每次 SSE 连接建立时都会发送 ready：EventSource 断线自动重连后，
-      // 断线窗口内错过的文件变更靠这里全量补拉
-      void loadFiles()
+      noteNetworkSuccess()
+      scheduleLoadFiles(0)
     })
     events.addEventListener('update', () => {
-      online.value = true
-      void loadFiles()
+      noteNetworkSuccess()
+      // 下载高峰时 files_changed 可能较密，防抖合并
+      scheduleLoadFiles(500)
     })
     events.onerror = () => {
-      online.value = false
+      // EventSource 会自动重连；延迟判定离线，避免点下载瞬间闪「重连中」
+      if (offlineGraceTimer)
+        return
+      offlineGraceTimer = window.setTimeout(() => {
+        offlineGraceTimer = 0
+        if (events) // 仍持有实例说明未手动断开
+          noteNetworkFailure(true)
+      }, 2500)
+    }
+    startHeartbeat()
+  }
+
+  function scheduleLoadFiles(delayMs: number): void {
+    if (loadFilesTimer) {
+      window.clearTimeout(loadFilesTimer)
+      loadFilesTimer = 0
+    }
+    loadFilesTimer = window.setTimeout(() => {
+      loadFilesTimer = 0
+      void loadFiles()
+    }, delayMs)
+  }
+
+  function startHeartbeat(): void {
+    stopHeartbeat()
+    heartbeatTimer = window.setInterval(() => {
+      if (!authenticated.value)
+        return
+      void getSession()
+        .then((session) => {
+          if (session.authenticated)
+            noteNetworkSuccess()
+        })
+        .catch((cause) => {
+          if (isTransientNetworkError(cause))
+            noteNetworkFailure(false)
+        })
+    }, 15000)
+  }
+
+  function stopHeartbeat(): void {
+    if (heartbeatTimer) {
+      window.clearInterval(heartbeatTimer)
+      heartbeatTimer = 0
     }
   }
 
   function disconnectEvents(): void {
     events?.close()
     events = null
+    stopHeartbeat()
+    if (offlineGraceTimer) {
+      window.clearTimeout(offlineGraceTimer)
+      offlineGraceTimer = 0
+    }
+    if (loadFilesTimer) {
+      window.clearTimeout(loadFilesTimer)
+      loadFilesTimer = 0
+    }
   }
 
   function handleRequestError(cause: unknown): void {
     if (cause instanceof HttpError && cause.status === 401) {
       authenticated.value = false
       disconnectEvents()
+      error.value = errorMessage(cause)
+      return
+    }
+    if (isTransientNetworkError(cause)) {
+      noteNetworkFailure(true)
+      return
     }
     error.value = errorMessage(cause)
   }
 
   onUnmounted(() => {
     disconnectEvents()
+    stopHeartbeat()
+    stopReconnectRetry()
+    if (loadFilesTimer) {
+      window.clearTimeout(loadFilesTimer)
+      loadFilesTimer = 0
+    }
     for (const controller of uploadControllers.values())
       controller.abort()
     abortIntents.clear()
@@ -460,10 +616,12 @@ export function useFileShare() {
     loadingFiles: readonly(loadingFiles),
     online: readonly(online),
     error: readonly(error),
+    isNetworkError: readonly(isNetworkBanner),
     deletingID: readonly(deletingID),
     uploadConcurrency,
     completedUploads,
     totalBytes,
+    downloadOrigin,
     initialize,
     pair,
     signOut,

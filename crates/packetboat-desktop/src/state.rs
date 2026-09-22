@@ -1,6 +1,7 @@
 //! 桌面端共享状态与前端状态快照。
 
 use crate::events::{ErrorNotice, StateChanged, SuccessNotice};
+use packetboat_core::auth::ConnectedDevice;
 use packetboat_core::catalog::{Catalog, Item};
 use packetboat_core::host::{HostManager, HostState};
 use packetboat_core::settings::{Settings, Store as SettingsStore};
@@ -25,6 +26,8 @@ pub struct StatePayload {
     pub settings: Settings,
     pub items: Vec<Item>,
     pub version: String,
+    /// 已连接/已配对设备（服务未运行时为空）。
+    pub devices: Vec<ConnectedDevice>,
 }
 
 pub fn build_state(state: &tauri::State<'_, Desktop>) -> StatePayload {
@@ -33,6 +36,7 @@ pub fn build_state(state: &tauri::State<'_, Desktop>) -> StatePayload {
         settings: state.settings.get(),
         items: state.catalog.list(),
         version: state.version.clone(),
+        devices: state.host.connected_devices(),
     }
 }
 

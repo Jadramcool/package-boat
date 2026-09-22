@@ -94,127 +94,57 @@ async function copyURL(): Promise<void> {
   text-align: left;
   cursor: pointer;
 }
-.addr-row:hover { border-color: var(--line-strong); }
 .addr-label {
   grid-area: label;
   color: var(--muted);
   font: 600 10px/1 var(--font-label);
-  letter-spacing: .1em;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 .addr-value {
   grid-area: value;
   overflow: hidden;
-  font: 600 12px/1.35 var(--font-mono);
-  word-break: break-all;
+  font: 600 12.5px/1.3 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.addr-row > svg { grid-area: icon; color: var(--muted); }
-.mobile-only { display: none; }
-.stat-list { display: grid; gap: 10px; }
-.stat-list div {
+.addr-row svg { grid-area: icon; }
+.stat-list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.stat-list > div {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
   align-items: baseline;
-  font-size: 13px;
+  justify-content: space-between;
+  gap: 12px;
 }
-.stat-list dt { color: var(--muted); flex: none; }
+.stat-list dt {
+  flex: none;
+  color: var(--muted);
+  font: 600 11px/1.2 var(--font-label);
+}
 .stat-list dd {
+  margin: 0;
   min-width: 0;
   overflow: hidden;
+  color: var(--ink);
+  font: 600 12.5px/1.3 var(--font-mono);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: 650 13px/1.2 var(--font-mono);
 }
 .note {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--acid-wash);
-  color: var(--acid-deep);
-  font-size: 12px;
-  line-height: 1.55;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
-
-/* 手机：置顶紧凑条 —— 地址独立描边 + 指标两列 */
-@media (max-width: 1099px) {
-  .side-card {
-    border-radius: 12px;
-    box-shadow: none;
-  }
-  .side-card > header {
-    display: none;
-  }
-  .body {
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .mobile-only {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    margin: 0;
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--dock-0);
-    min-width: 0;
-  }
-  .addr-label {
-    flex: none;
-    font: 600 10px/1 var(--font-label);
-    letter-spacing: 0.08em;
-    color: var(--muted);
-  }
-  .addr-value {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: 600 12px/1.3 var(--font-mono);
-    word-break: normal;
-    text-align: left;
-  }
-  .mobile-only > svg {
-    flex: none;
-    display: block;
-    color: var(--muted);
-  }
-  .stat-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
-    margin: 0;
-    padding: 0 2px 2px;
-  }
-  .stat-list div {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
-    min-width: 0;
-    font-size: 11.5px;
-    line-height: 1.3;
-  }
-  .stat-list dt {
-    flex: none;
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .stat-list dd {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: 650 11.5px/1.2 var(--font-mono);
-    text-align: right;
-  }
-  .note {
-    display: none;
-  }
+@media (max-width: 720px) {
+  .mobile-only { display: grid; }
+}
+@media (min-width: 721px) {
+  .mobile-only { display: none; }
 }
 </style>

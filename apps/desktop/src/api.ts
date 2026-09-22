@@ -1,7 +1,7 @@
 // Tauri 命令桥：封装 tauri-specta 生成的 commands，前端组件不直接接触 tauri API。
 // 命令签名与 Rust `commands.rs` 由 bindings.ts 同步，新增命令需在 Rust 侧
 // `collect_commands!` 注册后重跑 `cargo test -p packetboat-desktop` 重新导出。
-import { commands, events, type AppError, type Item, type TransferProgress } from './bindings'
+import { commands, events, type ActiveTransfer, type AppError, type ConnectedDevice, type Item, type TransferProgress } from './bindings'
 import type { DesktopSettings, DesktopState } from './types'
 
 /** 旧命名别名（组件层仍使用 DesktopItem）。 */
@@ -19,6 +19,31 @@ async function unwrap<T>(result: Promise<{ status: 'ok'; data: T } | { status: '
 
 export async function getState(): Promise<DesktopState> {
   return commands.getState()
+}
+
+/** 当前已连接设备（服务未运行时返回空列表）。 */
+export async function getConnectedDevices(): Promise<ConnectedDevice[]> {
+  return commands.getConnectedDevices()
+}
+
+/** 当前活跃传输任务。 */
+export async function getActiveTransfers(): Promise<ActiveTransfer[]> {
+  return commands.getActiveTransfers()
+}
+
+/** 主动停止传输任务。 */
+export async function cancelTransfer(id: string): Promise<boolean> {
+  return unwrap(commands.cancelTransfer(id))
+}
+
+/** 暂停传输任务。 */
+export async function pauseTransfer(id: string): Promise<boolean> {
+  return unwrap(commands.pauseTransfer(id))
+}
+
+/** 继续传输任务。 */
+export async function resumeTransfer(id: string): Promise<boolean> {
+  return unwrap(commands.resumeTransfer(id))
 }
 
 export async function addLinkedFiles(paths: string[]): Promise<DesktopItem[]> {
