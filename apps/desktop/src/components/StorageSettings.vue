@@ -39,6 +39,7 @@ function handleShareReceiveDirChange(event: Event) {
     <label class="switch">
       <span class="switch-copy">
         <strong>共享目录内全部文件</strong>
+        <!-- 固定两行高度：开/关文案长度不同，避免切换时右栏上下顶动 -->
         <small>
           {{ props.settings.share_receive_dir
             ? '目录下顶层文件与文件夹会出现在共享清单'
@@ -66,8 +67,14 @@ function handleShareReceiveDirChange(event: Event) {
       <RefreshCw v-else :size="15" />
       <span>重新扫描接收目录</span>
     </button>
-    <p v-if="props.settings.share_receive_dir" class="rescan-hint">
-      移出清单的文件仍保留在磁盘上；点此扫描可重新展示。
+    <!-- 始终占位（不用 v-if）：提示区高度固定，开关切换时下方「单文件上限 / 端口」不位移 -->
+    <p class="rescan-hint">
+      <template v-if="props.settings.share_receive_dir">
+        移出清单的文件仍保留在磁盘上；点此扫描可重新展示。
+      </template>
+      <template v-else>
+        开启上方开关后，可用按钮把接收目录重新列入共享清单。
+      </template>
     </p>
 
     <dl>
@@ -93,11 +100,28 @@ function handleShareReceiveDirChange(event: Event) {
 .choose svg { flex: none; display: block; }
 .choose:hover:not(:disabled) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .choose:disabled { cursor: not-allowed; opacity: .55; }
-.rescan-hint { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+/* min-height 锁两行：开关副标题在开/关态换行数可能不同，高度不锁会带动整卡抖动 */
+.rescan-hint {
+  margin: 6px 0 0;
+  min-height: calc(11px * 1.45 * 2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
 .switch-copy { min-width: 0; }
 .switch-copy strong { display: block; color: var(--ink); font: 650 12.5px/1.3 var(--font-label); }
-.switch-copy small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.switch-copy small {
+  display: -webkit-box;
+  min-height: calc(11px * 1.5 * 2);
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .switch input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .switch i { position: relative; width: 36px; height: 21px; flex: none; border-radius: 999px; background: var(--line-strong); transition: background 160ms ease; }
 .switch i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; transition: left 160ms cubic-bezier(.22, 1, .36, 1); }

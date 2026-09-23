@@ -324,10 +324,14 @@ function sortIcon(key: FileSortKey) {
   font: 720 22px/1.1 var(--font-display);
   letter-spacing: -0.02em;
 }
+/* 单行省略：开关共享目录会增减「本地文件 N」等统计段，换行会撑高标题区并把列表顶下去 */
 .list-heading p {
   margin: 5px 0 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .list-tools {
   display: flex;
