@@ -1,9 +1,10 @@
-//! 传输进度跟踪：任务栏总进度 + 桌面端「传输中」实时列表。
+//! 传输进度跟踪：任务栏总进度 + 桌面端「传输中」实时列表 + 结束后写入历史。
 //!
 //! 每个上传/下载任务有独立 ID；并发任务互不覆盖。速度用约 1 秒滑动窗口估算。
 
+use crate::history::{entry_from_task, HistoryStatus, TransferHistory};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,7 +12,7 @@ use std::task::Waker;
 use std::time::{Duration, Instant};
 
 /// 传输方向。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum TransferKind {
@@ -71,6 +72,8 @@ pub struct ActiveTransfer {
 }
 
 struct TaskState {
+    /// 单次传输事件 ID；任务进度 ID 可复用，但历史 ID 每次新任务必须唯一。
+    history_id: String,
     name: String,
     kind: TransferKind,
     peer_ip: String,
@@ -83,6 +86,8 @@ struct TaskState {
     speed_bps: u64,
     /// 并发流计数（浏览器 Range 多连接下载时同一文件只显示一条）。
     active_streams: u32,
+    /// 任一并发 Range 流异常结束，则该传输会话不能被误记为完整。
+    stream_failed: bool,
 }
 
 /// 用户取消后的冷却时间：窗口内同 ID 下载会被拒绝，避免浏览器重试把任务“复活”。
@@ -98,6 +103,8 @@ pub struct TransferRegistry {
     paused: Mutex<HashMap<String, Option<Waker>>>,
     /// 本传输会话是否已计过下载次数（同一 id 并发流/Drop 只计一次）。
     counted: Mutex<HashSet<String>>,
+    /// 结束后的主机侧历史（可选；宿主启动时挂接）。
+    history: Mutex<Option<Arc<TransferHistory>>>,
     /// 任务栏进度用的序号，保证 snapshot 在无任务时也可读。
     seq: AtomicU64,
 }
@@ -107,11 +114,53 @@ pub type ProgressTracker = TransferRegistry;
 
 const SPEED_WINDOW: Duration = Duration::from_millis(900);
 /// 无更新超过该时长的未完成任务在 list 时剔除（客户端异常断开兜底）。
-const _STALE_AFTER: Duration = Duration::from_secs(60);
+const STALE_AFTER: Duration = Duration::from_secs(60);
+static HISTORY_SEQ: AtomicU64 = AtomicU64::new(0);
 
 impl TransferRegistry {
     pub fn new() -> Arc<Self> {
         Arc::new(TransferRegistry::default())
+    }
+
+    /// 挂接主机侧传输历史（任务结束/取消时写入）。
+    pub fn attach_history(&self, history: Arc<TransferHistory>) {
+        *self.history.lock().expect("transfer registry poisoned") = Some(history);
+    }
+
+    /// 从任务快照写入历史（remove 前/后由调用方传入字段）。
+    #[allow(clippy::too_many_arguments)]
+    fn record_history_snapshot(
+        &self,
+        history_id: &str,
+        name: &str,
+        kind: TransferKind,
+        peer_ip: &str,
+        transferred_bytes: u64,
+        total_bytes: Option<u64>,
+        status: HistoryStatus,
+    ) {
+        let history = {
+            let guard = self.history.lock().expect("transfer registry poisoned");
+            guard.clone()
+        };
+        let Some(history) = history else { return };
+        history.record(entry_from_task(
+            history_id,
+            name,
+            kind,
+            peer_ip,
+            transferred_bytes,
+            total_bytes,
+            status,
+        ));
+    }
+
+    fn new_history_id(task_id: &str) -> String {
+        format!(
+            "{task_id}:{}-{:x}",
+            Utc::now().timestamp_micros(),
+            HISTORY_SEQ.fetch_add(1, Ordering::Relaxed)
+        )
     }
 
     /// 兼容旧 API：匿名单槽传输（上传 multipart / 测试）。
@@ -166,6 +215,7 @@ impl TransferRegistry {
         tasks.insert(
             id.clone(),
             TaskState {
+                history_id: Self::new_history_id(&id),
                 name,
                 kind,
                 peer_ip,
@@ -177,6 +227,57 @@ impl TransferRegistry {
                 window_start: Instant::now(),
                 speed_bps: 0,
                 active_streams: 1,
+                stream_failed: false,
+            },
+        );
+        self.seq.fetch_add(1, Ordering::Relaxed);
+        true
+    }
+
+    /// 任务是否仍在注册表中。
+    pub fn contains_task(&self, id: &str) -> bool {
+        self.tasks
+            .lock()
+            .expect("transfer registry poisoned")
+            .contains_key(id)
+    }
+
+    /// 为恢复中的上传重新登记任务；已存在时不改变并发流计数。
+    #[allow(clippy::too_many_arguments)]
+    pub fn ensure_task(
+        &self,
+        id: &str,
+        name: &str,
+        kind: TransferKind,
+        peer_ip: &str,
+        total: Option<u64>,
+    ) -> bool {
+        let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
+        if tasks.contains_key(id) || self.recently_cancelled(id) {
+            return false;
+        }
+        let now = Utc::now();
+        let total = total.filter(|value| *value > 0);
+        self.counted
+            .lock()
+            .expect("transfer registry poisoned")
+            .remove(id);
+        tasks.insert(
+            id.to_string(),
+            TaskState {
+                history_id: Self::new_history_id(id),
+                name: name.to_string(),
+                kind,
+                peer_ip: peer_ip.to_string(),
+                done: 0,
+                total,
+                started_at: now,
+                updated_at: now,
+                window_bytes: 0,
+                window_start: Instant::now(),
+                speed_bps: 0,
+                active_streams: 1,
+                stream_failed: false,
             },
         );
         self.seq.fetch_add(1, Ordering::Relaxed);
@@ -194,12 +295,13 @@ impl TransferRegistry {
             return;
         }
         let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
-        // 默认槽不存在时自动创建，避免旧路径丢进度
-        if !tasks.contains_key(id) {
+        // 只有旧默认槽允许隐式创建，避免恢复中的真实任务被错误标成“传输中”。
+        if !tasks.contains_key(id) && id == "__default__" {
             let now = Utc::now();
             tasks.insert(
                 id.to_string(),
                 TaskState {
+                    history_id: Self::new_history_id(id),
                     name: "传输中".to_string(),
                     kind: TransferKind::Upload,
                     peer_ip: String::new(),
@@ -211,6 +313,7 @@ impl TransferRegistry {
                     window_start: Instant::now(),
                     speed_bps: 0,
                     active_streams: 1,
+                    stream_failed: false,
                 },
             );
         }
@@ -234,36 +337,85 @@ impl TransferRegistry {
     }
 
     /// 结束并移除指定任务（不考虑并发流）。
+    /// 完整字节记 Complete，否则 Incomplete；取消请用 [`Self::cancel`] 或 [`Self::finish_task_as`]。
     pub fn finish_task(&self, id: &str) {
-        self.tasks
-            .lock()
-            .expect("transfer registry poisoned")
-            .remove(id);
+        let removed = {
+            let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
+            tasks.remove(id)
+        };
+        let Some(task) = removed else { return };
+        let status = match task.total {
+            Some(total) if total > 0 => {
+                if task.done >= total {
+                    HistoryStatus::Complete
+                } else {
+                    HistoryStatus::Incomplete
+                }
+            }
+            _ if task.done > 0 => HistoryStatus::Complete,
+            _ => HistoryStatus::Incomplete,
+        };
+        self.record_history_snapshot(
+            &task.history_id,
+            &task.name,
+            task.kind,
+            &task.peer_ip,
+            task.done,
+            task.total,
+            status,
+        );
+    }
+
+    /// 以指定状态结束任务（上传完成/取消等需要显式状态的路径）。
+    pub fn finish_task_as(&self, id: &str, status: HistoryStatus) {
+        let removed = {
+            let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
+            tasks.remove(id)
+        };
+        let Some(task) = removed else { return };
+        self.record_history_snapshot(
+            &task.history_id,
+            &task.name,
+            task.kind,
+            &task.peer_ip,
+            task.done,
+            task.total,
+            status,
+        );
     }
 
     /// 单条连接/流结束：递减并发计数。
     /// 最后一条流结束且任务被移除时，返回 `Some(should_count_download)`：
     /// 仅当已传字节达到目标且本会话尚未计过次数时为 `true`。
-    pub fn finish_stream(&self, id: &str) -> Option<bool> {
+    pub fn finish_stream(&self, id: &str, completed: bool) -> Option<bool> {
         let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
         let task = tasks.get_mut(id)?;
         task.active_streams = task.active_streams.saturating_sub(1);
+        if !completed {
+            task.stream_failed = true;
+        }
         if task.active_streams > 0 {
             return None;
         }
         let done = task.done;
         let total = task.total;
+        let name = task.name.clone();
+        let kind = task.kind;
+        let peer_ip = task.peer_ip.clone();
+        let history_id = task.history_id.clone();
+        let completed = completed && !task.stream_failed;
         tasks.remove(id);
         drop(tasks);
         if self.recently_cancelled(id) {
             return None;
         }
-        // 完整下载：已知总大小时要求 done >= total；ZIP 等未知总长时以流自然结束且有数据为准
-        let complete = match total {
-            Some(total) if total > 0 => done >= total,
-            _ => done > 0,
+        let status = if completed {
+            HistoryStatus::Complete
+        } else {
+            HistoryStatus::Incomplete
         };
-        if !complete {
+        self.record_history_snapshot(&history_id, &name, kind, &peer_ip, done, total, status);
+        if !completed {
             return Some(false);
         }
         // 同一传输会话只计一次（并发 Range / poll+Drop 重复调用）
@@ -278,9 +430,9 @@ impl TransferRegistry {
     /// 主动取消传输：标记取消并立刻从「传输中」列表移除。
     /// 下载/上传流在下一次 poll 时检测到取消并结束。
     pub fn cancel(&self, id: &str) -> bool {
-        let existed = {
+        let removed = {
             let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
-            tasks.remove(id).is_some()
+            tasks.remove(id)
         };
         self.paused
             .lock()
@@ -290,7 +442,20 @@ impl TransferRegistry {
             .lock()
             .expect("transfer registry poisoned")
             .insert(id.to_string(), Instant::now());
-        existed
+        if let Some(task) = removed {
+            self.record_history_snapshot(
+                &task.history_id,
+                &task.name,
+                task.kind,
+                &task.peer_ip,
+                task.done,
+                task.total,
+                HistoryStatus::Cancelled,
+            );
+            true
+        } else {
+            false
+        }
     }
 
     /// 流是否已被用户取消（冷却窗口内仍算取消）。
@@ -382,9 +547,6 @@ impl TransferRegistry {
     /// 当前活跃传输列表（按最近更新降序）。
     pub fn list(&self) -> Vec<ActiveTransfer> {
         let now = Utc::now();
-        let stale = chrono::Duration::seconds(60);
-        let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
-        tasks.retain(|_, task| now - task.updated_at <= stale);
         let paused_ids: HashSet<String> = self
             .paused
             .lock()
@@ -392,6 +554,46 @@ impl TransferRegistry {
             .keys()
             .cloned()
             .collect();
+        let expired = {
+            let mut tasks = self.tasks.lock().expect("transfer registry poisoned");
+            // 暂停是显式用户状态，不按普通“无活动”超时删除；刷新时间避免后续恢复时
+            // 被历史记录误判为一次中断。
+            for (id, task) in tasks.iter_mut() {
+                if paused_ids.contains(id)
+                    && now - task.updated_at
+                        > chrono::Duration::seconds(STALE_AFTER.as_secs() as i64)
+                {
+                    task.updated_at = now;
+                }
+            }
+            let expired_ids: Vec<String> = tasks
+                .iter()
+                .filter(|(id, task)| {
+                    // 下载流由 Drop/自然结束收口；只兜底清理不再有请求的上传任务。
+                    task.kind == TransferKind::Upload
+                        && !paused_ids.contains(*id)
+                        && now - task.updated_at
+                            > chrono::Duration::seconds(STALE_AFTER.as_secs() as i64)
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            expired_ids
+                .into_iter()
+                .filter_map(|id| tasks.remove(&id))
+                .collect::<Vec<_>>()
+        };
+        for task in expired {
+            self.record_history_snapshot(
+                &task.history_id,
+                &task.name,
+                task.kind,
+                &task.peer_ip,
+                task.done,
+                task.total,
+                HistoryStatus::Incomplete,
+            );
+        }
+        let tasks = self.tasks.lock().expect("transfer registry poisoned");
         let mut items: Vec<ActiveTransfer> = tasks
             .iter()
             .map(|(id, task)| {
@@ -610,12 +812,12 @@ mod tests {
         assert_eq!(list[0].progress, Some(100));
 
         // 部分流结束不移除任务
-        assert_eq!(registry.finish_stream("dl:file1"), None);
-        assert_eq!(registry.finish_stream("dl:file1"), None);
+        assert_eq!(registry.finish_stream("dl:file1", true), None);
+        assert_eq!(registry.finish_stream("dl:file1", true), None);
         assert_eq!(registry.list().len(), 1);
-        assert_eq!(registry.finish_stream("dl:file1"), None);
+        assert_eq!(registry.finish_stream("dl:file1", true), None);
         assert_eq!(
-            registry.finish_stream("dl:file1"),
+            registry.finish_stream("dl:file1", true),
             Some(true),
             "全部分片完成后应算完整下载"
         );
@@ -633,7 +835,7 @@ mod tests {
             Some(1000),
         );
         registry.add_to("dl:x", 200);
-        assert_eq!(registry.finish_stream("dl:x"), Some(false));
+        assert_eq!(registry.finish_stream("dl:x", false), Some(false));
     }
 
     #[test]
@@ -647,9 +849,13 @@ mod tests {
             Some(100),
         );
         registry.add_to("dl:z", 100);
-        assert_eq!(registry.finish_stream("dl:z"), Some(true), "首次完整应计数");
+        assert_eq!(
+            registry.finish_stream("dl:z", true),
+            Some(true),
+            "首次完整应计数"
+        );
         // Drop 或重复 finish 不应再计
-        assert_eq!(registry.finish_stream("dl:z"), None);
+        assert_eq!(registry.finish_stream("dl:z", false), None);
         // 新的传输会话可以再计一次
         registry.begin_task(
             "dl:z",
@@ -659,6 +865,69 @@ mod tests {
             Some(100),
         );
         registry.add_to("dl:z", 100);
-        assert_eq!(registry.finish_stream("dl:z"), Some(true));
+        assert_eq!(registry.finish_stream("dl:z", true), Some(true));
+    }
+
+    #[test]
+    fn repeated_downloads_get_distinct_history_entries() {
+        let registry = TransferRegistry::new();
+        let history = crate::history::open_in_memory(7);
+        registry.attach_history(Arc::clone(&history));
+
+        for _ in 0..2 {
+            registry.begin_task(
+                "dl:same-file",
+                "same.bin",
+                TransferKind::Download,
+                "10.0.0.8",
+                Some(100),
+            );
+            registry.add_to("dl:same-file", 100);
+            assert_eq!(registry.finish_stream("dl:same-file", true), Some(true));
+        }
+
+        let entries = history.list();
+        assert_eq!(entries.len(), 2, "同一文件每次下载都应保留独立历史");
+        assert_ne!(entries[0].id, entries[1].id);
+        assert_eq!(entries[0].transferred_bytes, 100);
+        assert_eq!(entries[0].total_bytes, Some(100));
+    }
+
+    #[test]
+    fn stale_upload_is_recorded_as_incomplete_and_paused_task_is_kept() {
+        let registry = TransferRegistry::new();
+        let history = crate::history::open_in_memory(7);
+        registry.attach_history(Arc::clone(&history));
+        registry.begin_task(
+            "upload:stale",
+            "stale.bin",
+            TransferKind::Upload,
+            "10.0.0.9",
+            Some(1000),
+        );
+        registry.add_to("upload:stale", 200);
+        registry.begin_task(
+            "upload:paused",
+            "paused.bin",
+            TransferKind::Upload,
+            "10.0.0.10",
+            Some(1000),
+        );
+        registry.pause("upload:paused");
+        {
+            let mut tasks = registry.tasks.lock().unwrap();
+            for task in tasks.values_mut() {
+                task.updated_at = Utc::now() - chrono::Duration::seconds(61);
+            }
+        }
+
+        let active = registry.list();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, "upload:paused");
+        let entries = history.list();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].status, HistoryStatus::Incomplete);
+        assert_eq!(entries[0].transferred_bytes, 200);
+        assert_eq!(entries[0].total_bytes, Some(1000));
     }
 }

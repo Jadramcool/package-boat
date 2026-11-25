@@ -10,6 +10,7 @@ pub mod auth;
 pub mod catalog;
 pub mod download_slots;
 pub mod files;
+pub mod history;
 pub mod host;
 pub mod hub;
 pub mod network;

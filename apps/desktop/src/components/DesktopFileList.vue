@@ -36,6 +36,7 @@ const emit = defineEmits<{
   refresh: [];
   reveal: [id: string];
   unshare: [id: string];
+  copyNote: [id: string];
   choose: [];
   clear: [];
 }>();
@@ -196,7 +197,8 @@ function sortIcon(key: FileSortKey) {
             :item="item"
             :busy="props.busy"
             @reveal="emit('reveal', $event)"
-            @unshare="emit('unshare', $event)" />
+            @unshare="emit('unshare', $event)"
+            @copy="emit('copyNote', $event)" />
         </ul>
       </template>
     </div>
@@ -426,7 +428,7 @@ function sortIcon(key: FileSortKey) {
   display: grid;
   grid-template-columns:
     minmax(220px, 1.35fr) minmax(72px, 0.38fr) 132px minmax(88px, 0.42fr)
-    minmax(64px, 0.32fr) 64px 68px;
+    minmax(64px, 0.32fr) 64px 102px;
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
@@ -500,7 +502,7 @@ function sortIcon(key: FileSortKey) {
 
 @media (max-width: 1200px) {
   .table-header {
-    grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 68px;
+    grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 102px;
     gap: 12px;
   }
   .date-column {
@@ -519,7 +521,7 @@ function sortIcon(key: FileSortKey) {
     display: none;
   }
   .table-header {
-    grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 68px;
+    grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 102px;
     gap: 12px;
     padding-right: 14px;
     padding-left: 14px;

@@ -11,6 +11,8 @@ pub struct Paths {
     pub data_dir: PathBuf,
     pub catalog: PathBuf,
     pub settings: PathBuf,
+    /// 传输历史元数据（主机侧，按保留天数清理）。
+    pub history: PathBuf,
     pub receive_dir: PathBuf,
 }
 
@@ -28,6 +30,7 @@ pub fn default_paths() -> Result<Paths, String> {
         data_dir: data_dir.clone(),
         catalog: data_dir.join("catalog.json"),
         settings: data_dir.join("settings.json"),
+        history: data_dir.join("history.json"),
         receive_dir: home.join("Downloads").join(DIRECTORY_NAME),
     })
 }
@@ -67,6 +70,7 @@ mod tests {
         assert!(paths.data_dir.ends_with(DIRECTORY_NAME));
         assert!(paths.catalog.ends_with("catalog.json"));
         assert!(paths.settings.ends_with("settings.json"));
+        assert!(paths.history.ends_with("history.json"));
         assert!(paths.receive_dir.ends_with("PacketBoat"));
     }
 }

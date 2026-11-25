@@ -103,6 +103,7 @@ async fn scenario_end_to_end_and_stress() {
         catalog: Some(catalog.clone()),
         progress: None,
         require_pairing: true,
+        history: None,
         download_port: None,
     })
     .await;
@@ -556,6 +557,7 @@ async fn scenario_pairing_disabled_anonymous() {
         catalog: None,
         progress: None,
         require_pairing: false,
+        history: None,
         download_port: None,
     })
     .await;
@@ -592,6 +594,7 @@ async fn scenario_disk_precheck_rejects_oversized() {
         catalog: None,
         progress: None,
         require_pairing: true,
+        history: None,
         download_port: None,
     })
     .await;

@@ -1,24 +1,33 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Eye, File, Folder, LoaderCircle, Trash2, Unlink } from '@lucide/vue'
+import { Copy, Eye, File, Folder, LoaderCircle, Trash2, Unlink } from '@lucide/vue'
 import type { DesktopItem } from '@/types'
 import { fileExtension, formatBytes, formatDate } from '@/utils/format'
 
 const props = defineProps<{ item: DesktopItem; busy: string }>()
-const emit = defineEmits<{ reveal: [id: string]; unshare: [id: string] }>()
+const emit = defineEmits<{ reveal: [id: string]; unshare: [id: string]; copy: [id: string] }>()
 
 const isBusy = computed(() => props.busy.endsWith(`:${props.item.id}`))
 const isLinked = computed(() => props.item.source_type === 'linked')
 const sourceLabel = computed(() => {
+  if (props.item.is_note)
+    return '文本投递'
   if (props.item.source_type === 'linked')
     return '原位共享'
   if (props.item.source_type === 'inbox')
     return '本地文件'
   return '远程接收'
 })
+const badgeClass = computed(() => {
+  if (props.item.is_note)
+    return 'note'
+  return props.item.source_type
+})
 const actionTitle = computed(() => {
   if (isLinked.value)
     return '取消共享（不会删除原文件）'
+  if (props.item.is_note)
+    return '从共享清单移除文本投递（不删除磁盘文件）'
   if (props.item.source_type === 'inbox')
     return '从共享清单移除本地文件（不删除磁盘文件）'
   return '从共享清单移除（不删除磁盘文件）'
@@ -44,7 +53,7 @@ const actionTitle = computed(() => {
           <span>{{ formatDate(props.item.modified_at) }}</span>
           <span>下载 {{ props.item.download_count ?? 0 }} 次</span>
           <span v-if="!props.item.available" class="source-badge missing">文件缺失</span>
-          <span v-else class="source-badge" :class="props.item.source_type">{{ sourceLabel }}</span>
+          <span v-else class="source-badge" :class="badgeClass">{{ sourceLabel }}</span>
         </div>
       </div>
     </div>
@@ -53,7 +62,7 @@ const actionTitle = computed(() => {
     <div class="file-date">{{ formatDate(props.item.modified_at) }}</div>
     <div class="source-cell">
       <span v-if="!props.item.available" class="source-badge missing">文件缺失</span>
-      <span v-else class="source-badge" :class="props.item.source_type">
+      <span v-else class="source-badge" :class="badgeClass">
         {{ sourceLabel }}
       </span>
     </div>
@@ -62,6 +71,16 @@ const actionTitle = computed(() => {
       {{ props.item.download_count ?? 0 }}
     </div>
     <div class="row-actions">
+      <button
+        v-if="props.item.is_note && props.item.available"
+        type="button"
+        :disabled="isBusy"
+        title="复制文本正文"
+        aria-label="复制文本正文"
+        @click="emit('copy', props.item.id)"
+      >
+        <Copy :size="15" />
+      </button>
       <button type="button" :disabled="!props.item.available || isBusy" title="在文件夹中查看" @click="emit('reveal', props.item.id)">
         <Eye :size="15" />
       </button>
@@ -81,7 +100,7 @@ const actionTitle = computed(() => {
    单行再高会明显减少首屏行数。 */
 /* 日期列固定 152px 而非 fr 份额：日期文案长度固定（`2025年8月31日 23:33`），
    13.5px 等宽下约 130px，给 22px 余量。用 .55fr 会被文件名列抢走份额而截断。 */
-.desktop-file-row { display: grid; grid-template-columns: minmax(220px, 1.35fr) minmax(72px, .38fr) 132px minmax(88px, .42fr) minmax(64px, .32fr) 64px 68px; align-items: center; gap: 12px; min-height: 54px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); transition: background 120ms ease; }
+.desktop-file-row { display: grid; grid-template-columns: minmax(220px, 1.35fr) minmax(72px, .38fr) 132px minmax(88px, .42fr) minmax(64px, .32fr) 64px 102px; align-items: center; gap: 12px; min-height: 54px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--surface); transition: background 120ms ease; }
 .desktop-file-row:last-child { border-bottom: 0; }
 .desktop-file-row:hover { background: rgb(215 249 84 / 12%); }
 .desktop-file-row.missing { opacity: .72; }
@@ -97,6 +116,7 @@ const actionTitle = computed(() => {
 .source-badge.linked { background: var(--acid-wash); color: var(--acid-deep); }
 .source-badge.received { background: var(--info-wash); color: #23559e; }
 .source-badge.inbox { background: var(--paper-deep, #e9ebe2); color: var(--ink-2, #39432f); }
+.source-badge.note { background: color-mix(in srgb, var(--info) 12%, #fff); color: var(--info); }
 .source-badge.missing { background: var(--signal-soft); color: var(--signal-deep); }
 .missing-badge { background: var(--signal-soft); color: var(--signal-deep); }
 .file-main p { overflow: hidden; margin: 5px 0 0; color: var(--muted); font: 500 11.5px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
@@ -113,11 +133,11 @@ const actionTitle = computed(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1200px) {
-  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 68px; }
+  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 96px 72px 64px 102px; }
   .file-date { display: none; }
 }
 @media (max-width: 900px) {
-  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 68px; gap: 12px; padding: 8px 14px; }
+  .desktop-file-row { grid-template-columns: minmax(220px, 1fr) 88px 72px 64px 102px; gap: 12px; padding: 8px 14px; }
   .source-cell, .type-cell { display: none; }
 }
 @media (max-width: 640px) {

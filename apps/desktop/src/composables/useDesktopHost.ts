@@ -8,24 +8,28 @@ import {
   addLinkedFiles,
   cancelTransfer as cancelTransferCommand,
   clearSharedFiles as clearSharedFilesCommand,
+  clearTransferHistory as clearTransferHistoryCommand,
   chooseLinkedFiles,
   chooseReceiveDirectory as chooseReceiveDirectoryCommand,
   events,
   getActiveTransfers,
   getConnectedDevices,
+  getNoteContent,
   getState,
+  getTransferHistory,
   getTransferProgress,
   pauseTransfer as pauseTransferCommand,
   refreshAccessCode as refreshAccessCodeCommand,
   rescanReceiveDir as rescanReceiveDirCommand,
   resumeTransfer as resumeTransferCommand,
   revealItem as revealItemCommand,
+  setHistoryRetention as setHistoryRetentionCommand,
   setRequirePairing as setRequirePairingCommand,
   setShareReceiveDir as setShareReceiveDirCommand,
   toggleServer as toggleServerCommand,
   unshare as unshareCommand,
 } from '@/api'
-import type { DesktopDevice, DesktopState, DesktopTransfer, LocalAddress } from '@/types'
+import type { DesktopDevice, DesktopHistoryEntry, DesktopState, DesktopTransfer, LocalAddress } from '@/types'
 
 const autoPairPreferenceKey = 'packetboat:auto-pair-by-qr'
 const alwaysOnTopPreferenceKey = 'packetboat:always-on-top'
@@ -54,6 +58,8 @@ export function useDesktopHost() {
   const devices = shallowRef<readonly DesktopDevice[]>([])
   /** 活跃传输任务：约 1 秒刷新，便于观察进度与速度。 */
   const transfers = shallowRef<readonly DesktopTransfer[]>([])
+  /** 主机侧传输历史（新到旧）。 */
+  const history = shallowRef<readonly DesktopHistoryEntry[]>([])
   const loading = shallowRef(true)
   const busy = shallowRef('')
   const errorMessage = shallowRef('')
@@ -85,6 +91,15 @@ export function useDesktopHost() {
   async function syncTransfers() {
     try {
       transfers.value = await getActiveTransfers()
+    }
+    catch {
+      // 服务未运行时保留上一次快照
+    }
+  }
+
+  async function syncHistory() {
+    try {
+      history.value = await getTransferHistory()
     }
     catch {
       // 服务未运行时保留上一次快照
@@ -194,12 +209,14 @@ export function useDesktopHost() {
       if (!loading.value) {
         void syncDevices()
         void syncTransfers()
+        void syncHistory()
       }
     }, 1000)
     try {
       await refresh()
       await syncDevices()
       await syncTransfers()
+      await syncHistory()
       // 状态事件 + 轻量轮询：下载次数等不总会触发 Tauri 事件
       stateTimer = window.setInterval(() => {
         if (!loading.value)
@@ -210,6 +227,7 @@ export function useDesktopHost() {
         void refresh()
         void syncDevices()
         void syncTransfers()
+        void syncHistory()
       })
       cancelErrorEvent = await events.errorNotice.listen((event) => {
         errorMessage.value = typeof event.payload === 'string' ? event.payload : '服务端发生错误，请查看日志'
@@ -346,6 +364,25 @@ export function useDesktopHost() {
     }
   }
 
+  /** 清空主机侧传输历史。 */
+  async function clearHistory() {
+    if (busy.value || history.value.length === 0)
+      return
+    if (!window.confirm(`确定清空 ${history.value.length} 条传输历史吗？\n\n仅清除历史记录，不影响已收文件。`))
+      return
+    await perform('clear-history', async () => {
+      const cleared = await clearTransferHistoryCommand()
+      await syncHistory()
+      showNotice(`已清空 ${cleared} 条传输历史`)
+    })
+  }
+
+  /** 更新传输历史保留天数（0 关闭并清空）。 */
+  async function setHistoryRetention(days: number) {
+    await perform('history-retention', () => setHistoryRetentionCommand(days))
+    await syncHistory()
+  }
+
   /** 手动刷新配对码（不重启服务）。 */
   async function refreshAccessCode() {
     busy.value = 'access-code'
@@ -373,6 +410,18 @@ export function useDesktopHost() {
       window.clearTimeout(copyTimer)
       window.clearTimeout(noticeTimer)
       copyTimer = window.setTimeout(() => copied.value = '', 1800)
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+    }
+  }
+
+  /** 读取文本投递正文并写入系统剪贴板。 */
+  async function copyNoteContent(id: string) {
+    try {
+      const content = await getNoteContent(id)
+      await writeText(content)
+      showNotice('文本投递正文已复制')
     }
     catch (error) {
       errorMessage.value = messageFrom(error)
@@ -465,6 +514,7 @@ export function useDesktopHost() {
     state: readonly(state),
     devices: readonly(devices),
     transfers: readonly(transfers),
+    history: readonly(history),
     loading: readonly(loading),
     busy: readonly(busy),
     errorMessage: readonly(errorMessage),
@@ -501,7 +551,10 @@ export function useDesktopHost() {
     setPairingRequired,
     setShareReceiveDirEnabled,
     rescanReceiveDirectory,
+    clearHistory,
+    setHistoryRetention,
     refreshAccessCode,
+    copyNoteContent,
     revealItem,
     copyURL,
     openURL,

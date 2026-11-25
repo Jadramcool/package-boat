@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, shallowRef } from "vue";
 import { formatBytes } from "@/utils/format";
 import BrandMark from "@/components/BrandMark.vue";
 import AppHeader from "./components/AppHeader.vue";
 import ConnectCard from "./components/ConnectCard.vue";
 import FileShelf from "./components/FileShelf.vue";
+import NotePreviewDialog from "./components/NotePreviewDialog.vue";
 import PairingGate from "./components/PairingGate.vue";
 import SessionCard from "./components/SessionCard.vue";
+import TextNoteCard from "./components/TextNoteCard.vue";
 import UploadDropzone from "./components/UploadDropzone.vue";
 import UploadQueue from "./components/UploadQueue.vue";
 import { useFileShare } from "./composables/useFileShare";
+import type { SharedFile } from "./types";
 
 const share = useFileShare();
 const accessURL = window.location.origin;
@@ -31,11 +34,55 @@ const receivedCount = computed(
 const inboxCount = computed(
   () => share.files.value.filter((file) => file.source_type === "inbox").length,
 );
+const noteBusy = shallowRef(false);
+const noteTitle = shallowRef("");
+const noteContent = shallowRef("");
+const noteMessage = shallowRef("");
+const noteMessageTone = shallowRef<'success' | 'error' | ''>('');
+const previewFile = shallowRef<SharedFile | null>(null);
 
 onMounted(share.initialize);
 
+async function handleSendNote(title: string, content: string): Promise<void> {
+  noteBusy.value = true;
+  noteMessage.value = "";
+  noteMessageTone.value = "";
+  try {
+    const ok = await share.sendNote(title, content);
+    if (ok) {
+      noteTitle.value = "";
+      noteContent.value = "";
+      noteMessageTone.value = "success";
+      noteMessage.value = "文本已投递，并加入共享文件架。";
+      await share.loadFiles();
+    }
+    else {
+      noteMessageTone.value = "error";
+      noteMessage.value = share.error.value || "投递失败，正文已保留，请重试。";
+    }
+  }
+  finally {
+    noteBusy.value = false;
+  }
+}
+
+async function handleClearHistory(): Promise<void> {
+  if (!window.confirm("确定清空全部传输历史吗？\n\n仅删除历史记录，不影响磁盘文件。"))
+    return;
+  await share.clearHistory();
+}
+
 async function confirmDelete(id: string, name: string): Promise<void> {
   const file = share.files.value.find((candidate) => candidate.id === id);
+  if (file?.is_note) {
+    if (
+      window.confirm(
+        `确定将文本投递「${name}」移出共享清单吗？\n\n磁盘上的文件不会被删除。`,
+      )
+    )
+      await share.deleteFile(id);
+    return;
+  }
   if (file?.source_type === "linked") {
     if (window.confirm(`确定取消共享「${name}」吗？原文件不会被删除。`))
       await share.deleteFile(id);
@@ -97,10 +144,16 @@ async function confirmDelete(id: string, name: string): Promise<void> {
           :disabled="!share.online.value"
           :max-size-label="maxUploadSize"
           @select-files="share.addFiles" />
+        <TextNoteCard
+          v-model:title="noteTitle"
+          v-model:content="noteContent"
+          :disabled="!share.online.value"
+          :busy="noteBusy"
+          :message="noteMessage"
+          :message-tone="noteMessageTone"
+          @send="handleSendNote" />
         <UploadQueue
-          v-if="
-            share.uploads.value.length > 0 || share.history.value.length > 0
-          "
+          v-if="share.uploads.value.length > 0 || share.history.value.length > 0"
           :uploads="share.uploads.value"
           :history="share.history.value"
           :completed-count="share.completedUploads.value"
@@ -110,7 +163,7 @@ async function confirmDelete(id: string, name: string): Promise<void> {
           @resume="share.resumeUpload"
           @retry="share.retryUpload"
           @clear="share.clearFinishedUploads"
-          @clear-history="share.clearHistory"
+          @clear-history="handleClearHistory"
           @update:concurrency="share.uploadConcurrency.value = $event" />
         <FileShelf
           :files="share.files.value"
@@ -122,7 +175,8 @@ async function confirmDelete(id: string, name: string): Promise<void> {
           :total-size-label="totalSize"
           :download-origin="share.downloadOrigin.value"
           @refresh="share.loadFiles"
-          @delete="confirmDelete" />
+          @delete="confirmDelete"
+          @preview="previewFile = $event" />
       </div>
 
       <aside class="side-col" aria-label="连接与会话">
@@ -144,6 +198,10 @@ async function confirmDelete(id: string, name: string): Promise<void> {
         ><span>关闭主机程序即停止共享</span>
       </div>
     </footer>
+    <NotePreviewDialog
+      v-if="previewFile"
+      :file="previewFile"
+      @close="previewFile = null" />
   </div>
 </template>
 

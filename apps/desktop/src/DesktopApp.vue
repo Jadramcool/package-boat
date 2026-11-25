@@ -10,6 +10,7 @@ import { onMounted, onUnmounted } from "vue";
 import ConnectionSettings from "@/components/ConnectionSettings.vue";
 import ConnectedDevices from "@/components/ConnectedDevices.vue";
 import ActiveTransfers from "@/components/ActiveTransfers.vue";
+import TransferHistory from "@/components/TransferHistory.vue";
 import DesktopFileList from "@/components/DesktopFileList.vue";
 import DesktopHeader from "@/components/DesktopHeader.vue";
 import StorageSettings from "@/components/StorageSettings.vue";
@@ -156,6 +157,7 @@ onUnmounted(() => {
             :inbox-count="desktop.inboxCount.value"
             @refresh="desktop.refresh"
             @reveal="desktop.revealItem"
+            @copy-note="desktop.copyNoteContent"
             @unshare="desktop.unshare"
             @choose="desktop.chooseFiles"
             @clear="desktop.clearSharedFiles" />
@@ -183,16 +185,23 @@ onUnmounted(() => {
               @cancel="desktop.cancelTransfer"
               @pause="desktop.pauseTransfer"
               @resume="desktop.resumeTransfer" />
+            <TransferHistory
+              :history="desktop.history.value"
+              :devices="desktop.devices.value"
+              :retention-days="desktop.state.value.settings.history_retention_days ?? 7"
+              :busy="desktop.busy.value === 'clear-history'"
+              @clear="desktop.clearHistory" />
             <ConnectedDevices
               :devices="desktop.devices.value"
               :running="desktop.state.value.host.running" />
             <StorageSettings
               :settings="desktop.state.value.settings"
-              :busy="desktop.busy.value === 'directory'"
+              :busy="desktop.busy.value === 'directory' || desktop.busy.value === 'history-retention'"
               :rescanning-inbox="desktop.busy.value === 'rescan-inbox'"
               @choose-directory="desktop.chooseReceiveDirectory"
               @toggle-share-receive-dir="desktop.setShareReceiveDirEnabled"
-              @rescan-receive-dir="desktop.rescanReceiveDirectory" />
+              @rescan-receive-dir="desktop.rescanReceiveDirectory"
+              @set-history-retention="desktop.setHistoryRetention" />
           </aside>
         </div>
       </main>

@@ -1,8 +1,11 @@
 import { computed, onUnmounted, readonly, ref, shallowRef, watch } from 'vue'
 import {
   cancelUploadSession,
+  clearHistory as clearHistoryRequest,
+  createNote,
   deleteSharedFile,
   getFiles,
+  getHistory,
   getServiceInfo,
   getSession,
   HttpError,
@@ -10,12 +13,6 @@ import {
   signOutDevice,
 } from '../api'
 import { runResumableUpload } from '../resumableUpload'
-import {
-  appendHistoryEntry,
-  createHistoryEntry,
-  loadHistory,
-  saveHistory,
-} from '../transferHistory'
 import { createTransferMetricsTracker } from '../transferMetrics'
 import type { ServiceInfo, SharedFile, TransferHistoryEntry, UploadTask } from '../types'
 
@@ -95,7 +92,7 @@ export function useFileShare() {
   const serviceInfo = shallowRef<ServiceInfo | null>(null)
   const files = shallowRef<SharedFile[]>([])
   const uploads = ref<UploadTask[]>([])
-  const history = shallowRef<TransferHistoryEntry[]>(loadHistory())
+  const history = shallowRef<TransferHistoryEntry[]>([])
   const authenticated = shallowRef(false)
   const initializing = shallowRef(true)
   const pairing = shallowRef(false)
@@ -183,6 +180,7 @@ export function useFileShare() {
       noteNetworkSuccess()
       if (authenticated.value) {
         await loadFiles()
+        await loadHistory()
         connectEvents()
       }
     }
@@ -205,6 +203,7 @@ export function useFileShare() {
 
       if (authenticated.value) {
         await loadFiles()
+        await loadHistory()
         connectEvents()
       }
       else if (code) {
@@ -237,6 +236,7 @@ export function useFileShare() {
       authenticated.value = true
       online.value = true
       await loadFiles()
+      await loadHistory()
       connectEvents()
     }
     catch (cause) {
@@ -275,6 +275,29 @@ export function useFileShare() {
     }
     finally {
       loadingFiles.value = false
+    }
+  }
+
+  /** 拉取主机侧传输历史（新到旧）。失败时保留上一次快照。 */
+  async function loadHistory(): Promise<void> {
+    try {
+      const response = await getHistory()
+      history.value = response.history
+      online.value = true
+    }
+    catch {
+      // 瞬时失败：保留现有历史
+    }
+  }
+
+  /** 清空主机侧传输历史。 */
+  async function clearHistory(): Promise<void> {
+    try {
+      await clearHistoryRequest()
+      history.value = []
+    }
+    catch (cause) {
+      handleRequestError(cause)
     }
   }
 
@@ -352,8 +375,8 @@ export function useFileShare() {
       task.etaSeconds = 0
       task.sessionID = undefined
       online.value = true
-      recordHistory(task)
       await loadFiles()
+      await loadHistory()
     }
     catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') {
@@ -371,7 +394,7 @@ export function useFileShare() {
           task.speedBytesPerSecond = 0
           task.etaSeconds = undefined
           await discardUploadSession(task)
-          recordHistory(task)
+          await loadHistory()
         }
       }
       else {
@@ -383,7 +406,7 @@ export function useFileShare() {
         task.etaSeconds = undefined
         if (!(cause instanceof HttpError))
           online.value = false
-        recordHistory(task)
+        await loadHistory()
       }
     }
     finally {
@@ -402,8 +425,8 @@ export function useFileShare() {
       return
     if (task.status === 'queued' || task.status === 'paused') {
       task.status = 'cancelled'
-      recordHistory(task)
       void discardUploadSession(task)
+      void loadHistory()
       return
     }
     if (task.status !== 'uploading')
@@ -465,28 +488,10 @@ export function useFileShare() {
     }
   }
 
-  function recordHistory(task: UploadTask): void {
-    history.value = appendHistoryEntry(history.value, createHistoryEntry({
-      id: task.id,
-      name: task.file.name,
-      size: task.file.size,
-      status: task.status === 'complete' || task.status === 'error' || task.status === 'cancelled'
-        ? task.status
-        : 'cancelled',
-      error: task.error,
-    }))
-    saveHistory(history.value)
-  }
-
   function clearFinishedUploads(): void {
     uploads.value = uploads.value.filter(task =>
       task.status !== 'complete' && task.status !== 'cancelled',
     )
-  }
-
-  function clearHistory(): void {
-    history.value = []
-    saveHistory(history.value)
   }
 
   async function deleteFile(id: string): Promise<void> {
@@ -501,6 +506,24 @@ export function useFileShare() {
     }
     finally {
       deletingID.value = ''
+    }
+  }
+
+  /** 文本/剪贴板投递：写入接收目录并刷新列表。 */
+  async function sendNote(title: string, content: string): Promise<boolean> {
+    const body = content.replace(/\s+$/, '')
+    if (!body.trim())
+      return false
+    error.value = ''
+    try {
+      const response = await createNote({ title: title.trim(), content: body })
+      const note = response.file
+      files.value = [note, ...files.value.filter(file => file.id !== note.id)]
+      return true
+    }
+    catch (cause) {
+      handleRequestError(cause)
+      return false
     }
   }
 
@@ -537,6 +560,7 @@ export function useFileShare() {
     loadFilesTimer = window.setTimeout(() => {
       loadFilesTimer = 0
       void loadFiles()
+      void loadHistory()
     }, delayMs)
   }
 
@@ -626,13 +650,15 @@ export function useFileShare() {
     pair,
     signOut,
     loadFiles,
+    loadHistory,
+    clearHistory,
     addFiles,
     cancelUpload,
     pauseUpload,
     resumeUpload,
     retryUpload,
     clearFinishedUploads,
-    clearHistory,
     deleteFile,
+    sendNote,
   }
 }

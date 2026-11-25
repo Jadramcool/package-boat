@@ -13,10 +13,17 @@ const emit = defineEmits<{
   chooseDirectory: []
   toggleShareReceiveDir: [enabled: boolean]
   rescanReceiveDir: []
+  setHistoryRetention: [days: number]
 }>()
 
 function handleShareReceiveDirChange(event: Event) {
   emit('toggleShareReceiveDir', (event.target as HTMLInputElement).checked)
+}
+
+const retentionOptions = [0, 1, 3, 7, 14, 30, 90]
+
+function handleRetentionChange(event: Event) {
+  emit('setHistoryRetention', Number((event.target as HTMLSelectElement).value))
 }
 </script>
 
@@ -77,6 +84,26 @@ function handleShareReceiveDirChange(event: Event) {
       </template>
     </p>
 
+    <div class="retention">
+      <label class="retention-label" for="history-retention">传输历史保留</label>
+      <select
+        id="history-retention"
+        class="retention-select"
+        :value="props.settings.history_retention_days ?? 7"
+        :disabled="props.busy"
+        @change="handleRetentionChange"
+      >
+        <option v-for="days in retentionOptions" :key="days" :value="days">
+          {{ days === 0 ? '关闭' : `${days} 天` }}
+        </option>
+      </select>
+      <p class="retention-hint">
+        {{ (props.settings.history_retention_days ?? 7) === 0
+          ? '关闭后不再记录，且会清空已有历史。'
+          : '主机侧历史，桌面与浏览器共用；到期自动清理。' }}
+      </p>
+    </div>
+
     <dl>
       <div>
         <dt>单文件上限</dt>
@@ -104,6 +131,38 @@ function handleShareReceiveDirChange(event: Event) {
 .rescan-hint {
   margin: 6px 0 0;
   min-height: calc(11px * 1.45 * 2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.retention {
+  display: grid;
+  gap: 6px;
+}
+.retention-label {
+  color: var(--muted);
+  font: 600 11.5px/1 var(--font-label);
+}
+.retention-select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  font: 650 12px/1.2 var(--font-mono);
+  cursor: pointer;
+}
+.retention-select:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 1px;
+}
+.retention-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.retention-hint {
+  margin: 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.45;

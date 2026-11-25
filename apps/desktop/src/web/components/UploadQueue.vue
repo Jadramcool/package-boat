@@ -3,7 +3,7 @@ import { Check, CircleX, History, LoaderCircle, Pause, Play, RotateCcw, X } from
 import { formatBytes, formatDate, formatDuration } from '@/utils/format'
 import type { TransferHistoryEntry, UploadTask } from '../types'
 
-defineProps<{
+const props = defineProps<{
   uploads: readonly UploadTask[]
   history: readonly TransferHistoryEntry[]
   completedCount: number
@@ -37,12 +37,22 @@ function transferDetail(task: UploadTask): string {
   return parts.join(' · ')
 }
 
-function historyLabel(entry: TransferHistoryEntry): string {
+function historyStatus(entry: TransferHistoryEntry): string {
   if (entry.status === 'complete')
-    return '已完成'
+    return '完成'
   if (entry.status === 'cancelled')
-    return '已取消'
-  return entry.error ?? '失败'
+    return '取消'
+  return '中断'
+}
+
+function historyKind(entry: TransferHistoryEntry): string {
+  return entry.kind === 'download' ? '下载' : '上传'
+}
+
+function historySize(entry: TransferHistoryEntry): string {
+  if (entry.status === 'complete' || entry.total_bytes == null)
+    return formatBytes(entry.transferred_bytes)
+  return `${formatBytes(entry.transferred_bytes)} / ${formatBytes(entry.total_bytes)}`
 }
 </script>
 
@@ -57,7 +67,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
         <label class="concurrency-field">
           <span>并行</span>
           <select
-            :value="concurrency"
+            :value="props.concurrency"
             aria-label="同时上传文件数"
             @change="onConcurrencyChange"
           >
@@ -66,13 +76,13 @@ function historyLabel(entry: TransferHistoryEntry): string {
             </option>
           </select>
         </label>
-        <button v-if="completedCount > 0" class="clear-button" type="button" @click="emit('clear')">
+        <button v-if="props.completedCount > 0" class="clear-button" type="button" @click="emit('clear')">
           清理已完成
         </button>
       </div>
     </header>
-    <ul v-if="uploads.length > 0" class="task-list">
-      <li v-for="task in uploads" :key="task.id" class="task-row">
+    <ul v-if="props.uploads.length > 0" class="task-list">
+      <li v-for="task in props.uploads" :key="task.id" class="task-row">
         <div class="task-state" :class="task.status" aria-hidden="true">
           <Check v-if="task.status === 'complete'" :size="16" />
           <CircleX v-else-if="task.status === 'error'" :size="16" />
@@ -133,26 +143,27 @@ function historyLabel(entry: TransferHistoryEntry): string {
     </ul>
     <p v-else class="queue-empty">暂无进行中的传输</p>
 
-    <section v-if="history.length > 0" class="history-block" aria-labelledby="history-title">
+    <section v-if="props.history.length > 0" class="history-block" aria-labelledby="history-title">
       <header class="history-header">
         <div class="history-heading">
           <History :size="14" aria-hidden="true" />
           <h3 id="history-title">传输历史</h3>
-          <span class="history-count">{{ history.length }} 条</span>
+          <span class="history-count">{{ props.history.length }} 条</span>
         </div>
         <button class="clear-button" type="button" @click="emit('clearHistory')">清空历史</button>
       </header>
       <ul class="history-list">
-        <li v-for="entry in history" :key="entry.id" class="history-row">
+        <li v-for="entry in props.history" :key="entry.id" class="history-row">
           <span class="history-status" :class="entry.status" aria-hidden="true">
             <Check v-if="entry.status === 'complete'" :size="12" />
-            <CircleX v-else-if="entry.status === 'error'" :size="12" />
+            <CircleX v-else-if="entry.status === 'incomplete'" :size="12" />
             <X v-else :size="12" />
           </span>
           <span class="history-name" :title="entry.name">{{ entry.name }}</span>
-          <span class="history-meta">{{ formatBytes(entry.size) }}</span>
-          <span class="history-meta">{{ formatDate(entry.finishedAt) }}</span>
-          <span class="history-result" :class="entry.status">{{ historyLabel(entry) }}</span>
+          <span class="history-kind">{{ historyKind(entry) }}</span>
+          <span class="history-meta">{{ historySize(entry) }}</span>
+          <span class="history-meta">{{ formatDate(entry.finished_at) }}</span>
+          <span class="history-result" :class="entry.status">{{ historyStatus(entry) }}</span>
         </li>
       </ul>
     </section>
@@ -199,16 +210,17 @@ function historyLabel(entry: TransferHistoryEntry): string {
 .history-heading h3 { margin: 0; font: 700 13px/1 var(--font-display); }
 .history-count { color: var(--muted); font: 600 10px/1 var(--font-label); letter-spacing: .06em; }
 .history-list { margin: 0; padding: 0; list-style: none; max-height: 220px; overflow-y: auto; }
-.history-row { padding: 10px 20px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.history-row { padding: 10px 20px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .history-row:last-child { border-bottom: 0; }
 .history-status { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; border: 1px solid var(--line-strong); color: var(--muted); }
 .history-status.complete { border-color: var(--ink); color: var(--ink); background: var(--acid); }
-.history-status.error { border-color: var(--signal); color: var(--signal); }
+.history-status.incomplete { border-color: var(--signal); color: var(--signal); }
 .history-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.history-kind { color: var(--muted); font: 600 10px/1 var(--font-label); letter-spacing: .04em; }
 .history-meta { color: var(--muted); font: 600 10px/1 var(--font-mono); white-space: nowrap; }
 .history-result { min-width: 48px; text-align: right; color: var(--muted); font: 650 10px/1.3 var(--font-label); letter-spacing: .04em; white-space: nowrap; }
 .history-result.complete { color: var(--acid-deep); }
-.history-result.error { color: var(--signal-deep); }
+.history-result.incomplete { color: var(--signal-deep); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 560px) {
   .queue-header { align-items: flex-start; flex-direction: column; }
@@ -218,6 +230,7 @@ function historyLabel(entry: TransferHistoryEntry): string {
   .history-result { grid-area: result; }
   .history-meta { grid-area: meta; justify-self: start; }
   .history-meta + .history-meta { display: none; }
+  .history-kind { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .task-state.uploading svg { animation: none; } }
 </style>

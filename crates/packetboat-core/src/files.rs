@@ -376,6 +376,66 @@ pub(crate) async fn commit_temporary_upload(
     }
 }
 
+/// 文本投递上限（UTF-8 字节）：短消息/剪贴板场景，避免把接收目录当网盘。
+pub const MAX_NOTE_BYTES: usize = 64 * 1024;
+
+/// 保存文本投递：写入接收目录 `.txt` 并以 `is_note` 登记到目录表。
+pub async fn save_note(
+    catalog: &Catalog,
+    storage_dir: &Path,
+    title: &str,
+    content: &str,
+    file_mu: &tokio::sync::Mutex<()>,
+) -> Result<Item, SaveUploadError> {
+    let body = content.as_bytes();
+    if body.is_empty() {
+        return Err(SaveUploadError::InvalidName);
+    }
+    if body.len() > MAX_NOTE_BYTES {
+        return Err(SaveUploadError::TooLarge);
+    }
+
+    let name = sanitize_filename(&note_display_name(title));
+    if name.is_empty() {
+        return Err(SaveUploadError::InvalidName);
+    }
+
+    let destination = {
+        let _guard = file_mu.lock().await;
+        let destination = unique_destination(storage_dir, &name);
+        tokio::fs::write(&destination, content)
+            .await
+            .map_err(|err| map_storage_io(&format!("写入文本投递到 {destination:?}"), err))?;
+        destination
+    };
+
+    match catalog.add_received_note(destination.clone()) {
+        Ok(item) => Ok(item),
+        Err(err) => {
+            let _ = tokio::fs::remove_file(&destination).await;
+            Err(SaveUploadError::Catalog(err))
+        }
+    }
+}
+
+/// 生成文本投递文件名：标题优先，否则时间戳。
+fn note_display_name(title: &str) -> String {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        let now = chrono::Utc::now();
+        return format!("文本投递_{}.txt", now.format("%Y%m%d_%H%M%S"));
+    }
+    let stem = trimmed
+        .get(trimmed.len().saturating_sub(4)..)
+        .filter(|suffix| suffix.eq_ignore_ascii_case(".txt"))
+        .and_then(|_| trimmed.get(..trimmed.len() - 4))
+        .unwrap_or(trimmed);
+    if stem.is_empty() {
+        return "文本投递.txt".to_string();
+    }
+    format!("{stem}.txt")
+}
+
 /// 写入临时文件：限制读取长度（超出上限判定为超大文件），完成后 fsync。
 async fn write_temp(
     path: &Path,

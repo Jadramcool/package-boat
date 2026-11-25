@@ -30,11 +30,20 @@ pub struct Settings {
     /// 默认关闭，保持「只展示明确上传/原位共享」的安全边界。
     #[serde(default)]
     pub share_receive_dir: bool,
+    /// 主机侧传输历史保留天数（1–365；0 = 关闭历史）。默认 7 天。
+    #[serde(default = "default_history_retention_days")]
+    #[cfg_attr(feature = "specta", specta(type = u32))]
+    pub history_retention_days: i64,
 }
 
 /// 配对码开关默认值：默认开启（与历史行为一致）。
 fn default_require_pairing() -> bool {
     true
+}
+
+/// 传输历史默认保留天数。
+fn default_history_retention_days() -> i64 {
+    7
 }
 
 /// 缺省端口（与 Go 版默认一致）。
@@ -68,6 +77,7 @@ impl Settings {
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
             require_pairing: true,
             share_receive_dir: false,
+            history_retention_days: default_history_retention_days(),
         }
     }
 }
@@ -165,6 +175,23 @@ impl Store {
         }
     }
 
+    /// 更新传输历史保留天数（0–365；0 关闭历史）。
+    pub fn set_history_retention_days(&self, days: i64) -> Result<Settings, String> {
+        if !(0..=365).contains(&days) {
+            return Err("历史保留天数需在 0–365 之间".to_string());
+        }
+        let mut guard = self.inner.write().expect("settings lock poisoned");
+        let previous = guard.clone();
+        guard.history_retention_days = days;
+        match self.save_locked(&guard) {
+            Ok(()) => Ok(guard.clone()),
+            Err(err) => {
+                *guard = previous;
+                Err(err)
+            }
+        }
+    }
+
     fn save_locked(&self, settings: &Settings) -> Result<(), String> {
         if self.path.as_os_str().is_empty() {
             return Ok(());
@@ -186,6 +213,9 @@ fn apply_fallbacks(settings: &mut Settings, defaults: &Settings) {
     }
     if settings.max_upload_bytes <= 0 {
         settings.max_upload_bytes = defaults.max_upload_bytes;
+    }
+    if !(0..=365).contains(&settings.history_retention_days) {
+        settings.history_retention_days = defaults.history_retention_days;
     }
 }
 
@@ -234,6 +264,7 @@ mod tests {
             max_upload_bytes: 10 * 1024 * 1024 * 1024,
             require_pairing: true,
             share_receive_dir: false,
+            history_retention_days: 7,
         }
     }
 
@@ -296,6 +327,7 @@ mod tests {
                 max_upload_bytes: 1,
                 require_pairing: true,
                 share_receive_dir: false,
+                history_retention_days: 7,
             },
         )
         .unwrap();
@@ -314,6 +346,7 @@ mod tests {
             max_upload_bytes: 0,
             require_pairing: true,
             share_receive_dir: false,
+            history_retention_days: 7,
         };
         apply_fallbacks(&mut settings, &defaults);
         assert_eq!(settings.port, 0);

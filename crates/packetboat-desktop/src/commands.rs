@@ -277,6 +277,64 @@ pub fn get_active_transfers(state: State<'_, Desktop>) -> Vec<ActiveTransfer> {
     state.host.active_transfers()
 }
 
+/// 主机侧传输历史（已完成/取消/中断，新到旧；落盘元数据）。
+#[tauri::command]
+#[specta::specta]
+pub fn get_transfer_history(
+    state: State<'_, Desktop>,
+) -> Vec<packetboat_core::history::HistoryEntry> {
+    state.host.transfer_history()
+}
+
+/// 读取文本投递正文，供桌面端一键复制。
+#[tauri::command]
+#[specta::specta]
+pub fn get_note_content(state: State<'_, Desktop>, id: String) -> Result<String, AppError> {
+    state.host.note_content(&id).map_err(AppError::new)
+}
+
+/// 清空传输历史，返回删除条数。
+#[tauri::command]
+#[specta::specta]
+pub fn clear_transfer_history(app: AppHandle, state: State<'_, Desktop>) -> Result<u32, AppError> {
+    match state.host.clear_transfer_history() {
+        Ok(count) => {
+            emit_state_changed(&app);
+            Ok(count)
+        }
+        Err(err) => {
+            emit_error(&app, &err);
+            Err(err.into())
+        }
+    }
+}
+
+/// 更新传输历史保留天数（0–365；0 关闭并清空）。无需重启服务。
+#[tauri::command]
+#[specta::specta]
+pub async fn set_history_retention(
+    app: AppHandle,
+    state: State<'_, Desktop>,
+    days: u32,
+) -> Result<Settings, AppError> {
+    if days > 365 {
+        return Err(AppError::new("历史保留天数需在 0–365 之间"));
+    }
+    let previous_days = state.settings.get().history_retention_days;
+    let updated = state
+        .settings
+        .set_history_retention_days(i64::from(days))
+        .inspect_err(|err| emit_error(&app, err))?;
+    if let Err(err) = state.host.set_history_retention_days(days) {
+        // 历史存储失败时回滚设置，避免 UI/磁盘配置与实际历史策略不一致。
+        let _ = state.settings.set_history_retention_days(previous_days);
+        emit_error(&app, &err);
+        return Err(err.into());
+    }
+    emit_state_changed(&app);
+    Ok(updated)
+}
+
 /// 主动停止一个传输任务（从列表移除，并中止对应下载流）。
 #[tauri::command]
 #[specta::specta]

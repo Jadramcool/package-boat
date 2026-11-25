@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   Download,
+  Eye,
   File,
   FileArchive,
   FileAudio,
@@ -24,6 +25,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   delete: [id: string, name: string]
+  preview: [file: SharedFile]
 }>()
 
 const extension = computed(() => props.file.is_dir ? 'ZIP' : fileExtension(props.file.name))
@@ -44,12 +46,17 @@ const icon = computed(() => {
   return File
 })
 const sourceLabel = computed(() => {
+  if (props.file.is_note)
+    return '文本投递'
   if (props.file.source_type === 'linked')
     return '原位共享'
   if (props.file.source_type === 'inbox')
     return '本地文件'
   return '远程接收'
 })
+const badgeClass = computed(() =>
+  props.file.is_note ? 'note' : props.file.source_type,
+)
 const downloadURL = computed(() => {
   // 同源下载（方案 C）：相对路径即可，避免跨端口
   return `/api/files/${encodeURIComponent(props.file.id)}/download`
@@ -65,7 +72,7 @@ const downloadURL = computed(() => {
     <div class="file-info">
       <div class="file-name-line">
         <strong :title="file.name">{{ file.name }}</strong>
-        <span class="source-label" :class="file.source_type">
+        <span class="source-label" :class="badgeClass">
           <span>{{ sourceLabel }}</span>
         </span>
         <span v-if="!file.available" class="missing-label"><span>原文件已移动</span></span>
@@ -77,6 +84,16 @@ const downloadURL = computed(() => {
       </div>
     </div>
     <div class="file-actions">
+      <button
+        v-if="file.is_note && file.available"
+        type="button"
+        class="preview-button"
+        title="预览并复制文本"
+        aria-label="预览并复制文本"
+        @click="emit('preview', file)"
+      >
+        <Eye :size="17" aria-hidden="true" /><span>查看</span>
+      </button>
       <!-- 直接用 <a> 指向下载端口：跨端口导航下载不受页面 CSP frame-src 限制 -->
       <a
         v-if="file.available"
@@ -118,16 +135,19 @@ const downloadURL = computed(() => {
 .source-label.linked { color: var(--acid-deep); background: var(--acid-wash); }
 .source-label.received { color: #23559e; background: var(--info-wash); }
 .source-label.inbox { color: var(--ink-2, #39432f); background: var(--paper-deep, #e9ebe2); }
+.source-label.note { color: var(--info); background: color-mix(in srgb, var(--info) 12%, #fff); }
 .missing-label { color: var(--signal-deep); background: var(--signal-soft); }
 .file-meta { margin-top: 9px; display: flex; gap: 10px; color: var(--muted); font: 550 10px/1 var(--font-mono); }
 .file-meta span + span::before { content: '·'; margin-right: 9px; }
 .file-actions { display: flex; align-items: center; gap: 7px; }
-.download-button, .unavailable-button, .delete-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: transparent; text-decoration: none; }
-.download-button svg, .delete-button svg { flex: none; display: block; }
+.download-button, .unavailable-button, .delete-button, .preview-button { height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 9px; color: var(--ink); background: transparent; text-decoration: none; }
+.download-button svg, .delete-button svg, .preview-button svg { flex: none; display: block; }
 .download-button { padding: 0 12px; gap: 7px; font-size: 11px; }
+.preview-button { padding: 0 11px; gap: 7px; cursor: pointer; font-size: 11px; }
 .unavailable-button { padding: 0 10px; color: var(--muted); cursor: not-allowed; font-size: 9px; }
 .delete-button { width: 36px; color: var(--muted); cursor: pointer; }
 .download-button:hover { border-color: var(--ink); color: var(--paper); background: var(--ink); }
+.preview-button:hover { border-color: var(--info); color: var(--info); }
 .delete-button:hover:not(:disabled) { border-color: var(--signal); color: var(--signal); }
 .delete-button:disabled { opacity: .5; cursor: wait; }
 .spin { animation: spin 1s linear infinite; }
@@ -139,7 +159,9 @@ const downloadURL = computed(() => {
   .file-meta { flex-direction: column; gap: 4px; }
   .file-meta span + span::before { display: none; }
   .download-button { width: 36px; padding: 0; }
+  .preview-button { width: 36px; padding: 0; }
   .download-button span { display: none; }
+  .preview-button span { display: none; }
   .source-label { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

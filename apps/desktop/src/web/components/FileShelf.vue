@@ -25,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   refresh: []
   delete: [id: string, name: string]
+  preview: [file: SharedFile]
 }>()
 
 const sortState = ref<FileSortState>({ ...DEFAULT_FILE_SORT })
@@ -110,6 +111,7 @@ function toggleDirection() {
         :deleting="deletingId === file.id"
         :download-origin="downloadOrigin"
         @delete="(id, name) => emit('delete', id, name)"
+        @preview="emit('preview', $event)"
       />
     </ul>
   </section>

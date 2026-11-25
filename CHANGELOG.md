@@ -2,7 +2,34 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
-## [Unreleased]
+## [0.5.0] - 2026-11-25
+
+### Added
+
+- **主机侧传输历史**：上传/下载结束后写入数据目录 `history.json`（完成 / 取消 / 中断，新到旧）。桌面端侧栏与浏览器接收页共用同一份历史；`GET /api/history`、`DELETE /api/history` 与 Tauri 命令 `get_transfer_history` / `clear_transfer_history` / `set_history_retention` 提供读取、清空与保留天数配置。默认保留 **7 天**（`settings.history_retention_days`，0–365，0 关闭并清空），最多保留 500 条；不删除已收磁盘文件。
+- **文本 / 剪贴板投递**：接收页新增文本投递卡，可粘贴剪贴板正文后一键投递（按 UTF-8 字节上限 64KB）。服务端 `POST /api/notes` 把短文本写入接收目录 `.txt` 并以 `is_note` 登记共享清单；桌面端与网页文件架展示「文本投递」徽标，移出清单仍不删除磁盘文件。
+- **文本预览与复制**：新增 `GET /api/files/{id}/text` 与 Tauri 命令 `get_note_content`。浏览器可打开纯文本预览并一键复制，桌面端文件行可直接复制正文；预览不会产生下载历史或增加下载次数。
+
+### Changed
+
+- 传输历史条目改为 `transferred_bytes` / `total_bytes` 两个字段，中断时能准确展示已传字节与文件总大小；旧版 `size` 字段在读取时自动兼容。
+- 每次实际传输使用独立历史事件 ID；同一文件的并发 Range 仍合并为一个进行中任务，但下一轮重新下载会生成新的历史条目。
+- 文本投递失败时保留标题和正文草稿，前端按 UTF-8 字节实时显示额度，超限时直接禁止提交。
+
+### Fixed
+
+- 修复同一文件重复下载只保留最后一条历史的问题。
+- 修复 Range 续传成功后被误判为中断、且无法累计下载次数的问题。
+- 修复浏览器关闭或断网后上传任务静默消失、不记录中断历史的问题；暂停任务不再因 60 秒无活动被误删。
+- 修复零字节文件完整下载不写历史的问题。
+- 修复文本投递出错后草稿立即被清空的数据丢失问题。
+- 修复中文标题生成本地文件名时按字节截断可能导致服务端崩溃的问题。
+- 修复包含大量 JSON 转义字符的合法 64KB 文本被请求体上限误拒的问题。
+- 修复自动生成的 `bindings.ts` 尾随空格导致 `git diff --check` 失败的问题。
+
+### Removed
+
+- **浏览器本地传输历史**：原先基于 `localStorage` 的接收页历史已移除，改为上述主机侧历史。
 
 ## [0.4.0] - 2026-09-20
 
@@ -106,7 +133,8 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Jadramcool/package-boat/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Jadramcool/package-boat/compare/v0.1.0...v0.2.0

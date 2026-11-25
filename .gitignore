@@ -29,3 +29,4 @@ apps/desktop/shots/
 
 # 本地临时生成物
 generated-*.png
+*.pid

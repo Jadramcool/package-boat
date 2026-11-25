@@ -1,8 +1,12 @@
 import type {
   ChunkUploadSession,
+  CreateNotePayload,
+  CreateNoteResponse,
   FileListResponse,
+  NoteContentResponse,
   ServiceInfo,
   SessionStatus,
+  TransferHistoryEntry,
   UploadResponse,
 } from './types'
 
@@ -107,8 +111,31 @@ export function getFiles(): Promise<FileListResponse> {
   return request('/api/files')
 }
 
+/** 主机侧传输历史（新到旧）。 */
+export function getHistory(): Promise<{ history: TransferHistoryEntry[] }> {
+  return request('/api/history')
+}
+
+/** 清空主机侧传输历史，返回删除条数。 */
+export function clearHistory(): Promise<{ cleared: number }> {
+  return request('/api/history', { method: 'DELETE' })
+}
+
 export function deleteSharedFile(id: string): Promise<void> {
   return request(`/api/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+/** 文本/剪贴板投递：写入接收目录并加入共享清单。 */
+export function createNote(payload: CreateNotePayload): Promise<CreateNoteResponse> {
+  return request('/api/notes', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** 读取文本投递正文；不会触发下载历史或下载次数。 */
+export function getNoteContent(id: string): Promise<NoteContentResponse> {
+  return request(`/api/files/${encodeURIComponent(id)}/text`)
 }
 
 export function createUploadSession(file: File, signal?: AbortSignal): Promise<ChunkUploadSession> {

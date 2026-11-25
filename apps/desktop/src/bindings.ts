@@ -10,6 +10,14 @@ export const commands = {
 	getConnectedDevices: () => __TAURI_INVOKE<ConnectedDevice[]>("get_connected_devices"),
 	/**  当前活跃传输任务（桌面端「传输中」实时监控）。 */
 	getActiveTransfers: () => __TAURI_INVOKE<ActiveTransfer[]>("get_active_transfers"),
+	/**  主机侧传输历史（已完成/取消/中断，新到旧；落盘元数据）。 */
+	getTransferHistory: () => __TAURI_INVOKE<HistoryEntry[]>("get_transfer_history"),
+	/**  读取文本投递正文，供桌面端一键复制。 */
+	getNoteContent: (id: string) => typedError<string, AppError>(__TAURI_INVOKE("get_note_content", { id })),
+	/**  清空传输历史，返回删除条数。 */
+	clearTransferHistory: () => typedError<number, AppError>(__TAURI_INVOKE("clear_transfer_history")),
+	/**  更新传输历史保留天数（0–365；0 关闭并清空）。无需重启服务。 */
+	setHistoryRetention: (days: number) => typedError<Settings_Serialize, AppError>(__TAURI_INVOKE("set_history_retention", { days })),
 	/**  主动停止一个传输任务（从列表移除，并中止对应下载流）。 */
 	cancelTransfer: (id: string) => typedError<boolean, AppError>(__TAURI_INVOKE("cancel_transfer", { id })),
 	/**  暂停传输任务。 */
@@ -100,14 +108,41 @@ export type ConnectedDevice = {
 };
 
 /**  设备接入方式。 */
-export type DeviceAuthMode = 
+export type DeviceAuthMode =
 /**  使用六位配对码建立的会话。 */
-"paired" | 
+"paired" |
 /**  免配对模式下的匿名访问。 */
 "anonymous";
 
 /**  服务端错误提示（设置、目录表或服务生命周期失败时）。 */
 export type ErrorNotice = string;
+
+/**  单条传输历史记录（新到旧展示时由 `list` 排序）。 */
+export type HistoryEntry = {
+	/**  单次传输事件 ID。并发 Range 共用一个 ID，但同一文件的下一次下载必须生成新 ID。 */
+	id: string,
+	name: string,
+	kind: TransferKind,
+	/**  结束时实际已传/已收字节数。旧版本字段 `size` 通过 serde alias 兼容读取。 */
+	transferred_bytes: number,
+	/**  任务声明/探测到的总字节数；未知时为 `None`。 */
+	total_bytes: number | null,
+	status: HistoryStatus,
+	/**  对端 IP（未知为空串）。 */
+	peer_ip: string,
+	/**  失败/中断原因（可选）。 */
+	error: string | null,
+	finished_at: string,
+};
+
+/**  历史结果状态。 */
+export type HistoryStatus =
+/**  完整完成。 */
+"complete" |
+/**  用户主动取消。 */
+"cancelled" |
+/**  未完整结束（中断 / 异常断开）。 */
+"incomplete";
 
 /**  宿主运行状态（桌面 UI 直接序列化为 JSON）。 */
 export type HostState = HostState_Serialize | HostState_Deserialize;
@@ -151,6 +186,8 @@ export type Item = {
 	available: boolean,
 	/**  是否为文件夹（共享文件夹时下载打包为 zip）。旧数据无此字段，默认 false。 */
 	is_dir?: boolean,
+	/**  文本/剪贴板投递条目（落盘为 `.txt`，UI 标「文本投递」）。旧数据默认 false。 */
+	is_note?: boolean,
 	/**  下载次数；由 catalog 路径计数表注入，默认 0。 */
 	download_count?: number,
 };
@@ -198,6 +235,8 @@ export type Settings_Deserialize = {
 	 *  默认关闭，保持「只展示明确上传/原位共享」的安全边界。
 	 */
 	share_receive_dir?: boolean,
+	/**  主机侧传输历史保留天数（1–365；0 = 关闭历史）。默认 7 天。 */
+	history_retention_days?: number,
 };
 
 /**
@@ -218,14 +257,16 @@ export type Settings_Serialize = {
 	 *  默认关闭，保持「只展示明确上传/原位共享」的安全边界。
 	 */
 	share_receive_dir: boolean,
+	/**  主机侧传输历史保留天数（1–365；0 = 关闭历史）。默认 7 天。 */
+	history_retention_days: number,
 };
 
 /**  条目来源类型，JSON 序列化为小写。 */
-export type SourceType = 
+export type SourceType =
 /**  原位共享：用户明确选择的本机路径，不复制。 */
-"linked" | 
+"linked" |
 /**  远程接收：本次服务通过上传接口落盘的文件。 */
-"received" | 
+"received" |
 /**  接收目录扫描：目录内已有的顶层文件/文件夹（非上传产生）。 */
 "inbox";
 
@@ -259,9 +300,9 @@ export type StatePayload_Serialize = {
 export type SuccessNotice = string;
 
 /**  传输方向。 */
-export type TransferKind = 
+export type TransferKind =
 /**  远程设备上传到本机。 */
-"upload" | 
+"upload" |
 /**  远程设备从本机下载。 */
 "download";
 

@@ -38,6 +38,8 @@ pub struct Config {
     pub catalog: Option<Arc<Catalog>>,
     /// 外部注入的传输注册表（任务栏总进度 + 桌面「传输中」列表）；缺省时内部创建。
     pub progress: Option<Arc<TransferRegistry>>,
+    /// 主机侧传输历史（可选；宿主注入后任务结束时写入，并暴露 /api/history）。
+    pub history: Option<Arc<crate::history::TransferHistory>>,
     /// 是否需要六位配对码才能访问；关闭时所有受保护端点对局域网匿名放行。
     pub require_pairing: bool,
     /// 下载专用端口（可选，宿主绑定后通过 `with_download_port` 注入）。
@@ -58,6 +60,8 @@ pub struct Server {
     file_mu: Arc<tokio::sync::Mutex<()>>,
     /// 传输进度（上传/下载）跟踪。
     progress: Arc<TransferRegistry>,
+    /// 主机侧传输历史（可为空：未注入时不写、不提供 API 数据源）。
+    history: Option<Arc<crate::history::TransferHistory>>,
     /// 分块上传会话及临时文件状态。
     uploads: Arc<UploadManager>,
     /// 是否需要配对码访问（快照自设置；更改后由宿主重启服务器生效）。
@@ -113,6 +117,7 @@ impl Server {
                 Some(progress) => progress,
                 None => TransferRegistry::new(),
             },
+            history: config.history.clone(),
             uploads,
             require_pairing: config.require_pairing,
             download_port: config.download_port,
@@ -207,9 +212,15 @@ impl Server {
         let protected = Router::new()
             .route("/api/files", get(handle_file_list).post(handle_upload))
             .route("/api/files/{id}/download", get(handle_download))
+            .route("/api/files/{id}/text", get(handle_note_content))
             .route("/api/files/{id}", delete(handle_delete))
             .route("/api/devices", get(handle_devices))
             .route("/api/transfers", get(handle_active_transfers))
+            .route(
+                "/api/history",
+                get(handle_history).delete(handle_clear_history),
+            )
+            .route("/api/notes", axum::routing::post(handle_create_note))
             .route(
                 "/api/uploads",
                 axum::routing::post(handle_create_chunk_upload),
@@ -278,6 +289,15 @@ struct CreateUploadPayload {
     chunk_size: Option<u64>,
 }
 
+/// 文本/剪贴板投递请求体。
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateNotePayload {
+    #[serde(default)]
+    title: String,
+    content: String,
+}
+
 /// 浏览器端文件记录（不含 local_path）。
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -291,6 +311,9 @@ struct FileRecord {
     /// 文件夹条目（下载时打包为 zip）。
     #[serde(default)]
     is_dir: bool,
+    /// 文本/剪贴板投递条目。
+    #[serde(default)]
+    is_note: bool,
     /// 下载次数。
     #[serde(default)]
     download_count: u32,
@@ -305,6 +328,7 @@ fn record_from_item(item: &Item) -> FileRecord {
         source_type: item.source_type,
         available: item.available,
         is_dir: item.is_dir,
+        is_note: item.is_note,
         download_count: item.download_count,
     }
 }
@@ -482,6 +506,27 @@ async fn handle_active_transfers(State(server): State<Arc<Server>>) -> Response 
     )
 }
 
+/// 主机侧传输历史（新到旧）。
+async fn handle_history(State(server): State<Arc<Server>>) -> Response {
+    let entries = server
+        .history
+        .as_ref()
+        .map(|history| history.list())
+        .unwrap_or_default();
+    json_response(StatusCode::OK, serde_json::json!({ "history": entries }))
+}
+
+/// 清空传输历史，返回删除条数。
+async fn handle_clear_history(State(server): State<Arc<Server>>) -> Response {
+    let Some(history) = server.history.as_ref() else {
+        return json_response(StatusCode::OK, serde_json::json!({ "cleared": 0 }));
+    };
+    match history.clear() {
+        Ok(cleared) => json_response(StatusCode::OK, serde_json::json!({ "cleared": cleared })),
+        Err(err) => json_error(StatusCode::INTERNAL_SERVER_ERROR, &err),
+    }
+}
+
 async fn handle_create_chunk_upload(
     State(server): State<Arc<Server>>,
     request: Request,
@@ -529,6 +574,7 @@ async fn handle_upload_chunk(
     Path((id, index)): Path<(String, u32)>,
     request: Request,
 ) -> Response {
+    let peer_ip = remote_ip_from(&request);
     let checksum = match request
         .headers()
         .get("x-chunk-sha256")
@@ -537,6 +583,17 @@ async fn handle_upload_chunk(
         Some(checksum) => checksum.to_string(),
         None => return json_error(StatusCode::BAD_REQUEST, "缺少 X-Chunk-SHA256 请求头"),
     };
+    if !server.progress.contains_task(&id) {
+        if let Ok(status) = server.uploads.status(&id).await {
+            server.progress.ensure_task(
+                &status.id,
+                &status.file_name,
+                TransferKind::Upload,
+                &peer_ip,
+                Some(status.file_size),
+            );
+        }
+    }
     let bytes = match axum::body::to_bytes(request.into_body(), MAX_CHUNK_SIZE as usize).await {
         Ok(bytes) => bytes,
         Err(_) => return json_error(StatusCode::PAYLOAD_TOO_LARGE, "分块超过大小限制"),
@@ -566,7 +623,9 @@ async fn handle_complete_chunk_upload(
         .await
     {
         Ok(item) => {
-            server.progress.finish_task(&id);
+            server
+                .progress
+                .finish_task_as(&id, crate::history::HistoryStatus::Complete);
             server
                 .hub
                 .publish(r#"{"type":"files_changed"}"#.to_string());
@@ -585,7 +644,16 @@ async fn handle_cancel_chunk_upload(
 ) -> Response {
     match server.uploads.cancel(&id).await {
         Ok(()) => {
-            server.progress.finish_task(&id);
+            server
+                .progress
+                .finish_task_as(&id, crate::history::HistoryStatus::Cancelled);
+            no_content()
+        }
+        // 会话已过期但仍留有进度任务时，取消请求仍应幂等收口。
+        Err(UploadError::NotFound) => {
+            server
+                .progress
+                .finish_task_as(&id, crate::history::HistoryStatus::Cancelled);
             no_content()
         }
         Err(error) => upload_error_response(error),
@@ -734,6 +802,96 @@ async fn handle_upload(State(server): State<Arc<Server>>, request: Request) -> R
     json_response(
         StatusCode::CREATED,
         serde_json::json!({ "files": uploaded }),
+    )
+}
+
+/// 文本/剪贴板投递：短文本写入接收目录并加入共享清单。
+async fn handle_create_note(State(server): State<Arc<Server>>, request: Request) -> Response {
+    // JSON 字符串中的引号、反斜杠和控制字符最多可以膨胀到原始 UTF-8 的约 6 倍。
+    let body_limit = crate::files::MAX_NOTE_BYTES
+        .saturating_mul(6)
+        .saturating_add(4096);
+    let body = match axum::body::to_bytes(request.into_body(), body_limit).await {
+        Ok(body) => body,
+        Err(_) => return json_error(StatusCode::PAYLOAD_TOO_LARGE, "文本内容超过大小限制"),
+    };
+    let payload: CreateNotePayload = match serde_json::from_slice(&body) {
+        Ok(payload) => payload,
+        Err(_) => return json_error(StatusCode::BAD_REQUEST, "请求格式不正确"),
+    };
+    let content = payload.content.trim_end();
+    if content.trim().is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "文本内容不能为空");
+    }
+    if content.len() > crate::files::MAX_NOTE_BYTES {
+        return json_error(StatusCode::PAYLOAD_TOO_LARGE, "文本内容超过大小限制");
+    }
+
+    match crate::files::save_note(
+        &server.catalog,
+        &server.storage_dir,
+        &payload.title,
+        content,
+        &server.file_mu,
+    )
+    .await
+    {
+        Ok(item) => {
+            server
+                .hub
+                .publish(r#"{"type":"files_changed"}"#.to_string());
+            json_response(
+                StatusCode::CREATED,
+                serde_json::json!({ "file": record_from_item(&item) }),
+            )
+        }
+        Err(SaveUploadError::TooLarge) => {
+            json_error(StatusCode::PAYLOAD_TOO_LARGE, "文本内容超过大小限制")
+        }
+        Err(SaveUploadError::InsufficientStorage) => {
+            json_error(StatusCode::INSUFFICIENT_STORAGE, "接收目录可用空间不足")
+        }
+        Err(SaveUploadError::InvalidName) => json_error(StatusCode::BAD_REQUEST, "标题无效"),
+        Err(SaveUploadError::Catalog(err)) => json_error(StatusCode::INTERNAL_SERVER_ERROR, &err),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "保存文本失败，请检查磁盘空间和目录权限",
+        ),
+    }
+}
+
+/// 读取文本投递正文供接收页预览/复制。该接口不触发下载历史或下载次数。
+async fn handle_note_content(
+    State(server): State<Arc<Server>>,
+    Path(id): Path<String>,
+) -> Response {
+    let Some(item) = server.catalog.get(&id) else {
+        return json_error(StatusCode::NOT_FOUND, "文件不存在");
+    };
+    if !item.is_note {
+        return json_error(StatusCode::BAD_REQUEST, "该文件不是文本投递");
+    }
+    let metadata = match tokio::fs::symlink_metadata(&item.local_path).await {
+        Ok(metadata) => metadata,
+        Err(_) => return json_error(StatusCode::NOT_FOUND, "文本文件不存在"),
+    };
+    if !metadata.file_type().is_file() || metadata.len() > crate::files::MAX_NOTE_BYTES as u64 {
+        return json_error(StatusCode::PAYLOAD_TOO_LARGE, "文本内容超过大小限制");
+    }
+    let bytes = match tokio::fs::read(&item.local_path).await {
+        Ok(bytes) => bytes,
+        Err(_) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, "读取文本失败"),
+    };
+    if bytes.len() > crate::files::MAX_NOTE_BYTES {
+        return json_error(StatusCode::PAYLOAD_TOO_LARGE, "文本内容超过大小限制");
+    }
+    let content = match String::from_utf8(bytes) {
+        Ok(content) => content,
+        Err(_) => return json_error(StatusCode::UNPROCESSABLE_ENTITY, "文本文件不是有效 UTF-8"),
+    };
+    json_response(
+        StatusCode::OK,
+        serde_json::json!({ "content": content, "file": record_from_item(&item) }),
     )
 }
 
@@ -890,6 +1048,16 @@ async fn serve_file_download(
     // 空文件：GET 视为完整下载
     if size == 0 {
         if !head_only {
+            let _is_new = server.progress.begin_task(
+                &transfer_id,
+                &item.name,
+                TransferKind::Download,
+                &peer_ip,
+                Some(0),
+            );
+            server
+                .progress
+                .finish_task_as(&transfer_id, crate::history::HistoryStatus::Complete);
             record_download_and_notify(&server, &item.id);
         }
         let mut response = Response::new(Body::empty());
@@ -992,6 +1160,8 @@ async fn serve_file_download(
                 file_id: item.id.clone(),
                 catalog: Arc::clone(&server.catalog),
                 hub: Arc::clone(&server.hub),
+                delivered: 0,
+                expected_bytes: content_length,
                 finished: false,
                 _slot: slot,
             };
@@ -1048,6 +1218,10 @@ struct DownloadCountStream {
     file_id: String,
     catalog: Arc<Catalog>,
     hub: Arc<Hub>,
+    /// 当前 HTTP 流已经写出的字节数。
+    delivered: u64,
+    /// 当前 200/Range 响应要求写出的字节数。
+    expected_bytes: u64,
     /// poll 已处理结束后置位，避免 Drop 再次 finish。
     finished: bool,
     /// 持有下载并发槽位直到流结束。
@@ -1055,12 +1229,12 @@ struct DownloadCountStream {
 }
 
 impl DownloadCountStream {
-    fn finish_transfer(&mut self) {
+    fn finish_transfer(&mut self, completed: bool) {
         if self.finished {
             return;
         }
         self.finished = true;
-        if let Some(should_count) = self.transfers.finish_stream(&self.transfer_id) {
+        if let Some(should_count) = self.transfers.finish_stream(&self.transfer_id, completed) {
             if should_count {
                 record_download_and_notify_parts(&self.catalog, &self.hub, &self.file_id);
             }
@@ -1076,7 +1250,7 @@ impl futures_util::Stream for DownloadCountStream {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         if self.transfers.is_cancelled(&self.transfer_id) {
-            self.finish_transfer();
+            self.finish_transfer(false);
             return std::task::Poll::Ready(None);
         }
         if self.transfers.is_paused(&self.transfer_id) {
@@ -1086,10 +1260,11 @@ impl futures_util::Stream for DownloadCountStream {
         }
         let poll = futures_util::StreamExt::poll_next_unpin(&mut self.inner, cx);
         if let std::task::Poll::Ready(Some(Ok(bytes))) = &poll {
+            self.delivered = self.delivered.saturating_add(bytes.len() as u64);
             self.transfers.add_to(&self.transfer_id, bytes.len() as u64);
         }
         if matches!(poll, std::task::Poll::Ready(None)) {
-            self.finish_transfer();
+            self.finish_transfer(true);
         }
         poll
     }
@@ -1098,7 +1273,9 @@ impl futures_util::Stream for DownloadCountStream {
 impl Drop for DownloadCountStream {
     /// 客户端断开时流被 drop：释放槽位；未传完则不计下载次数。
     fn drop(&mut self) {
-        self.finish_transfer();
+        // 浏览器在收满 Content-Length 后不一定再 poll 到 EOF，直接 drop 时按
+        // 当前响应实际写出的字节数判断是否完整。
+        self.finish_transfer(self.delivered >= self.expected_bytes);
     }
 }
 
@@ -1175,7 +1352,7 @@ struct TransferCountStream {
 }
 
 impl TransferCountStream {
-    fn finish_transfer(&mut self) {
+    fn finish_transfer(&mut self, completed: bool) {
         if self.finished {
             return;
         }
@@ -1183,7 +1360,7 @@ impl TransferCountStream {
         let Some(transfers) = &self.transfers else {
             return;
         };
-        if let Some(should_count) = transfers.finish_stream(&self.transfer_id) {
+        if let Some(should_count) = transfers.finish_stream(&self.transfer_id, completed) {
             if should_count {
                 if let (Some(catalog), Some(hub)) = (&self.catalog, &self.hub) {
                     record_download_and_notify_parts(catalog, hub, &self.file_id);
@@ -1202,7 +1379,7 @@ impl futures_util::Stream for TransferCountStream {
     ) -> std::task::Poll<Option<Self::Item>> {
         if let Some(transfers) = &self.transfers {
             if transfers.is_cancelled(&self.transfer_id) {
-                self.finish_transfer();
+                self.finish_transfer(false);
                 return std::task::Poll::Ready(None);
             }
             if transfers.is_paused(&self.transfer_id) {
@@ -1216,7 +1393,7 @@ impl futures_util::Stream for TransferCountStream {
             transfers.add_to(&self.transfer_id, bytes.len() as u64);
         }
         if matches!(poll, std::task::Poll::Ready(None)) {
-            self.finish_transfer();
+            self.finish_transfer(true);
         }
         poll
     }
@@ -1224,7 +1401,7 @@ impl futures_util::Stream for TransferCountStream {
 
 impl Drop for TransferCountStream {
     fn drop(&mut self) {
-        self.finish_transfer();
+        self.finish_transfer(false);
     }
 }
 
@@ -1393,6 +1570,7 @@ mod tests {
             catalog: None,
             progress: None,
             require_pairing,
+            history: None,
             download_port: None,
         })
         .expect("server");

@@ -1,7 +1,7 @@
 // Tauri 命令桥：封装 tauri-specta 生成的 commands，前端组件不直接接触 tauri API。
 // 命令签名与 Rust `commands.rs` 由 bindings.ts 同步，新增命令需在 Rust 侧
 // `collect_commands!` 注册后重跑 `cargo test -p packetboat-desktop` 重新导出。
-import { commands, events, type ActiveTransfer, type AppError, type ConnectedDevice, type Item, type TransferProgress } from './bindings'
+import { commands, events, type ActiveTransfer, type AppError, type ConnectedDevice, type HistoryEntry, type Item, type TransferProgress } from './bindings'
 import type { DesktopSettings, DesktopState } from './types'
 
 /** 旧命名别名（组件层仍使用 DesktopItem）。 */
@@ -29,6 +29,26 @@ export async function getConnectedDevices(): Promise<ConnectedDevice[]> {
 /** 当前活跃传输任务。 */
 export async function getActiveTransfers(): Promise<ActiveTransfer[]> {
   return commands.getActiveTransfers()
+}
+
+/** 主机侧传输历史（新到旧）。 */
+export async function getTransferHistory(): Promise<HistoryEntry[]> {
+  return commands.getTransferHistory()
+}
+
+/** 读取文本投递正文，供一键复制。 */
+export async function getNoteContent(id: string): Promise<string> {
+  return unwrap(commands.getNoteContent(id))
+}
+
+/** 清空传输历史，返回删除条数。 */
+export async function clearTransferHistory(): Promise<number> {
+  return unwrap(commands.clearTransferHistory())
+}
+
+/** 更新传输历史保留天数（0 关闭并清空）。 */
+export async function setHistoryRetention(days: number): Promise<DesktopSettings> {
+  return unwrap(commands.setHistoryRetention(days))
 }
 
 /** 主动停止传输任务。 */

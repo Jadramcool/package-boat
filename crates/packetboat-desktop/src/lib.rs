@@ -32,6 +32,15 @@ fn export_bindings(builder: &Builder<tauri::Wry>) {
     builder
         .export(specta_typescript::Typescript::default(), &path)
         .expect("导出前端 bindings 失败");
+    // specta 的多行 union 会在每行尾生成空格；统一去除，避免 git diff --check 失败。
+    let source = std::fs::read_to_string(&path).expect("读取前端 bindings 失败");
+    let normalized = source
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, normalized).expect("格式化前端 bindings 失败");
 }
 
 #[cfg(all(test, debug_assertions))]
@@ -46,6 +55,10 @@ mod tests {
                 commands::get_state,
                 commands::get_connected_devices,
                 commands::get_active_transfers,
+                commands::get_transfer_history,
+                commands::get_note_content,
+                commands::clear_transfer_history,
+                commands::set_history_retention,
                 commands::cancel_transfer,
                 commands::pause_transfer,
                 commands::resume_transfer,
@@ -109,6 +122,7 @@ pub fn run() {
         catalog.clone(),
         settings.clone(),
         VERSION,
+        paths.history.clone(),
     ));
 
     let builder = Builder::<tauri::Wry>::new()
@@ -116,6 +130,10 @@ pub fn run() {
             commands::get_state,
             commands::get_connected_devices,
             commands::get_active_transfers,
+            commands::get_transfer_history,
+            commands::get_note_content,
+            commands::clear_transfer_history,
+            commands::set_history_retention,
             commands::cancel_transfer,
             commands::pause_transfer,
             commands::resume_transfer,

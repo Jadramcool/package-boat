@@ -7,6 +7,7 @@
 import type {
   ActiveTransfer,
   ConnectedDevice,
+  HistoryEntry,
   Item,
   LocalAddress,
   Settings_Serialize,
@@ -28,11 +29,14 @@ export type {
   DeviceAuthMode,
   ActiveTransfer,
   TransferKind,
+  HistoryEntry,
+  HistoryStatus,
 } from './bindings'
 
 export type DesktopItem = Item
 export type DesktopDevice = ConnectedDevice
 export type DesktopTransfer = ActiveTransfer
+export type DesktopHistoryEntry = HistoryEntry
 
 export type DesktopHostState = Omit<StatePayload_Serialize['host'], 'urls' | 'addresses'> & {
   urls: readonly string[]

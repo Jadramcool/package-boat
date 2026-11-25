@@ -21,6 +21,8 @@ export interface SharedFile {
   source_type: SourceType
   available: boolean
   is_dir: boolean
+  /** 文本/剪贴板投递条目。 */
+  is_note?: boolean
   download_count?: number
 }
 
@@ -45,6 +47,20 @@ export interface FileListResponse {
 
 export interface UploadResponse {
   files: SharedFile[]
+}
+
+export interface CreateNoteResponse {
+  file: SharedFile
+}
+
+export interface NoteContentResponse {
+  content: string
+  file: SharedFile
+}
+
+export interface CreateNotePayload {
+  title?: string
+  content: string
 }
 
 export interface ChunkUploadSession {
@@ -80,13 +96,18 @@ export interface UploadTask {
   resumed?: boolean
 }
 
-export type TransferHistoryStatus = 'complete' | 'error' | 'cancelled'
+/** 主机侧传输历史状态。 */
+export type TransferHistoryStatus = 'complete' | 'cancelled' | 'incomplete'
 
+/** 主机侧传输历史条目（与 Rust `HistoryEntry` 对齐）。 */
 export interface TransferHistoryEntry {
   id: string
   name: string
-  size: number
+  kind: 'upload' | 'download'
+  transferred_bytes: number
+  total_bytes?: number | null
   status: TransferHistoryStatus
-  error?: string
-  finishedAt: string
+  peer_ip?: string
+  error?: string | null
+  finished_at: string
 }

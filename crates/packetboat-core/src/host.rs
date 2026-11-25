@@ -3,12 +3,14 @@
 
 use crate::auth::{AuthManager, ConnectedDevice};
 use crate::catalog::Catalog;
+use crate::history::TransferHistory;
 use crate::network::{local_addresses, LocalAddress};
 use crate::progress::{ActiveTransfer, TransferRegistry};
 use crate::server::{Config, Server};
 use crate::settings::Store as SettingsStore;
 use serde::Serialize;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
@@ -72,12 +74,23 @@ pub struct HostManager {
     settings: Arc<SettingsStore>,
     version: String,
     progress: Arc<TransferRegistry>,
+    /// 主机侧传输历史（挂在数据目录，按设置保留天数清理）。
+    history: Arc<TransferHistory>,
     /// 串行化 start/stop/restart，防止并发调用双起服务器（TOCTOU 竞态）。
     lifecycle: tokio::sync::Mutex<()>,
 }
 
 impl HostManager {
-    pub fn new(catalog: Arc<Catalog>, settings: Arc<SettingsStore>, version: &str) -> Self {
+    pub fn new(
+        catalog: Arc<Catalog>,
+        settings: Arc<SettingsStore>,
+        version: &str,
+        history_path: PathBuf,
+    ) -> Self {
+        let retention = settings.get().history_retention_days.max(0) as u32;
+        let history = crate::history::open_at(&history_path, retention);
+        let progress = TransferRegistry::new();
+        progress.attach_history(Arc::clone(&history));
         HostManager {
             inner: Mutex::new(HostInner {
                 handle: None,
@@ -87,7 +100,8 @@ impl HostManager {
             catalog,
             settings,
             version: version.to_string(),
-            progress: TransferRegistry::new(),
+            progress,
+            history,
             lifecycle: tokio::sync::Mutex::new(()),
         }
     }
@@ -95,6 +109,47 @@ impl HostManager {
     /// 传输进度跟踪器（桌面端任务栏进度读取；与服务器共享同一实例）。
     pub fn progress(&self) -> Arc<TransferRegistry> {
         Arc::clone(&self.progress)
+    }
+
+    /// 主机侧传输历史。
+    pub fn history(&self) -> Arc<TransferHistory> {
+        Arc::clone(&self.history)
+    }
+
+    /// 当前历史条目（新到旧）。
+    pub fn transfer_history(&self) -> Vec<crate::history::HistoryEntry> {
+        self.history.list()
+    }
+
+    /// 清空历史，返回删除条数。
+    pub fn clear_transfer_history(&self) -> Result<u32, String> {
+        self.history.clear()
+    }
+
+    /// 更新历史保留天数并同步存储（0 关闭并清空）。
+    pub fn set_history_retention_days(&self, days: u32) -> Result<(), String> {
+        self.history.set_retention_days(days)
+    }
+
+    /// 读取文本投递正文；只允许读取仍在目录表中的小文本条目。
+    pub fn note_content(&self, id: &str) -> Result<String, String> {
+        let item = self
+            .catalog
+            .get(id)
+            .ok_or_else(|| "文件不存在".to_string())?;
+        if !item.is_note {
+            return Err("该文件不是文本投递".to_string());
+        }
+        let metadata = std::fs::symlink_metadata(&item.local_path)
+            .map_err(|_| "文本文件不存在".to_string())?;
+        if !metadata.file_type().is_file() || metadata.len() > crate::files::MAX_NOTE_BYTES as u64 {
+            return Err("文本内容超过大小限制".to_string());
+        }
+        let bytes = std::fs::read(&item.local_path).map_err(|_| "读取文本失败".to_string())?;
+        if bytes.len() > crate::files::MAX_NOTE_BYTES {
+            return Err("文本内容超过大小限制".to_string());
+        }
+        String::from_utf8(bytes).map_err(|_| "文本文件不是有效 UTF-8".to_string())
     }
 
     /// 当前活跃传输任务（桌面端「传输中」列表）。
@@ -142,6 +197,7 @@ impl HostManager {
             version: self.version.clone(),
             catalog: Some(self.catalog.clone()),
             progress: Some(Arc::clone(&self.progress)),
+            history: Some(Arc::clone(&self.history)),
             require_pairing: settings.require_pairing,
             download_port: None,
         })
@@ -292,11 +348,12 @@ mod tests {
                     max_upload_bytes: 1024,
                     require_pairing: true,
                     share_receive_dir: false,
+                    history_retention_days: 7,
                 },
             )
             .unwrap(),
         );
-        let manager = HostManager::new(catalog, settings, "test");
+        let manager = HostManager::new(catalog, settings, "test", temp.join("history.json"));
         manager.start().await.expect("start");
         let state = manager.state();
         assert!(state.running);
@@ -346,11 +403,13 @@ mod tests {
                     max_upload_bytes: 1024,
                     require_pairing: true,
                     share_receive_dir: false,
+                    history_retention_days: 7,
                 },
             )
             .unwrap(),
         );
-        let manager = HostManager::new(catalog, settings.clone(), "test");
+        let manager =
+            HostManager::new(catalog, settings.clone(), "test", temp.join("history.json"));
         manager.start().await.expect("start should fall back");
         let state = manager.state();
         assert!(state.running);
@@ -384,11 +443,17 @@ mod tests {
                     max_upload_bytes: 1024,
                     require_pairing: true,
                     share_receive_dir: false,
+                    history_retention_days: 7,
                 },
             )
             .unwrap(),
         );
-        let manager = Arc::new(HostManager::new(catalog, settings, "test"));
+        let manager = Arc::new(HostManager::new(
+            catalog,
+            settings,
+            "test",
+            temp.join("history.json"),
+        ));
 
         // 并发调用 start：只应成功启动一个服务器
         let mut handles = Vec::new();
@@ -404,6 +469,39 @@ mod tests {
 
         manager.stop().await;
         assert!(!manager.state().running);
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn reads_only_registered_note_content() {
+        use std::path::PathBuf;
+        let temp =
+            std::env::temp_dir().join(format!("packetboat-host-note-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).unwrap();
+        let note_path = temp.join("note.txt");
+        std::fs::write(&note_path, "可复制的正文").unwrap();
+        let catalog = Arc::new(Catalog::open(PathBuf::new()).unwrap());
+        let note = catalog.add_received_note(note_path).unwrap();
+        let settings = Arc::new(
+            SettingsStore::open(
+                PathBuf::new(),
+                Settings {
+                    device_name: "test".into(),
+                    host: "127.0.0.1".into(),
+                    port: 0,
+                    receive_dir: temp.to_string_lossy().into_owned(),
+                    max_upload_bytes: 1024,
+                    require_pairing: true,
+                    share_receive_dir: false,
+                    history_retention_days: 7,
+                },
+            )
+            .unwrap(),
+        );
+        let manager = HostManager::new(catalog, settings, "test", temp.join("history.json"));
+        assert_eq!(manager.note_content(&note.id).unwrap(), "可复制的正文");
+        assert!(manager.note_content("missing").is_err());
         let _ = std::fs::remove_dir_all(&temp);
     }
 

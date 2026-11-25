@@ -14,8 +14,8 @@ Vue browser UI ── HTTP/SSE ──> packetboat-core
 
 ## 核心模块
 
-- `server.rs`：Axum 路由、认证中间件、上传、Range 下载、SSE 和安全响应头。
-- `files.rs`：文件名净化、临时文件落盘、唯一命名和文件夹 ZIP。
+- `server.rs`：Axum 路由、认证中间件、上传、Range 下载、SSE、文本投递与安全响应头。
+- `files.rs`：文件名净化、临时文件落盘、唯一命名、文本投递（`save_note`）和文件夹 ZIP。
 - `uploads.rs`：分块上传会话、块摘要校验、缺块查询、取消和原子提交。
 - `catalog.rs`：共享条目持久化。`linked` 只引用用户明确选择的原文件，`received` 只指向本次服务明确接收的上传文件；`inbox` 为可选开启的接收目录顶层扫描项。`list()` 带短 TTL 缓存；文件系统事件通过 `apply_path_event` 增量刷新命中条目。
 - `auth.rs`：随机配对码、IP 尝试限制和内存会话。
@@ -31,9 +31,13 @@ Vue browser UI ── HTTP/SSE ──> packetboat-core
 
 单文件下载使用 256 KiB 流缓冲，并在 Reader 层严格限制 Range 长度。文件夹下载在内存管道中边遍历边用 Deflate 压缩并流式发送（data descriptor），不再先把完整临时 ZIP 落到磁盘；客户端断开时打包任务随管道关闭而中止。
 
+文本 / 剪贴板投递走 `POST /api/notes`：正文上限 64KB（按 UTF-8 字节计算），服务端写入接收目录唯一命名的 `.txt`，再以 `is_note=true` 的 `received` 条目登记 catalog；与上传共用移出清单「只改记录、不删盘」的安全边界。`GET /api/files/{id}/text` 和桌面命令 `get_note_content` 只读取已登记、可用且不超过 64KB 的文本条目，供预览与复制，不计下载次数。
+
+传输结束后由 `TransferRegistry` 写入主机侧历史（`history.rs` → 数据目录 `history.json`）：状态为 `complete` / `cancelled` / `incomplete`。每个实际传输事件生成独立历史 ID；并发 Range 共用一个任务，后续重新下载则生成新记录。条目同时保存实际 `transferred_bytes` 与 `total_bytes`，按 `settings.history_retention_days`（默认 7 天，0 关闭并清空）和 500 条硬上限裁剪。桌面通过 Tauri 命令、浏览器通过 `GET/DELETE /api/history` 读取与清空。
+
 ## 持久化
 
-设置和 catalog 使用“同目录临时文件 → 同步 → 原子替换”写入。catalog 只在用户明确共享文件或上传完成时登记条目；接收目录中的既有文件仅在开启 inbox 扫描时出现在列表，且不会写入 catalog.json。
+设置、catalog 与传输历史使用“同目录临时文件 → 同步 → 原子替换”写入。catalog 只在用户明确共享文件或上传完成时登记条目；接收目录中的既有文件仅在开启 inbox 扫描时出现在列表，且不会写入 catalog.json。
 
 ## 安全边界
 

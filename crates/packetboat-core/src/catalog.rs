@@ -53,6 +53,9 @@ pub struct Item {
     /// 是否为文件夹（共享文件夹时下载打包为 zip）。旧数据无此字段，默认 false。
     #[serde(default)]
     pub is_dir: bool,
+    /// 文本/剪贴板投递条目（落盘为 `.txt`，UI 标「文本投递」）。旧数据默认 false。
+    #[serde(default)]
+    pub is_note: bool,
     /// 下载次数；由 catalog 路径计数表注入，默认 0。
     #[serde(default)]
     #[cfg_attr(feature = "specta", specta(type = u32))]
@@ -246,6 +249,7 @@ impl Catalog {
                 added_at: Utc::now(),
                 available: true,
                 is_dir,
+                is_note: false,
                 download_count: self.download_count_for_path(&absolute.to_string_lossy()),
             });
         }
@@ -278,6 +282,15 @@ impl Catalog {
 
     /// 记录一个接收目录中的文件；路径已存在时直接返回原条目。
     pub fn add_received(&self, path: PathBuf) -> Result<Item, String> {
+        self.add_received_with_flags(path, false)
+    }
+
+    /// 记录文本投递（同 `add_received`，但标记 `is_note`）。
+    pub fn add_received_note(&self, path: PathBuf) -> Result<Item, String> {
+        self.add_received_with_flags(path, true)
+    }
+
+    fn add_received_with_flags(&self, path: PathBuf, is_note: bool) -> Result<Item, String> {
         let absolute = std::path::absolute(&path).map_err(|err| format!("解析接收路径: {err}"))?;
         let metadata =
             std::fs::symlink_metadata(&absolute).map_err(|err| format!("读取接收文件: {err}"))?;
@@ -310,6 +323,7 @@ impl Catalog {
             added_at: Utc::now(),
             available: true,
             is_dir: false,
+            is_note,
             download_count: self.download_count_for_path(&absolute.to_string_lossy()),
         };
         guard.push(item.clone());
@@ -909,6 +923,7 @@ fn append_inbox_items(
             added_at: now,
             available: true,
             is_dir: file_type.is_dir(),
+            is_note: false,
             download_count: download_counts.get(&key).copied().unwrap_or(0),
         });
     }
@@ -949,6 +964,7 @@ fn resolve_inbox_item(id: &str, receive_dir: &Path) -> Option<(Item, std::fs::Me
             added_at: Utc::now(),
             available: true,
             is_dir: file_type.is_dir(),
+            is_note: false,
             download_count: 0,
         },
         metadata,

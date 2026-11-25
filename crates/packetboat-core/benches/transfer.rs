@@ -243,6 +243,7 @@ impl BenchServer {
             catalog: None,
             progress: None,
             require_pairing: true,
+            history: None,
             download_port: None,
         })
         .map_err(failure)?;
