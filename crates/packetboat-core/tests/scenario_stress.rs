@@ -273,13 +273,23 @@ async fn scenario_end_to_end_and_stress() {
     );
     let zip_bytes = zip_resp.bytes().await.unwrap();
     assert!(zip_bytes.len() > 100, "zip should not be empty");
-    // 本地用 zip crate 解析（与 e2e 相同）
-    let cursor = std::io::Cursor::new(&zip_bytes[..]);
-    let mut archive = zip::ZipArchive::new(cursor).unwrap();
-    let mut names = Vec::new();
-    for i in 0..archive.len() {
-        names.push(archive.by_index(i).unwrap().name().to_string());
-    }
+    // 用项目已有的 async-zip 解析，避免引入带提取 API 的额外 ZIP 依赖。
+    let archive = async_zip::base::read1::seek::ZipArchiveReader::open(
+        futures_lite::io::Cursor::new(zip_bytes.to_vec()),
+    )
+    .await
+    .unwrap();
+    let names: Vec<String> = archive
+        .cdrs()
+        .iter()
+        .map(|entry| {
+            entry
+                .insecure_file_name
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
     assert!(
         names
             .iter()

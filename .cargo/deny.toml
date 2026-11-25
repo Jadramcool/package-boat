@@ -20,6 +20,8 @@ ignore = [
   { id = "RUSTSEC-2025-0081", reason = "transitive via tauri-utils/urlpattern" },
   { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils/urlpattern" },
   { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils/urlpattern" },
+  # chrono：仅标记“停止维护”，无已知漏洞；当前 Tauri/Specta 依赖链仍要求它。
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained-only notice; required by Tauri/Specta stack" },
 ]
 
 [licenses]

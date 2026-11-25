@@ -912,10 +912,21 @@ async fn folder_share_downloads_as_zip() {
         .unwrap()
         .to_string_lossy()
         .into_owned();
-    let cursor = std::io::Cursor::new(body.to_vec());
-    let mut archive = zip::ZipArchive::new(cursor).unwrap();
-    let names: Vec<String> = (0..archive.len())
-        .map(|i| archive.by_index(i).unwrap().name().to_string())
+    let mut archive = async_zip::base::read1::seek::ZipArchiveReader::open(
+        futures_lite::io::Cursor::new(body.to_vec()),
+    )
+    .await
+    .unwrap();
+    let names: Vec<String> = archive
+        .cdrs()
+        .iter()
+        .map(|entry| {
+            entry
+                .insecure_file_name
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+        })
         .collect();
     assert!(
         names.iter().any(|n| n == &format!("{top}/readme.txt")),
@@ -931,9 +942,17 @@ async fn folder_share_downloads_as_zip() {
     );
 
     // 内容校验
-    let mut readme = archive.by_name(&format!("{top}/readme.txt")).unwrap();
+    let readme_name = format!("{top}/readme.txt");
+    let readme_index = archive
+        .find(readme_name.as_bytes())
+        .unwrap()
+        .next()
+        .unwrap();
+    let mut readme = archive.file(readme_index).await.unwrap();
     let mut content = String::new();
-    std::io::Read::read_to_string(&mut readme, &mut content).unwrap();
+    futures_lite::AsyncReadExt::read_to_string(&mut readme, &mut content)
+        .await
+        .unwrap();
     assert_eq!(content, "folder readme");
 
     server.abort();

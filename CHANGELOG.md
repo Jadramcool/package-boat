@@ -2,6 +2,14 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.5.1] - 2026-11-25
+
+### Security
+
+- 升级 `rustls`、`rustls-webpki`、`url`、`tokio`、`cookie` 与 `clipboard-win`，修复 2026-11-25 新披露的依赖安全公告。
+- 关闭 Tauri Updater 未使用的 ZIP 解包特性，移除 updater 带入的可达提取攻击面；集成测试改用项目已有的 `async-zip` 只读解析。
+- 对 `chrono` 的“停止维护”公告做有理由的临时忽略：该依赖由 Tauri/Specta 工具链强制引入，公告不含已知漏洞。
+
 ## [0.5.0] - 2026-11-25
 
 ### Added
@@ -133,7 +141,8 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Jadramcool/package-boat/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Jadramcool/package-boat/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Jadramcool/package-boat/compare/v0.2.0...v0.3.0

@@ -103,7 +103,7 @@
 
 - mDNS 设备发现 · 英文界面 · 安装包代码签名 · HTTPS/HTTP2 与端到端加密 · 跨平台桌面打包
 
-完整路线见 [ROADMAP.md](ROADMAP.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)（当前 **0.5.0**）。
+完整路线见 [ROADMAP.md](ROADMAP.md)，版本变化见 [CHANGELOG.md](CHANGELOG.md)（当前 **0.5.1**）。
 
 ---
 
@@ -301,10 +301,10 @@ PacketBoat 的威胁模型是 **可信局域网**，不是公网文件托管：
 ## 🗺️ 路线图摘要
 
 **近期** ✅ 开源基础与可靠性（基准、临时文件回收、自动更新等）  
-**中期** ✅ 0.5.0：主机侧传输历史 · 文本 / 剪贴板投递与复制 · 列表排序 · 设备监控 · 完整下载计数 · 桌面传输中 · Range + 并发限流
+**中期** ✅ 0.5.1：主机侧传输历史 · 文本 / 剪贴板投递与复制 · 列表排序 · 设备监控 · 完整下载计数 · 桌面传输中 · Range + 并发限流
 **长期** 🌍 跨平台、可选 HTTPS/HTTP2、端到端加密  
 
-详见 [ROADMAP.md](ROADMAP.md) 与 [CHANGELOG.md](CHANGELOG.md)（当前版本 **0.5.0**）。
+详见 [ROADMAP.md](ROADMAP.md) 与 [CHANGELOG.md](CHANGELOG.md)（当前版本 **0.5.1**）。
 
 ---
 
