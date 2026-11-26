@@ -3,6 +3,7 @@
 use crate::catalog::{Catalog, Item};
 use rand::RngCore;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter as AsyncBufWriter};
 
@@ -11,6 +12,14 @@ pub const TRANSFER_BUFFER_SIZE: usize = 256 * 1024;
 
 /// 启动时回收超过此时长的残留上传/压缩临时文件。
 pub const STALE_TRANSFER_FILE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// 进程内所有文件命名/落盘操作共享同一把锁，避免桌面命令与 HTTP 上传并发时
+/// 对同一文件名做出相同的唯一性判断。
+static FILE_OPERATION_MUTEX: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
+
+pub fn file_operation_mutex() -> Arc<tokio::sync::Mutex<()>> {
+    Arc::clone(FILE_OPERATION_MUTEX.get_or_init(|| Arc::new(tokio::sync::Mutex::new(()))))
+}
 
 /// 临时文件清理结果。失败项会被保留，避免因清理问题阻止服务启动。
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

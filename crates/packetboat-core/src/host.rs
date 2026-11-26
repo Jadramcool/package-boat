@@ -152,6 +152,25 @@ impl HostManager {
         String::from_utf8(bytes).map_err(|_| "文本文件不是有效 UTF-8".to_string())
     }
 
+    /// 从桌面主程序直接投递一段文本到接收目录。
+    pub async fn create_note(
+        &self,
+        title: &str,
+        content: &str,
+    ) -> Result<crate::catalog::Item, String> {
+        let receive_dir = PathBuf::from(self.settings.get().receive_dir);
+        let file_mu = crate::files::file_operation_mutex();
+        crate::files::save_note(&self.catalog, &receive_dir, title, content, &file_mu)
+            .await
+            .map_err(|error| match error {
+                crate::files::SaveUploadError::TooLarge => "文本内容超过 64KB 限制".to_string(),
+                crate::files::SaveUploadError::InvalidName => {
+                    "文本内容不能为空，或标题无效".to_string()
+                }
+                other => other.to_string(),
+            })
+    }
+
     /// 当前活跃传输任务（桌面端「传输中」列表）。
     pub fn active_transfers(&self) -> Vec<ActiveTransfer> {
         self.progress.list()
@@ -472,17 +491,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&temp);
     }
 
-    #[test]
-    fn reads_only_registered_note_content() {
+    #[tokio::test]
+    async fn desktop_creates_and_reads_note_content() {
         use std::path::PathBuf;
         let temp =
             std::env::temp_dir().join(format!("packetboat-host-note-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp);
         std::fs::create_dir_all(&temp).unwrap();
-        let note_path = temp.join("note.txt");
-        std::fs::write(&note_path, "可复制的正文").unwrap();
         let catalog = Arc::new(Catalog::open(PathBuf::new()).unwrap());
-        let note = catalog.add_received_note(note_path).unwrap();
         let settings = Arc::new(
             SettingsStore::open(
                 PathBuf::new(),
@@ -500,6 +516,12 @@ mod tests {
             .unwrap(),
         );
         let manager = HostManager::new(catalog, settings, "test", temp.join("history.json"));
+        let note = manager
+            .create_note("桌面投递", "可复制的正文")
+            .await
+            .unwrap();
+        assert!(note.is_note);
+        assert!(temp.join(&note.name).exists());
         assert_eq!(manager.note_content(&note.id).unwrap(), "可复制的正文");
         assert!(manager.note_content("missing").is_err());
         let _ = std::fs::remove_dir_all(&temp);

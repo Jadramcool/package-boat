@@ -293,6 +293,28 @@ pub fn get_note_content(state: State<'_, Desktop>, id: String) -> Result<String,
     state.host.note_content(&id).map_err(AppError::new)
 }
 
+/// 桌面主程序直接投递文本，写入接收目录并加入共享清单。
+#[tauri::command]
+#[specta::specta]
+pub async fn create_note(
+    app: AppHandle,
+    state: State<'_, Desktop>,
+    title: String,
+    content: String,
+) -> Result<Item, AppError> {
+    match state.host.create_note(&title, &content).await {
+        Ok(item) => {
+            emit_state_changed(&app);
+            emit_notice(&app, "文本已投递并加入共享清单");
+            Ok(item)
+        }
+        Err(err) => {
+            emit_error(&app, &err);
+            Err(err.into())
+        }
+    }
+}
+
 /// 清空传输历史，返回删除条数。
 #[tauri::command]
 #[specta::specta]

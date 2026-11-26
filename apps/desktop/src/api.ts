@@ -41,6 +41,11 @@ export async function getNoteContent(id: string): Promise<string> {
   return unwrap(commands.getNoteContent(id))
 }
 
+/** 桌面主程序直接投递文本。 */
+export async function createNote(title: string, content: string): Promise<DesktopItem> {
+  return unwrap(commands.createNote(title, content))
+}
+
 /** 清空传输历史，返回删除条数。 */
 export async function clearTransferHistory(): Promise<number> {
   return unwrap(commands.clearTransferHistory())

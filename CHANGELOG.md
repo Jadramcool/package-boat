@@ -2,6 +2,12 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/)。
 
+## [0.5.2] - 2026-11-26
+
+### Added
+
+- **桌面端文本投递**：主程序共享文件区新增「投递文本」入口，可直接填写标题和正文、读取系统剪贴板，写入接收目录并加入共享清单；失败时保留草稿。
+
 ## [0.5.1] - 2026-11-25
 
 ### Security
@@ -141,7 +147,8 @@
 
 - 移除独立命令行服务端（`packetboat` CLI），仅保留 Windows 桌面端。
 
-[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Jadramcool/package-boat/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Jadramcool/package-boat/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Jadramcool/package-boat/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Jadramcool/package-boat/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Jadramcool/package-boat/compare/v0.3.0...v0.4.0

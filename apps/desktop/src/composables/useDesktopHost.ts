@@ -11,6 +11,7 @@ import {
   clearTransferHistory as clearTransferHistoryCommand,
   chooseLinkedFiles,
   chooseReceiveDirectory as chooseReceiveDirectoryCommand,
+  createNote as createNoteCommand,
   events,
   getActiveTransfers,
   getConnectedDevices,
@@ -428,6 +429,25 @@ export function useDesktopHost() {
     }
   }
 
+  /** 从桌面主程序投递文本；失败时保留调用方草稿。 */
+  async function createTextNote(title: string, content: string): Promise<boolean> {
+    busy.value = 'note'
+    errorMessage.value = ''
+    try {
+      await createNoteCommand(title.trim(), content.replace(/\s+$/, ''))
+      await refresh()
+      showNotice('文本已投递并加入共享清单')
+      return true
+    }
+    catch (error) {
+      errorMessage.value = messageFrom(error)
+      return false
+    }
+    finally {
+      busy.value = ''
+    }
+  }
+
   async function openURL(url: string) {
     try {
       await openUrl(url)
@@ -554,6 +574,7 @@ export function useDesktopHost() {
     clearHistory,
     setHistoryRetention,
     refreshAccessCode,
+    createTextNote,
     copyNoteContent,
     revealItem,
     copyURL,

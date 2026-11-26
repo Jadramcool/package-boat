@@ -6,13 +6,14 @@ import {
   LoaderCircle,
   X,
 } from "@lucide/vue";
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, shallowRef } from "vue";
 import ConnectionSettings from "@/components/ConnectionSettings.vue";
 import ConnectedDevices from "@/components/ConnectedDevices.vue";
 import ActiveTransfers from "@/components/ActiveTransfers.vue";
 import TransferHistory from "@/components/TransferHistory.vue";
 import DesktopFileList from "@/components/DesktopFileList.vue";
 import DesktopHeader from "@/components/DesktopHeader.vue";
+import DesktopTextNoteDialog from "@/components/DesktopTextNoteDialog.vue";
 import StorageSettings from "@/components/StorageSettings.vue";
 import WindowTitleBar from "@/components/WindowTitleBar.vue";
 import BrandMark from "@/components/BrandMark.vue";
@@ -21,6 +22,33 @@ import { useUpdater } from "@/composables/useUpdater";
 
 const desktop = useDesktopHost();
 const updater = useUpdater();
+const noteDialogOpen = shallowRef(false)
+const noteTitle = shallowRef('')
+const noteContent = shallowRef('')
+const noteError = shallowRef('')
+
+function openNoteDialog(): void {
+  noteError.value = ''
+  noteDialogOpen.value = true
+}
+
+function closeNoteDialog(): void {
+  if (desktop.busy.value === 'note')
+    return
+  noteDialogOpen.value = false
+}
+
+async function submitNote(title: string, content: string): Promise<void> {
+  noteError.value = ''
+  const ok = await desktop.createTextNote(title, content)
+  if (!ok) {
+    noteError.value = desktop.errorMessage.value || '文本投递失败，请重试'
+    return
+  }
+  noteTitle.value = ''
+  noteContent.value = ''
+  noteDialogOpen.value = false
+}
 
 function formatUpdateDate(value: string): string {
   const raw = value.trim();
@@ -158,6 +186,7 @@ onUnmounted(() => {
             @refresh="desktop.refresh"
             @reveal="desktop.revealItem"
             @copy-note="desktop.copyNoteContent"
+            @write-note="openNoteDialog"
             @unshare="desktop.unshare"
             @choose="desktop.chooseFiles"
             @clear="desktop.clearSharedFiles" />
@@ -233,6 +262,15 @@ onUnmounted(() => {
           </button>
         </div>
       </footer>
+
+      <DesktopTextNoteDialog
+        v-if="noteDialogOpen"
+        v-model:title="noteTitle"
+        v-model:content="noteContent"
+        :busy="desktop.busy.value === 'note'"
+        :error="noteError"
+        @submit="submitNote"
+        @close="closeNoteDialog" />
     </div>
 
     <!-- 更新信息弹窗：展示版本号 / 更新说明 / 下载进度 -->

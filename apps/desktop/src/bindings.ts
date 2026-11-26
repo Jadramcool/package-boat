@@ -14,6 +14,8 @@ export const commands = {
 	getTransferHistory: () => __TAURI_INVOKE<HistoryEntry[]>("get_transfer_history"),
 	/**  读取文本投递正文，供桌面端一键复制。 */
 	getNoteContent: (id: string) => typedError<string, AppError>(__TAURI_INVOKE("get_note_content", { id })),
+	/**  桌面主程序直接投递文本，写入接收目录并加入共享清单。 */
+	createNote: (title: string, content: string) => typedError<Item, AppError>(__TAURI_INVOKE("create_note", { title, content })),
 	/**  清空传输历史，返回删除条数。 */
 	clearTransferHistory: () => typedError<number, AppError>(__TAURI_INVOKE("clear_transfer_history")),
 	/**  更新传输历史保留天数（0–365；0 关闭并清空）。无需重启服务。 */

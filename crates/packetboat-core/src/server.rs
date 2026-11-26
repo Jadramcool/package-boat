@@ -112,7 +112,7 @@ impl Server {
             catalog,
             auth: Arc::new(AuthManager::new()),
             hub: Arc::new(Hub::new()),
-            file_mu: Arc::new(tokio::sync::Mutex::new(())),
+            file_mu: crate::files::file_operation_mutex(),
             progress: match config.progress {
                 Some(progress) => progress,
                 None => TransferRegistry::new(),

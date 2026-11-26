@@ -31,7 +31,7 @@ Vue browser UI ── HTTP/SSE ──> packetboat-core
 
 单文件下载使用 256 KiB 流缓冲，并在 Reader 层严格限制 Range 长度。文件夹下载在内存管道中边遍历边用 Deflate 压缩并流式发送（data descriptor），不再先把完整临时 ZIP 落到磁盘；客户端断开时打包任务随管道关闭而中止。
 
-文本 / 剪贴板投递走 `POST /api/notes`：正文上限 64KB（按 UTF-8 字节计算），服务端写入接收目录唯一命名的 `.txt`，再以 `is_note=true` 的 `received` 条目登记 catalog；与上传共用移出清单「只改记录、不删盘」的安全边界。`GET /api/files/{id}/text` 和桌面命令 `get_note_content` 只读取已登记、可用且不超过 64KB 的文本条目，供预览与复制，不计下载次数。
+文本 / 剪贴板投递可从桌面主程序的 Tauri 命令 `create_note` 或浏览器 `POST /api/notes` 发起：正文上限 64KB（按 UTF-8 字节计算），服务端写入接收目录唯一命名的 `.txt`，再以 `is_note=true` 的 `received` 条目登记 catalog；与上传共用移出清单「只改记录、不删盘」的安全边界。`GET /api/files/{id}/text` 和桌面命令 `get_note_content` 只读取已登记、可用且不超过 64KB 的文本条目，供预览与复制，不计下载次数。
 
 传输结束后由 `TransferRegistry` 写入主机侧历史（`history.rs` → 数据目录 `history.json`）：状态为 `complete` / `cancelled` / `incomplete`。每个实际传输事件生成独立历史 ID；并发 Range 共用一个任务，后续重新下载则生成新记录。条目同时保存实际 `transferred_bytes` 与 `total_bytes`，按 `settings.history_retention_days`（默认 7 天，0 关闭并清空）和 500 条硬上限裁剪。桌面通过 Tauri 命令、浏览器通过 `GET/DELETE /api/history` 读取与清空。
 

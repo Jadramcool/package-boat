@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import {
   ArrowDown,
   ArrowUp,
+  ClipboardPaste,
   FilePlus2,
   FolderUp,
   Inbox,
@@ -37,6 +38,7 @@ const emit = defineEmits<{
   reveal: [id: string];
   unshare: [id: string];
   copyNote: [id: string];
+  writeNote: [];
   choose: [];
   clear: [];
 }>();
@@ -74,14 +76,24 @@ function sortIcon(key: FileSortKey) {
         <FolderUp :size="16" :stroke-width="1.7" />
       </span>
       <p class="drop-copy">把文件拖到这里 · 仅保存原始路径，不复制、不移动</p>
-      <button
-        type="button"
-        :disabled="props.busy === 'files'"
-        @click="emit('choose')">
-        <LoaderCircle v-if="props.busy === 'files'" class="spin" :size="14" />
-        <FilePlus2 v-else :size="14" />
-        选择文件
-      </button>
+      <div class="drop-actions">
+        <button
+          class="text-note-button"
+          type="button"
+          :disabled="props.busy === 'files' || props.busy === 'note'"
+          @click="emit('writeNote')">
+          <ClipboardPaste :size="14" />
+          投递文本
+        </button>
+        <button
+          type="button"
+          :disabled="props.busy === 'files' || props.busy === 'note'"
+          @click="emit('choose')">
+          <LoaderCircle v-if="props.busy === 'files'" class="spin" :size="14" />
+          <FilePlus2 v-else :size="14" />
+          选择文件
+        </button>
+      </div>
     </div>
 
     <header class="list-header">
@@ -307,6 +319,23 @@ function sortIcon(key: FileSortKey) {
 .drop-zone button:disabled {
   cursor: wait;
   opacity: 0.55;
+}
+.drop-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drop-zone .text-note-button {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+.drop-zone .text-note-button:hover:not(:disabled) {
+  border-color: var(--info);
+  background: var(--info-wash);
+  color: var(--info);
 }
 /* 56px：清单标题是内容区的「页标题」，19px 时比行内的 13px 文件名只重一点，
    层级不足以撑起整张卡。放到 22px 后与拖放条、列头拉开明确的三级层次。 */
@@ -552,9 +581,10 @@ function sortIcon(key: FileSortKey) {
   .drop-zone::after {
     inset: 5px;
   }
-  .drop-zone button {
+  .drop-actions {
     grid-column: 2;
     justify-self: start;
+    flex-wrap: wrap;
   }
   .drop-copy {
     white-space: normal;
